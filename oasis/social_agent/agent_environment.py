@@ -193,8 +193,20 @@ class SocialEnvironment(Environment):
         if market_phase == "communication":
             posts = await self.action.refresh()
             if posts["success"]:
-                posts_env = json.dumps(posts["posts"], indent=4)
-                posts_env = self.posts_env_template.substitute(posts=posts_env)
+                target_tag = getattr(agent, 'target_tag', None) if agent else None
+                
+                if target_tag:
+                    # Filter posts by target_tag
+                    filtered_posts = [p for p in posts["posts"] if p.get("tag") == target_tag]
+                    if filtered_posts:
+                        posts_env = json.dumps(filtered_posts, indent=4)
+                        posts_env = f"Posts (tag: {target_tag}):\n" + posts_env
+                    else:
+                        posts_env = f"No posts found with tag '{target_tag}'."
+                else:
+                    # If no target_tag is specified, return all posts
+                    posts_env = json.dumps(posts["posts"], indent=4)
+                    posts_env = self.posts_env_template.substitute(posts=posts_env)
             else:
                 posts_env = "After refreshing, there are no existing posts."
             return posts_env

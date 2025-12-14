@@ -42,7 +42,7 @@ The project provides an `env.template` file as a configuration template. Please 
 
 1. Copy the template file:
 ```bash
-cp env.template .env
+cp .env.template .env
 ```
 
 2. Edit the `.env` file with your actual configuration:

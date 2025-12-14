@@ -147,7 +147,7 @@ class SocialAction:
         """
         return await self.perform_action(None, ActionType.DO_NOTHING.value)
 
-    async def create_post(self, content: str):
+    async def create_post(self, content: str, tag: str = None):
         r"""Create a new post with the given content.
 
         This method invokes an asynchronous action to create a new post based
@@ -156,6 +156,7 @@ class SocialAction:
 
         Args:
             content (str): The content of the post to be created.
+            tag (str, optional): The tag of the post (e.g., 'fraudulent', 'honest').
 
         Returns:
             dict: A dictionary with two key-value pairs. The 'success' key
@@ -166,7 +167,7 @@ class SocialAction:
             Example of a successful return:
             {'success': True, 'post_id': 50}
         """
-        return await self.perform_action(content, ActionType.CREATE_POST.value)
+        return await self.perform_action({"content": content, "tag": tag}, ActionType.CREATE_POST.value)
 
     async def repost(self, post_id: int):
         r"""Repost a specified post.

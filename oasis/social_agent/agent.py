@@ -77,6 +77,7 @@ class SocialAgent(ChatAgent):
         self.env = SocialEnvironment(SocialAction(agent_id, self.channel), db_path=db_path)
         
         # Agent state attributes
+        self.target_tag = None
         self.initial_budget = 10  # Seller and Buyer initial budget in simulation
         self.reputation_score = 0    # Seller reputation
         self.cumulative_utility = 0  # Buyer cumulative utility

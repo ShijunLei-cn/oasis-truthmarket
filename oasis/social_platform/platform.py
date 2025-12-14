@@ -403,7 +403,7 @@ class Platform:
             commit=True,
         )
 
-    async def create_post(self, agent_id: int, content: str):
+    async def create_post(self, agent_id: int, post_data: str | dict):
         if self.recsys_type == RecsysType.REDDIT:
             current_time = self.sandbox_clock.time_transfer(
                 datetime.now(), self.start_time)
@@ -412,17 +412,24 @@ class Platform:
         try:
             user_id = agent_id
 
+            if isinstance(post_data, str):
+                content = post_data
+                tag = None
+            else:
+                content = post_data.get("content")
+                tag = post_data.get("tag")
+
             post_insert_query = (
                 "INSERT INTO post (user_id, content, created_at, num_likes, "
-                "num_dislikes, num_shares) VALUES (?, ?, ?, ?, ?, ?)")
+                "num_dislikes, num_shares, tag) VALUES (?, ?, ?, ?, ?, ?, ?)")
             self.pl_utils._execute_db_command(
-                post_insert_query, (user_id, content, current_time, 0, 0, 0),
+                post_insert_query, (user_id, content, current_time, 0, 0, 0, tag),
                 commit=True)
             post_id = self.db_cursor.lastrowid
 
-            action_info = {"content": content, "post_id": post_id}
+            action_info = {"content": content, "post_id": post_id, "tag": tag}
             self.pl_utils._record_trace(user_id, ActionType.CREATE_POST.value,
-                                        action_info, current_time)
+                                    action_info, current_time)
 
             # twitter_log.info(f"Trace inserted: user_id={user_id}, "
             #                  f"current_time={current_time}, "

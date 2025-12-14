@@ -11,6 +11,7 @@ CREATE TABLE post (
     num_dislikes INTEGER DEFAULT 0,
     num_shares INTEGER DEFAULT 0,  -- num_shares = num_reposts + num_quotes
     num_reports INTEGER DEFAULT 0,
+    tag TEXT, -- Tag for strategy tendency (e.g., '[Pro-Fraud]', '[Anti-Fraud]','[Neutral]')
     FOREIGN KEY(user_id) REFERENCES user(user_id),
     FOREIGN KEY(original_post_id) REFERENCES post(post_id)
 );
