@@ -105,16 +105,18 @@ class SocialEnvironment(Environment):
             
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
-        posts = "No posts are currently available."
+        posts_env = "No posts are currently available."
         try:
+            # Query all posts regardless of status, ordered by creation time (newest first)
+            # In market simulation, posts don't have 'on_sale' status, so we query all posts
             cursor.execute(
-                "SELECT post_id, content FROM post WHERE status = 'on_sale' ORDER BY post_id DESC"
+                "SELECT post_id, content, user_id, created_at FROM post ORDER BY created_at DESC, post_id DESC LIMIT 50"
             )
             posts = cursor.fetchall()
             if posts:
                 posts_env = "Here is the list of posts currently available:\n"
                 for p in posts:
-                    posts_env += f"- Post ID: {p[0]}, Content: {p[1]}\n"
+                    posts_env += f"- Post ID: {p[0]}, Author ID: {p[2]}, Content: {p[1]}\n"
         except sqlite3.Error as e:
             print(f"Database query error (get_posts_communication_for_env): {e}")
         finally:
@@ -191,12 +193,9 @@ class SocialEnvironment(Environment):
         role = agent.user_info.profile.get("role")
         
         if market_phase == "communication":
-            posts = await self.action.refresh()
-            if posts["success"]:
-                posts_env = json.dumps(posts["posts"], indent=4)
-                posts_env = self.posts_env_template.substitute(posts=posts_env)
-            else:
-                posts_env = "After refreshing, there are no existing posts."
+            # Use direct database query instead of refresh() to get all posts
+            # refresh() relies on rec table which may not be properly updated in market simulation
+            posts_env = self.get_posts_communication_for_env()
             return posts_env
         
         elif market_phase == "listing" and role == "seller":
