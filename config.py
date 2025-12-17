@@ -30,10 +30,10 @@ class SimulationConfig:
     }
 
     # Market rule parameters
-    REPUTATION_LAG = 1  # Reputation lag display rounds
-    REENTRY_ALLOWED_ROUND = 5  # Re-entry market allowed rounds
-    INITIAL_WINDOW_ROUNDS = [1, 2]  # Initial rounds with hidden complete history
-    EXIT_ROUND = 7  # Exit market allowed rounds
+    REPUTATION_LAG = None  # Reputation lag display rounds
+    REENTRY_ALLOWED_ROUND = None  # Re-entry market allowed rounds
+    INITIAL_WINDOW_ROUNDS = []  # Initial rounds with hidden complete history
+    EXIT_ROUND = 30  # Exit market allowed rounds
     MARKET_TYPE = 'reputation_only'
     COMMUNICATION_TYPE = 'none'  # Communication type: 'none', 'seller', 'buyer', 'both'
     

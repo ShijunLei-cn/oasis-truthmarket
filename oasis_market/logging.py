@@ -169,7 +169,7 @@ class SimulationLogger:
             exit_round: Round when exit is allowed
             reentry_round: Round when re-entry is allowed
         """
-        if round_num > exit_round:
+        if round_num == exit_round:
             print("Sellers may exit market. (soft flag)")
         
         if round_num == reentry_round:

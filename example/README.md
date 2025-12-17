@@ -189,13 +189,13 @@ Check the parent directory's documentation:
 
 ```bash
 # 1. Test single run
-python run_market_simulation.py test.db -m reputation_only -c none
+python ./example/run_market_simulation.py test.db -m reputation_only -c none
 
 # 2. If successful, run small batch
-python run_batch_experiments.py 2
+python ./example/run_batch_experiments.py 2
 
 # 3. Run full experiment
-python run_batch_experiments.py 10
+python ./example/run_batch_experiments.py 10
 
 # 4. Analyze results
 python ../analyze_aggregated_results.py experiments/exp_*

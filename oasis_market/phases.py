@@ -83,11 +83,14 @@ class SellerListingPhase(MarketPhase):
                 # Tools available for sellers
                 listing_tools = ['list_product']
                 
-                # Conditionally add exit/re-entry tools
-                if round_num >= self.config.EXIT_ROUND:
+                # Conditionally add exit/re-entry tools (skip if config is None)
+                exit_round = self.config.EXIT_ROUND if self.config.EXIT_ROUND is not None else None
+                reentry_round = self.config.REENTRY_ALLOWED_ROUND if self.config.REENTRY_ALLOWED_ROUND is not None else None
+                
+                if exit_round is not None and round_num == exit_round:
                     listing_tools.append('exit_market')
                     seller_round_prompt += "\n\nYou are now allowed to exit the market.\n"
-                if round_num == self.config.REENTRY_ALLOWED_ROUND:
+                if reentry_round is not None and round_num == reentry_round:
                     listing_tools.append('reenter_market')
                     seller_round_prompt += "\n\nYou are now allowed to re-enter the market.\n"
                 

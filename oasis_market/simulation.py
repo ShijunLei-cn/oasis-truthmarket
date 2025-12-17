@@ -135,8 +135,10 @@ class MarketSimulation:
                 total_profit = new_state.get('total_profit', 0)
                 
                 # Calculate next round reputation
+                # Use default value if REPUTATION_LAG is None
+                reputation_lag = self.config.REPUTATION_LAG if self.config.REPUTATION_LAG is not None else 1
                 next_reputation = self.db_manager.compute_next_round_reputation(
-                    agent_id, round_num, self.config.REPUTATION_LAG
+                    agent_id, round_num, reputation_lag
                 )
                 
                 # Update history
@@ -161,10 +163,10 @@ class MarketSimulation:
         self.env.platform.sandbox_clock.round_step = round_num
         SimulationLogger.print_round_header(round_num, self.config.SIMULATION_ROUNDS)
         
-        # Log market flags
-        SimulationLogger.log_market_flags(
-            round_num, self.config.EXIT_ROUND, self.config.REENTRY_ALLOWED_ROUND
-        )
+        # Log market flags (use defaults if None)
+        exit_round = self.config.EXIT_ROUND if self.config.EXIT_ROUND is not None else 0
+        reentry_round = self.config.REENTRY_ALLOWED_ROUND if self.config.REENTRY_ALLOWED_ROUND is not None else 0
+        SimulationLogger.log_market_flags(round_num, exit_round, reentry_round)
         
         # Initialize phases
         seller_listing = SellerListingPhase(
@@ -202,7 +204,9 @@ class MarketSimulation:
         
         # Update reputation
         from oasis.environment.processing.reputation import compute_and_update_reputation
-        ratings_cutoff_round = max(0, round_num - self.config.REPUTATION_LAG)
+        # Use default value if REPUTATION_LAG is None
+        reputation_lag = self.config.REPUTATION_LAG if self.config.REPUTATION_LAG is not None else 1
+        ratings_cutoff_round = max(0, round_num - reputation_lag)
         with sqlite3.connect(self.database_path) as conn:
             compute_and_update_reputation(conn, round_num, ratings_up_to_round=ratings_cutoff_round)
         
