@@ -174,10 +174,13 @@ async def generate_agents(
     # generate_log.info('twitter followee update finished.')
 
     post_insert_query = (
-        "INSERT INTO post (user_id, content, created_at, num_likes, "
-        "num_dislikes) VALUES (?, ?, ?, ?, ?)")
+        "INSERT INTO post (user_id, content, structured_info, created_at, num_likes, "
+        "num_dislikes) VALUES (?, ?, ?, ?, ?, ?)")
+    # Add default value for structured_info (empty string) to existing post_list tuples
+    post_list_with_extras = [(user_id, content, "", created_at, num_likes, num_dislikes) 
+                              for user_id, content, created_at, num_likes, num_dislikes in post_list]
     twitter.pl_utils._execute_many_db_command(post_insert_query,
-                                              post_list,
+                                              post_list_with_extras,
                                               commit=True)
 
     # generate_log.info('twitter creat post finished.')
@@ -343,10 +346,13 @@ async def generate_agents_100w(
     # generate_log.info('twitter followee update finished.')
 
     post_insert_query = (
-        "INSERT INTO post (user_id, content, created_at, num_likes, "
-        "num_dislikes) VALUES (?, ?, ?, ?, ?)")
+        "INSERT INTO post (user_id, content, structured_info, created_at, num_likes, "
+        "num_dislikes) VALUES (?, ?, ?, ?, ?, ?)")
+    # Add default value for structured_info (empty string) to existing post_list tuples
+    post_list_with_extras = [(user_id, content, "", created_at, num_likes, num_dislikes) 
+                              for user_id, content, created_at, num_likes, num_dislikes in post_list]
     twitter.pl_utils._execute_many_db_command(post_insert_query,
-                                              post_list,
+                                              post_list_with_extras,
                                               commit=True)
 
     # generate_log.info('twitter creat post finished.')
@@ -669,7 +675,8 @@ async def generate_agent_from_LLM(agents_num:int,
                                 market_type: str,
                                 agent_graph: AgentGraph = None,
                                 agent_checkpoint_save: bool = True,
-                                db_path: str = ""):
+                                db_path: str = "",
+                                config = None):
 
     if agent_checkpoint_save == True and os.path.exists(f"./data/agent_checkpoint_{role}.json"):
         with open(f"./data/agent_checkpoint_{role}.json", "r") as file:
@@ -703,6 +710,16 @@ async def generate_agent_from_LLM(agents_num:int,
     if agent_graph is None:
         agent_graph = AgentGraph(backend="igraph")
     
+    # Import config if not provided
+    if config is None:
+        from config import SimulationConfig
+        config = SimulationConfig()
+    
+    # Get configuration values for prompts
+    simulation_rounds = config.SIMULATION_ROUNDS
+    exit_round = config.EXIT_ROUND if config.EXIT_ROUND is not None else simulation_rounds
+    reentry_round = config.REENTRY_ALLOWED_ROUND if config.REENTRY_ALLOWED_ROUND is not None else 5
+    
     for idx, agent_info in enumerate(user_trait_list):
         if idx >= agents_num:
             break
@@ -710,14 +727,25 @@ async def generate_agent_from_LLM(agents_num:int,
         # Select corresponding TextPrompt template based on role
         template = get_prompt_child(role, "MASTER_PROMPT", market_type)
         
+        # Get actions string and format it with round parameters
+        actions_template = get_prompt_child(role, "ACTIONS", market_type)
+        actions = actions_template.format(
+            simulation_rounds=simulation_rounds,
+            exit_round=exit_round,
+            reentry_round=reentry_round
+        ) if isinstance(actions_template, str) else actions_template
+        
         profile = {
             # Add static key-value pairs required by System_prompt template
             "user_profile": agent_info["user_char"],
             "role": role,
             "market_type": market_type, 
             "market_rules": get_prompt_child(role, "MARKET_RULES", market_type),  
-            "actions": get_prompt_child(role, "ACTIONS", market_type),
-            "payoff_matrix": get_prompt_child(role, "PAYOFF_MATRIX", market_type),  
+            "actions": actions,
+            "payoff_matrix": get_prompt_child(role, "PAYOFF_MATRIX", market_type),
+            "simulation_rounds": simulation_rounds,
+            "exit_round": exit_round,
+            "reentry_round": reentry_round,
         }
 
         
@@ -740,6 +768,9 @@ async def generate_agent_from_LLM(agents_num:int,
             max_iteration = 1,
             db_path=db_path,
         )
+        # Set config in environment if available
+        if hasattr(agent, 'env') and hasattr(agent.env, 'config'):
+            agent.env.config = config
 
         agent_graph.add_agent(agent)
 

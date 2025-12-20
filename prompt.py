@@ -17,8 +17,8 @@ class Seller_prompt:
             "  - `advertised_quality`: What you tell buyers ('HQ' or 'LQ')\n"
             "  - `product_quality`: What you actually produce ('HQ' or 'LQ')\n"
             "  - Note: `has_warrant` is NOT available in this market\n"
-            "- `exit_market()`: Exit the market (available after round 7)\n"
-            "- `reenter_market()`: Re-enter with fresh reputation (available at round 5)"
+            "- `exit_market()`: Exit the market\n"
+            "- `reenter_market()`: Re-enter with fresh reputation (available at round {reentry_round})"
         ),
         "reputation_and_warrant": (
             "Available Actions:\n"
@@ -26,8 +26,8 @@ class Seller_prompt:
             "  - `advertised_quality`: What you tell buyers ('HQ' or 'LQ')\n"
             "  - `product_quality`: What you actually produce ('HQ' or 'LQ')\n"
             "  - `has_warrant`: Whether to offer a Truth Warrant (True/False)\n"
-            "- `exit_market()`: Exit the market (available after round 7)\n"
-            "- `reenter_market()`: Re-enter with fresh reputation (available at round 5)"
+            "- `exit_market()`: Exit the market\n"
+            "- `reenter_market()`: Re-enter with fresh reputation (available at round {reentry_round})"
         ),
     }
 
@@ -67,7 +67,7 @@ Note: If you offer a warrant on a misleading claim and get challenged, you lose 
     MASTER_PROMPT = TextPrompt(
         """
 # CONTEXT
-You are a Seller Agent in a multi-round online marketplace simulation ('{market_type}' market). Your sole objective is to maximize your total profit over 7 rounds.
+You are a Seller Agent in a multi-round online marketplace simulation ('{market_type}' market). Your sole objective is to maximize your total profit over {simulation_rounds} rounds.
 
 # YOUR PERSONALITY
 {user_profile}
@@ -89,10 +89,10 @@ You are a Seller Agent in a multi-round online marketplace simulation ('{market_
 {actions}
 
 ## Market Structure
-- **7 rounds total**, each round you must decide what to produce and advertise
+- **{simulation_rounds} rounds total**, each round you must decide what to produce and advertise
 - You can **exit and re-enter the market** to reset your reputation:
-  - Exit available after round 7
-  - Re-entry available at round 5
+  - Exit available after round {exit_round}
+  - Re-entry available at round {reentry_round}
   - Re-entering resets your reputation to zero (fresh start)
 - Strategic exits can help you escape a damaged reputation
 
@@ -206,7 +206,7 @@ While you wait, here's a reminder of the game mechanics:
 • Your warrant is only at risk if challenged
 
 ## Game Structure
-7 rounds total. You can exit (after round 7) and re-enter (at round 5) the market to reset reputation.
+{simulation_rounds} rounds total. You can exit (after round {exit_round}) and re-enter (at round {reentry_round}) the market to reset reputation.
 """
     )
 
@@ -286,7 +286,7 @@ Note: You can only challenge warranted products. Successful challenges earn you 
     MASTER_PROMPT = TextPrompt(
         """
 # CONTEXT
-You are a Buyer Agent in a multi-round online marketplace simulation ('{market_type}' market). Your sole objective is to maximize your total utility over 7 rounds.
+You are a Buyer Agent in a multi-round online marketplace simulation ('{market_type}' market). Your sole objective is to maximize your total utility over {simulation_rounds} rounds.
 
 # YOUR PERSONALITY
 {user_profile}
@@ -305,7 +305,7 @@ You are a Buyer Agent in a multi-round online marketplace simulation ('{market_t
 {market_rules}
 
 ## Market Structure
-- **7 rounds total**, each round you should make one strategic purchase
+- **{simulation_rounds} rounds total**, each round you should make one strategic purchase
 - Sellers may exit and re-enter, resetting their reputation
 - Use seller reputation and warranty signals to make informed decisions
 
@@ -412,7 +412,7 @@ While you wait, here's a reminder of the game mechanics:
 • Your ratings help build or damage seller reputations
 
 ## Game Structure
-7 rounds total. Make strategic decisions based on product quality, price, seller reputation, and whether products are warranted.
+{simulation_rounds} rounds total. Make strategic decisions based on product quality, price, seller reputation, and whether products are warranted.
 """
     )
 
@@ -454,7 +454,7 @@ class MarketEnv_prompt:
 {previous_feedback}
 
 ## Current Market Status
-- Current Round: {current_round}/7
+- Current Round: {current_round}/{simulation_rounds}
 - Your Reputation Score: {reputation_score}
 - Your Total Profit So Far: ${total_profit}
 
@@ -469,7 +469,7 @@ Remember: Producing LQ and selling as HQ earns 4 points but damages reputation. 
 # MARKET ENVIRONMENT OBSERVATION
 
 ## Current Market Status
-- Current Round: {current_round}/7
+- Current Round: {current_round}/{simulation_rounds}
 - Your Cumulative Utility: {cumulative_utility}
 
 ## Available Products for Purchase

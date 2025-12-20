@@ -21,6 +21,7 @@ from string import Template
 import os
 from oasis.social_agent.agent_action import SocialAction
 from oasis.social_platform.database import get_db_path
+from config import SimulationConfig
 
 
 class Environment(ABC):
@@ -53,17 +54,17 @@ class SocialEnvironment(Environment):
         "posts content. Do not limit your action in just `like` to like posts")
     
     market_env_template = Template(
-        "Current Round: $current_round / 7\n"
-        "Current Budget: $$current_budget\n"
+        "Current Round: $current_round / $simulation_rounds\n"
         "Reputation Score: $reputation_score\n"
         "Cumulative Utility: $cumulative_utility\n\n"
         "Current available products:\n$products")
-
-    def __init__(self, action: SocialAction, db_path: str = ""):
+    
+    def __init__(self, action: SocialAction, db_path: str = "", config: SimulationConfig = None):
         self.action = action
         self.db_path = db_path if db_path else get_db_path()
         # === market-sim: add a flag to distinguish modes ===
         self.is_market_sim = False 
+        self.config = config if config else SimulationConfig()
 
     def get_product_listings_for_env(self) -> str:
         """Query all products on sale from database and format as string."""
@@ -99,22 +100,44 @@ class SocialEnvironment(Environment):
         return listings
 
     def get_posts_communication_for_env(self) -> str:
-        """Query all posts from database and format as string."""
+        """Query all posts from database and format as string with structured information."""
         if not os.path.exists(self.db_path):
             return "No posts are currently available."
             
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
-        posts = "No posts are currently available."
+        posts_env = "No posts are currently available."
         try:
+            # Query all posts regardless of status, ordered by creation time (newest first)
+            # In market simulation, posts don't have 'on_sale' status, so we query all posts
+            # Include structured_info field for enhanced communication
             cursor.execute(
-                "SELECT post_id, content FROM post WHERE status = 'on_sale' ORDER BY post_id DESC"
+                "SELECT post_id, content, structured_info, user_id, created_at FROM post WHERE original_post_id IS NULL ORDER BY created_at DESC, post_id DESC LIMIT 50"
             )
             posts = cursor.fetchall()
             if posts:
-                posts_env = "Here is the list of posts currently available:\n"
+                posts_env = "Here is the list of posts currently available:\n\n"
                 for p in posts:
-                    posts_env += f"- Post ID: {p[0]}, Content: {p[1]}\n"
+                    post_id, content, structured_info, user_id, created_at = p
+                    # Format structured_info display based on content
+                    if structured_info:
+                        # Check if it's a seller tag (Pro-Fraud, Anti-Fraud, Neutral) or buyer feedback
+                        if structured_info.startswith('[') and structured_info.endswith(']'):
+                            # Seller tag format
+                            structured_info_str = f" [Fraud Attitude Tag: {structured_info}]"
+                        elif structured_info.startswith('Seller_'):
+                            # Buyer feedback format
+                            structured_info_str = f" [Transaction Feedback: {structured_info}]"
+                        else:
+                            # Generic structured info
+                            structured_info_str = f" [Structured Info: {structured_info}]"
+                    else:
+                        structured_info_str = ""
+                    posts_env += f"- Post ID: {post_id}, Author ID: {user_id}\n"
+                    posts_env += f"  Content: {content}\n"
+                    if structured_info_str:
+                        posts_env += f"  {structured_info_str}\n"
+                    posts_env += "\n"
         except sqlite3.Error as e:
             print(f"Database query error (get_posts_communication_for_env): {e}")
         finally:
@@ -186,17 +209,14 @@ class SocialEnvironment(Environment):
         
         if not agent:
             # If no agent information, return basic environment information
-            return f"Current Round: {current_round}/7\nNo agent information available."
+            return f"Current Round: {current_round}/{self.config.SIMULATION_ROUNDS}\nNo agent information available."
         
         role = agent.user_info.profile.get("role")
         
         if market_phase == "communication":
-            posts = await self.action.refresh()
-            if posts["success"]:
-                posts_env = json.dumps(posts["posts"], indent=4)
-                posts_env = self.posts_env_template.substitute(posts=posts_env)
-            else:
-                posts_env = "After refreshing, there are no existing posts."
+            # Use direct database query instead of refresh() to get all posts
+            # refresh() relies on rec table which may not be properly updated in market simulation
+            posts_env = self.get_posts_communication_for_env()
             return posts_env
         
         elif market_phase == "listing" and role == "seller":
@@ -207,6 +227,7 @@ class SocialEnvironment(Environment):
             return MarketEnv_prompt.SELLER_LISTING_ENV.format(
                 previous_feedback=previous_feedback,
                 current_round=current_round,
+                simulation_rounds=self.config.SIMULATION_ROUNDS,
                 reputation_score=agent.reputation_score,
                 total_profit=total_profit,
             )
@@ -218,6 +239,7 @@ class SocialEnvironment(Environment):
             
             return MarketEnv_prompt.BUYER_PURCHASE_ENV.format(
                 current_round=current_round,
+                simulation_rounds=self.config.SIMULATION_ROUNDS,
                 cumulative_utility=agent.cumulative_utility,
                 available_products=available_products,
                 seller_reputation_info=seller_reputation_info
@@ -228,6 +250,8 @@ class SocialEnvironment(Environment):
             purchase_info = getattr(agent, 'last_purchase_info', {})
             
             return MarketEnv_prompt.BUYER_RATING_ENV.format(
+                current_round=current_round,
+                simulation_rounds=self.config.SIMULATION_ROUNDS,
                 transaction_id=purchase_info.get('transaction_id', 'N/A'),
                 product_id=purchase_info.get('product_id', 'N/A'),
                 advertised_quality=purchase_info.get('advertised_quality', 'N/A'),
@@ -241,7 +265,7 @@ class SocialEnvironment(Environment):
             
         else:
             # Other cases return basic environment information
-            return f"Current Round: {current_round}/7\nRole: {role}, Phase: {market_phase}\nNo specific environment template available."
+            return f"Current Round: {current_round}/{self.config.SIMULATION_ROUNDS}\nRole: {role}, Phase: {market_phase}\nNo specific environment template available."
     
     def _get_previous_feedback(self, agent) -> str:
         """Get previous phase historical performance feedback information"""

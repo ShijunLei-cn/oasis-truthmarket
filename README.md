@@ -95,34 +95,30 @@ To modify simulation parameters, edit these values in `config.py` before running
 
 ### 4. Run Simulation
 
-#### Option 1: Run Multiple Independent Experiments (Recommended)
+For detailed instructions on running simulations, please refer to the [Example Documentation](./example/README.md).
 
-To run multiple independent market simulations with data collection and aggregated analysis:
+The `example/` folder contains ready-to-run scripts:
+- **Single Simulation**: `run_market_simulation.py` - Run individual simulations with various configurations
+- **Batch Experiments**: `run_batch_experiments.py` - Run multiple experiments with different market types and communication settings
 
-```bash
-python run_experiments.py
-```
-
-This will:
-- Run the number of simulations specified by `SimulationConfig.RUNS` (default: 50)
-- Create an experiment directory with a timestamp-based ID
-- Save individual run databases
-- Collect and analyze results from all runs
-- Generate aggregated analysis reports
-
-#### Option 2: Run Single Simulation
-
-To run a single market simulation:
+Quick start examples:
 
 ```bash
-# Run with custom database path
-python run_single_simulation.py test_run.db
+# Run a single simulation
+python ./example/run_market_simulation.py test.db -m reputation_only -c buyer
 
-# Run with default database path
-python run_single_simulation.py
+# Run batch experiments (5 runs per configuration)
+python ./example/run_batch_experiments.py 5
 ```
 
-This creates a standalone simulation run with results saved to the specified database file.
+See [example/README.md](./example/README.md) for comprehensive documentation on:
+- Available command-line options
+- Configuration parameters
+- Communication types and market types
+- Analysis tools and workflows
+
+
+
 
 ## 🛠️ Customization
 
@@ -163,109 +159,87 @@ Modify prompt templates in `prompt.py`:
 
 ## 📊 Data Analysis
 
-After running simulations, use the analysis tools to generate visualizations and insights:
+After running simulations, use the modular visualization tools to generate visualizations and insights. For comprehensive documentation, please refer to the [Visualization Documentation](./visualization/README.md).
 
-### 1. Single Run Analysis
+### Quick Start
+
+The visualization module provides three main analysis types:
+
+#### 1. Single Run Analysis
 
 Analyze a single market simulation database:
 
 ```bash
-python analysis/analyze_market.py <database_path> [--out output_directory]
+# Using convenience script (recommended)
+./visualization/run_visul.sh single experiments/exp_123/run_1.db
+
+# Using Python CLI
+python3 visualization/analyze_single.py experiments/exp_123/run_1.db
 ```
 
-**Examples:**
-```bash
-# Analyze single run with default output directory
-python analysis/analyze_market.py experiments/experiment_20251030_120000/run_1.db
+**Generated visualizations include:**
+- Reputation evolution across rounds
+- Price analysis by quality level
+- Seller action patterns
+- Manipulation behavior statistics
 
-# Specify custom output directory
-python analysis/analyze_market.py test_run.db --out my_analysis_output
-```
-
-**Generated visualizations:**
-- `reputation_over_rounds.png` - Seller reputation evolution across rounds
-- `avg_price_by_advertised_quality.png` - Average listing prices by quality level
-- `seller_actions_scatter.png` - Seller actions (listing, exit, re-entry) by round
-- `manipulation_behavior_statistics.png` - Manipulation behavior patterns
-- `seller_manipulation_details.png` - Detailed manipulation analysis per seller
-
-### 2. Multi-Run Aggregated Analysis
+#### 2. Multi-Run Aggregated Analysis
 
 Analyze all runs from a completed experiment:
 
 ```bash
-python analysis/multi_run_analysis.py --experiment_id <experiment_id>
-```
+# Using convenience script
+./visualization/run_visul.sh multi exp_20251216_120000
 
-**Example:**
-```bash
-python analysis/multi_run_analysis.py --experiment_id experiment_20251030_120000
+# Using Python CLI
+python3 visualization/analyze_multi.py --experiment-id exp_20251216_120000
 ```
 
 **Features:**
-- Cross-run comparison analysis
-- Round-by-round progression trends
-- Distribution analysis across all runs
-- Seller deception behavior analysis
+- Cross-run comparison (grouped by configuration)
+- Round-by-round progression trends with mean ± std
+- Configuration-based aggregation (8 configurations × 5 runs)
 - Individual run analysis for each simulation
+- Seller deception behavior analysis
 
-**Generated outputs:**
-- `analysis/<experiment_id>/aggregated/aggregated_statistics.json` - Aggregated metrics
-- `analysis/<experiment_id>/aggregated/` - Visualizations
-  - `cross_run_comparison.png` - Comparison across all runs
-  - `round_progression.png` - Trends by round
-  - `distribution_analysis.png` - Distribution patterns
-  - `seller_deception_analysis.png` - Deception behavior analysis
-- `analysis/<experiment_id>/individual_runs/` - Analysis for each run
+#### 3. Experiment Comparison
 
-### 3. Market Mechanism Comparison
-
-Compare two market mechanisms (Reputation-Only vs Reputation+Warrant):
+Compare different experiments (e.g., different market types):
 
 ```bash
-python analysis/create_comparison_charts.py
+# Using convenience script
+./visualization/run_visul.sh compare reputation_only:exp_123 reputation_warrant:exp_456
+
+# Using Python CLI
+python3 visualization/compare_experiments.py \
+    --exp reputation_only:exp_123 \
+    --exp reputation_warrant:exp_456
 ```
 
-**Setup required:**
-Edit the `EXPERIMENT_CONFIG` in `create_comparison_charts.py` to specify your experiment IDs:
-
-```python
-EXPERIMENT_CONFIG = {
-    'reputation_only': "your_reputation_only_experiment_id",
-    'reputation_warrant': "your_reputation_warrant_experiment_id"
-}
-```
-
-**Generated comparison charts:**
-- `market_mechanism_comparison_summary.png` - Core metrics (buyer utility, seller profit, transactions)
-- `market_mechanism_round_progression.png` - Round-by-round progression comparison
-- `market_mechanism_distribution_comparison.png` - Distribution analysis
-- `market_mechanism_deception_behavior.png` - Deception behavior comparison
-- `config.json` - Configuration and statistics metadata
-
-**Analysis coverage:**
-- Average buyer utility per run
-- Average seller profit per run
-- Transaction volumes
-- Deception behavior (HQ advertised but LQ delivered)
+**Comparison coverage:**
+- Core metrics comparison (buyer utility, seller profit, transactions)
+- Round-by-round progression comparison
+- Deception behavior comparison
 - Statistical distributions and trends
 
-## 📊 Analysis Workflow Example
+### Visualization Module Structure
 
-```bash
-# 1. Run multiple experiments
-python run_experiments.py --runs 50
+The visualization module is organized as follows:
 
-# 2. Get experiment ID from output (e.g., experiment_20251030_120000)
+- **Core Modules** (`visualization/core/`): Data loading, statistics calculation, plotting components
+- **CLI Scripts**: Command-line interfaces for each analysis type
+- **Convenience Script** (`run_visul.sh`): Unified shell script for all visualization tasks
 
-# 3. Analyze aggregated results
-python analysis/multi_run_analysis.py --experiment_id experiment_20251030_120000
+### For More Information
 
-# 4. View results in analysis/experiment_20251030_120000/aggregated/
+See [visualization/README.md](./visualization/README.md) for:
+- Complete API documentation
+- Detailed usage examples
+- Configuration file formats
+- Output directory structure
+- Python API usage examples
+- Communication effects visualization
 
-# 5. For mechanism comparison (if you have two experiments to compare)
-python analysis/create_comparison_charts.py
-```
 
 ## 📚 Related Resources
 
