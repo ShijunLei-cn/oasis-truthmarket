@@ -15,7 +15,7 @@ class SimulationConfig:
     RUNS = 10
     NUM_SELLERS = 10
     NUM_BUYERS = 10
-    SIMULATION_ROUNDS = 7
+    SIMULATION_ROUNDS = 30
 
     # Market parameters
     MARKET_PARAMS = {                       #TODO: Maybe it needs to be modified because it doesn't match Payoff Matrix.

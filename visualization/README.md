@@ -18,6 +18,7 @@ visualization/
 ├── analyze_single.py         # 单次运行分析命令行接口
 ├── analyze_multi.py          # 多次运行分析命令行接口
 ├── compare_experiments.py    # 比较分析命令行接口
+├── plot_communication_effects.py  # 通信效果可视化命令行接口
 └── run_visul.sh              # 便捷脚本
 ```
 
@@ -52,6 +53,11 @@ python3 visualization/analyze_multi.py --experiment-id exp_20251216_120000
 python3 visualization/compare_experiments.py \
     --exp reputation_only:exp_123 \
     --exp reputation_warrant:exp_456
+
+# 可视化通信效果（rep-only市场）
+python3 visualization/plot_communication_effects.py \
+    --experiments-dir experiments \
+    --output experiments/communication_effects_rep_only.png
 ```
 
 ### 3. 使用 Python API
@@ -112,6 +118,13 @@ compare_experiments({
 
 - `ComparisonAnalyzer`: 比较不同实验的结果
 - `compare_experiments()`: 便捷函数
+
+### 通信效果可视化 (`communication_effects.py`)
+
+- `create_communication_effects_plot()`: 创建通信效果对比图
+- 对比4种通信条件（无通信、买家通信、卖家通信、双向通信）
+- 生成6个子图：卖家利润、买家效用、不诚实产品数量、交易评分、交易数量、总收益
+- 使用带阴影区域的折线图显示均值±标准差
 
 ## 配置文件格式
 
