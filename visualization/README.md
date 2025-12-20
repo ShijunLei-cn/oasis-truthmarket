@@ -1,66 +1,66 @@
 # Visualization Module
 
-模块化的可视化分析工具，用于分析市场仿真结果。
+Modular visualization analysis tools for analyzing market simulation results.
 
-## 目录结构
+## Directory Structure
 
 ```
 visualization/
-├── core/                      # 核心模块
-│   ├── __init__.py           # 模块导出
-│   ├── utils.py              # 工具函数
-│   ├── data_loader.py        # 数据加载模块
-│   ├── statistics.py         # 统计计算模块
-│   ├── plotters.py           # 绘图模块
-│   ├── single_run_analysis.py  # 单次运行分析
-│   ├── multi_run_analysis.py   # 多次运行分析
-│   └── comparison_analysis.py  # 比较分析
-├── analyze_single.py         # 单次运行分析命令行接口
-├── analyze_multi.py          # 多次运行分析命令行接口
-├── compare_experiments.py    # 比较分析命令行接口
-├── plot_communication_effects.py  # 通信效果可视化命令行接口
-└── run_visul.sh              # 便捷脚本
+├── core/                      # Core modules
+│   ├── __init__.py           # Module exports
+│   ├── utils.py              # Utility functions
+│   ├── data_loader.py        # Data loading module
+│   ├── statistics.py         # Statistics calculation module
+│   ├── plotters.py           # Plotting module
+│   ├── single_run_analysis.py  # Single run analysis
+│   ├── multi_run_analysis.py   # Multi-run analysis
+│   └── comparison_analysis.py  # Comparison analysis
+├── analyze_single.py         # Single run analysis CLI
+├── analyze_multi.py          # Multi-run analysis CLI
+├── compare_experiments.py    # Comparison analysis CLI
+├── plot_communication_effects.py  # Communication effects visualization CLI
+└── run_visul.sh              # Convenience script
 ```
 
-## 使用方法
+## Usage
 
-### 1. 使用便捷脚本（推荐）
+### 1. Using Convenience Script (Recommended)
 
 ```bash
-# 分析单次运行
+# Analyze single run
 ./visualization/run_visul.sh single experiments/exp_123/run_1.db
 
-# 分析多次运行实验
+# Analyze multi-run experiment
 ./visualization/run_visul.sh multi exp_20251216_120000
 
-# 比较两个实验
+# Compare two experiments
 ./visualization/run_visul.sh compare reputation_only:exp_123 reputation_warrant:exp_456
 
-# 使用配置文件进行比较
+# Compare using configuration file
 ./visualization/run_visul.sh compare-config comparison_config.json
 ```
 
-### 2. 使用 Python 命令行接口
+### 2. Using Python Command-Line Interface
 
 ```bash
-# 分析单次运行
+# Analyze single run
 python3 visualization/analyze_single.py experiments/exp_123/run_1.db
 
-# 分析多次运行
+# Analyze multi-run experiment
 python3 visualization/analyze_multi.py --experiment-id exp_20251216_120000
 
-# 比较实验
+# Compare experiments
 python3 visualization/compare_experiments.py \
     --exp reputation_only:exp_123 \
     --exp reputation_warrant:exp_456
 
-# 可视化通信效果（rep-only市场）
+# Visualize communication effects (rep-only market)
 python3 visualization/plot_communication_effects.py \
     --experiments-dir experiments \
     --output experiments/communication_effects_rep_only.png
 ```
 
-### 3. 使用 Python API
+### 3. Using Python API
 
 ```python
 from visualization.core import (
@@ -69,16 +69,16 @@ from visualization.core import (
     ComparisonAnalyzer
 )
 
-# 分析单次运行
+# Analyze single run
 analyze_single_run('experiments/exp_123/run_1.db')
 
-# 分析多次运行
+# Analyze multi-run experiment
 analyzer = MultiRunAnalyzer('exp_20251216_120000')
 analyzer.load_data()
 stats = analyzer.generate_aggregated_statistics()
 analyzer.save_aggregated_results()
 
-# 比较实验
+# Compare experiments
 from visualization.core.comparison_analysis import compare_experiments
 compare_experiments({
     'reputation_only': 'exp_123',
@@ -86,49 +86,49 @@ compare_experiments({
 })
 ```
 
-## 功能模块
+## Functional Modules
 
-### 数据加载 (`data_loader.py`)
+### Data Loading (`data_loader.py`)
 
-- `DataLoader`: 加载单个数据库文件
-- `ExperimentDataLoader`: 加载多次运行实验数据
+- `DataLoader`: Load single database file
+- `ExperimentDataLoader`: Load multi-run experiment data
 
-### 统计计算 (`statistics.py`)
+### Statistics Calculation (`statistics.py`)
 
-- `StatisticsCalculator`: 计算聚合统计信息、欺骗行为统计等
+- `StatisticsCalculator`: Calculate aggregated statistics, deception behavior statistics, etc.
 
-### 绘图 (`plotters.py`)
+### Plotting (`plotters.py`)
 
-- `ReputationPlotter`: 声誉相关图表
-- `PricePlotter`: 价格相关图表
-- `ActionPlotter`: 行为相关图表
-- `ManipulationPlotter`: 操纵行为图表
+- `ReputationPlotter`: Reputation-related charts
+- `PricePlotter`: Price-related charts
+- `ActionPlotter`: Action-related charts
+- `ManipulationPlotter`: Manipulation behavior charts
 
-### 单次运行分析 (`single_run_analysis.py`)
+### Single Run Analysis (`single_run_analysis.py`)
 
-- `SingleRunAnalyzer`: 分析单个仿真运行
-- `analyze_single_run()`: 便捷函数
+- `SingleRunAnalyzer`: Analyze single simulation run
+- `analyze_single_run()`: Convenience function
 
-### 多次运行分析 (`multi_run_analysis.py`)
+### Multi-Run Analysis (`multi_run_analysis.py`)
 
-- `MultiRunAnalyzer`: 分析多次运行实验
-- 生成聚合统计和可视化
+- `MultiRunAnalyzer`: Analyze multi-run experiments
+- Generate aggregated statistics and visualizations
 
-### 比较分析 (`comparison_analysis.py`)
+### Comparison Analysis (`comparison_analysis.py`)
 
-- `ComparisonAnalyzer`: 比较不同实验的结果
-- `compare_experiments()`: 便捷函数
+- `ComparisonAnalyzer`: Compare results from different experiments
+- `compare_experiments()`: Convenience function
 
-### 通信效果可视化 (`communication_effects.py`)
+### Communication Effects Visualization (`communication_effects.py`)
 
-- `create_communication_effects_plot()`: 创建通信效果对比图
-- 对比4种通信条件（无通信、买家通信、卖家通信、双向通信）
-- 生成6个子图：卖家利润、买家效用、不诚实产品数量、交易评分、交易数量、总收益
-- 使用带阴影区域的折线图显示均值±标准差
+- `create_communication_effects_plot()`: Create communication effects comparison chart
+- Compare 4 communication conditions (no communication, buyer communication, seller communication, both-way communication)
+- Generate 6 subplots: seller profit, buyer utility, dishonest product count, transaction rating, transaction count, total revenue
+- Use line charts with shaded areas to show mean ± standard deviation
 
-## 配置文件格式
+## Configuration File Format
 
-比较分析配置文件（JSON）：
+Comparison analysis configuration file (JSON):
 
 ```json
 {
@@ -137,21 +137,21 @@ compare_experiments({
 }
 ```
 
-## 输出目录
+## Output Directories
 
-- 单次运行分析：`analysis/outputs/<timestamp>/`
-- 多次运行分析：`experiments/<experiment_id>/analysis/aggregated/`
-- 比较分析：`analysis/comparison_<timestamp>/`
+- Single run analysis: `analysis/outputs/<timestamp>/`
+- Multi-run analysis: `experiments/<experiment_id>/analysis/aggregated/`
+- Comparison analysis: `analysis/comparison_<timestamp>/`
 
-## 依赖
+## Dependencies
 
 - pandas
 - numpy
 - matplotlib
 - seaborn
 
-## 注意事项
+## Notes
 
-1. 确保数据库文件路径正确
-2. 实验 ID 格式应为：`exp_YYYYMMDD_HHMMSS`
-3. 配置文件使用 UTF-8 编码
+1. Ensure database file paths are correct
+2. Experiment ID format should be: `exp_YYYYMMDD_HHMMSS`
+3. Configuration files use UTF-8 encoding
