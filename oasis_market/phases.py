@@ -262,17 +262,55 @@ class CommunicationPhase(MarketPhase):
                     communication_prompt = (
                         "\n\nIn this phase, you are allowed to perform some social platform actions to communicate with other sellers. "
                         "You cannot perform any other actions during this phase.\n"
-                        "You can share your plan of listing products, product information, your experience, or any other information with other sellers to help them make listing decisions. "
+                        "You can share your plan of listing products, product information, your experience, or any other information with other sellers to help them make listing decisions.\n\n"
+                        "**IMPORTANT: Using structured_info for Fraud Attitude Tag**\n"
+                        "When creating a post using create_post(content, structured_info), you MUST use the structured_info parameter "
+                        "to express your attitude towards fraud/deception. You must choose ONE of the following three tags:\n"
+                        "- '[Pro-Fraud]' - Indicates you are willing to use deceptive strategies (e.g., advertise HQ but produce LQ)\n"
+                        "- '[Anti-Fraud]' - Indicates you are committed to honest selling (advertise truthfully)\n"
+                        "- '[Neutral]' - Indicates a flexible approach (may vary based on circumstances)\n\n"
+                        "Example: create_post('I plan to maximize profit this round', '[Pro-Fraud]')\n"
+                        "Example: create_post('Building trust is important for long-term success', '[Anti-Fraud]')\n\n"
+                        "This tag helps other sellers understand your strategic orientation and may influence their own decisions."
                     )
                 else:  # buyer
                     # Prepare buyer state for communication
                     state = AgentManager.prepare_buyer_state(agent, agent_id, round_num, self.db_manager)
                     self.env.current_round = round_num
                     
+                    # Get buyer's last transaction info if available
+                    last_purchase_info = getattr(agent, 'last_purchase_info', {})
+                    seller_id = last_purchase_info.get('seller_id', 'N/A')
+                    advertised_quality = last_purchase_info.get('advertised_quality', 'N/A')
+                    true_quality = last_purchase_info.get('true_quality', 'N/A')
+                    
                     communication_prompt = (
                         "\n\nIn this phase, you are allowed to perform some social platform actions to communicate with other buyers. "
                         "You cannot perform any other actions during this phase.\n"
-                        "You can share your purchase experience, product information, seller reputation, or any other information with other buyers to help them make purchase decisions. "
+                        "You can share your purchase experience, product information, seller reputation, or any other information with other buyers to help them make purchase decisions.\n\n"
+                        "**IMPORTANT: Using structured_info for Transaction Feedback**\n"
+                        "When creating a post using create_post(content, structured_info), you MUST use the structured_info parameter "
+                        "to provide feedback about your previous transaction. This helps other buyers identify fraudulent or honest sellers.\n\n"
+                        "Format: 'Seller_ID: [Fraudulent/Honest] - [brief description]'\n\n"
+                        "Examples:\n"
+                        "- If you were deceived (advertised HQ but received LQ):\n"
+                        "  create_post('Be careful with this seller', 'Seller_5: Fraudulent - Advertised HQ but delivered LQ')\n"
+                        "- If you received what was advertised:\n"
+                        "  create_post('This seller is reliable', 'Seller_3: Honest - Received exactly what was advertised (HQ)')\n\n"
+                    )
+                    
+                    # Add context about last transaction if available
+                    if seller_id != 'N/A' and advertised_quality != 'N/A' and true_quality != 'N/A':
+                        is_fraudulent = advertised_quality == 'HQ' and true_quality == 'LQ'
+                        assessment = "Fraudulent" if is_fraudulent else "Honest"
+                        communication_prompt += (
+                            f"**Your Last Transaction Context:**\n"
+                            f"You purchased from Seller_{seller_id}. They advertised {advertised_quality} but you received {true_quality}.\n"
+                            f"Based on this, your structured_info should indicate: 'Seller_{seller_id}: {assessment} - ...'\n\n"
+                        )
+                    
+                    communication_prompt += (
+                        "This structured feedback helps other buyers make more informed purchase decisions and avoid fraudulent sellers."
                     )
                 
                 # Common communication tools

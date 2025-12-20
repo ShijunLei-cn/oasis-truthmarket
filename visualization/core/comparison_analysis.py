@@ -201,7 +201,7 @@ class ComparisonAnalyzer:
                           for r in common_rounds]
             seller_values = [round_stats.get(str(r), {}).get('avg_seller_profit', 0) 
                            for r in common_rounds]
-            
+        
             buyer_data[exp_label] = buyer_values
             seller_data[exp_label] = seller_values
         
@@ -331,10 +331,10 @@ class ComparisonAnalyzer:
 
 
 def compare_experiments(experiment_configs: Dict[str, str], output_dir: Optional[str] = None):
-    """
+        """
     Convenience function to compare experiments
-    
-    Args:
+        
+        Args:
         experiment_configs: Dictionary mapping experiment names to experiment IDs
         output_dir: Output directory (optional)
     """

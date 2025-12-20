@@ -5,6 +5,7 @@ CREATE TABLE post (
     user_id INTEGER,
     original_post_id INTEGER,  -- NULL if this is an original post
     content TEXT DEFAULT '',  -- DEFAULT '' for initial posts
+    structured_info TEXT DEFAULT '',  -- Structured information for communication (e.g., product details, experience, strategy tags, metadata)
     quote_content TEXT,  -- NULL if this is an original post or a repost
     created_at DATETIME,
     num_likes INTEGER DEFAULT 0,

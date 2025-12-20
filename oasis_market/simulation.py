@@ -80,6 +80,7 @@ class MarketSimulation:
             role="seller",
             model=model,
             db_path=self.database_path,
+            config=self.config,
         )
         
         # Generate buyer agents
@@ -92,6 +93,7 @@ class MarketSimulation:
             role="buyer",
             model=model,
             db_path=self.database_path,
+            config=self.config,
         )
         
         # Add agents to main graph

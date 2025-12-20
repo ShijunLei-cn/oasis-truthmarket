@@ -201,19 +201,21 @@ class MultiRunAnalyzer:
             else:
                 if 'seller_profit' in transactions.columns:
                     honest_profit = transactions['seller_profit'].fillna(0).sum()
+                    dishonest_profit = 0
                 else:
                     honest_profit = 0
-                dishonest_profit = 0
+                    dishonest_profit = 0
                 
                 if 'buyer_utility' in transactions.columns:
                     honest_buyer_utility = transactions['buyer_utility'].fillna(0).sum()
+                    dishonest_buyer_utility = 0
                 else:
                     honest_buyer_utility = 0
-                dishonest_buyer_utility = 0
+                    dishonest_buyer_utility = 0
                 
                 honest_transaction_count = len(transactions)
                 dishonest_transaction_count = 0
-            
+                
             config_groups[config_key]['honest_profits'].append(float(honest_profit))
             config_groups[config_key]['dishonest_profits'].append(float(dishonest_profit))
             config_groups[config_key]['seller_profits'].append(float(honest_profit + dishonest_profit))
@@ -297,7 +299,7 @@ class MultiRunAnalyzer:
             transaction_counts = group['transaction_counts']
             honest_transaction_counts = group['honest_transaction_counts']
             dishonest_transaction_counts = group['dishonest_transaction_counts']
-            
+        
             # Create plots for this configuration
             fig, axes = plt.subplots(2, 2, figsize=(12, 10))
             fig.suptitle(f'Cross-Run Comparison Analysis - {config_label}', fontsize=14, fontweight='bold')
