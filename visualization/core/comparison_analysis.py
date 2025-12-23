@@ -331,7 +331,7 @@ class ComparisonAnalyzer:
 
 
 def compare_experiments(experiment_configs: Dict[str, str], output_dir: Optional[str] = None):
-        """
+    """
     Convenience function to compare experiments
         
         Args:

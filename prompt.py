@@ -132,7 +132,7 @@ Each seller should have distinct backgrounds, professions, ages, interests, gend
 
     # LLM generation user prompt for sellers
     GENERATION_USER_PROMPT = """Create a unique seller persona for agent {0} in a market simulation.
-The seller operates in an online marketplace where they can list products with different quality levels (High Quality HQ or Low Quality LQ).
+The seller operates in an online marketplace where they can list products with different quality levels.
 
 Please provide a JSON response with the following structure:
 {{

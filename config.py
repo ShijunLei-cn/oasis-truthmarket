@@ -15,7 +15,7 @@ class SimulationConfig:
     RUNS = 10
     NUM_SELLERS = 10
     NUM_BUYERS = 10
-    SIMULATION_ROUNDS = 30
+    SIMULATION_ROUNDS = 10
 
     # Market parameters
     MARKET_PARAMS = {                       #TODO: Maybe it needs to be modified because it doesn't match Payoff Matrix.
@@ -33,7 +33,7 @@ class SimulationConfig:
     REPUTATION_LAG = None  # Reputation lag display rounds
     REENTRY_ALLOWED_ROUND = None  # Re-entry market allowed rounds
     INITIAL_WINDOW_ROUNDS = []  # Initial rounds with hidden complete history
-    EXIT_ROUND = 30  # Exit market allowed rounds
+    EXIT_ROUND = None  # Exit market allowed rounds
     MARKET_TYPE = 'reputation_only'
     COMMUNICATION_TYPE = 'none'  # Communication type: 'none', 'seller', 'buyer', 'both'
     
@@ -42,7 +42,6 @@ class SimulationConfig:
     # MODEL_PLATFORM = "vllm"
     MODEL_TYPE = "gpt-4o-mini"
     # MODEL_TYPE = "gpt-4.1"
-    # MODEL_TYPE = "MiniMax-M2"
     # MODEL_TYPE = "Qwen3-8B"
     
     # Path configuration

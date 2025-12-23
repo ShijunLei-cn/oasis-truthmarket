@@ -12,12 +12,12 @@ from .data_loader import ExperimentDataLoader
 class StatisticsCalculator:
     """Calculator for aggregated statistics"""
     
-    def __init__(self, run_data: Dict[int, Dict[str, pd.DataFrame]]):
+    def __init__(self, run_data: Dict[str, Dict[str, pd.DataFrame]]):
         """
         Initialize statistics calculator
         
         Args:
-            run_data: Dictionary mapping run_id to run data dictionaries
+            run_data: Dictionary mapping run_key (str) to run data dictionaries
         """
         self.run_data = run_data
     
