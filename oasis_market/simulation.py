@@ -23,7 +23,7 @@ from prompt import (
     SELLER_GENERATION_SYS_PROMPT, SELLER_GENERATION_USER_PROMPT,
     BUYER_GENERATION_SYS_PROMPT, BUYER_GENERATION_USER_PROMPT
 )
-        
+
 class MarketSimulation:
     """Main market simulation orchestrator"""
     
@@ -67,7 +67,7 @@ class MarketSimulation:
         Returns:
             Tuple of (agent_graph, env)
         """
-
+        
         agent_graph = AgentGraph()
         
         # Generate seller agents

@@ -46,7 +46,7 @@ class MultiRunAnalyzer:
             Dictionary containing aggregated statistics
         """
         if not self.run_data:
-            stats = {
+            return {
                 'experiment_id': self.experiment_id,
                 'total_runs': 0,
                 'summary_stats': {},
@@ -54,8 +54,6 @@ class MultiRunAnalyzer:
                 'seller_profit_by_run': {},
                 'buyer_utility_by_run': {}
             }
-            self.aggregated_data = stats
-            return stats
         
         # Use StatisticsCalculator for calculation
         calculator = StatisticsCalculator(self.run_data)
@@ -199,6 +197,7 @@ class MultiRunAnalyzer:
                 dishonest_transaction_count = len(merged[dishonest_mask])
                 honest_transaction_count = len(merged[~dishonest_mask])
             else:
+                # No product data available, use transactions directly
                 if 'seller_profit' in transactions.columns:
                     honest_profit = transactions['seller_profit'].fillna(0).sum()
                     dishonest_profit = 0
@@ -299,7 +298,7 @@ class MultiRunAnalyzer:
             transaction_counts = group['transaction_counts']
             honest_transaction_counts = group['honest_transaction_counts']
             dishonest_transaction_counts = group['dishonest_transaction_counts']
-        
+            
             # Create plots for this configuration
             fig, axes = plt.subplots(2, 2, figsize=(12, 10))
             fig.suptitle(f'Cross-Run Comparison Analysis - {config_label}', fontsize=14, fontweight='bold')
@@ -369,7 +368,7 @@ class MultiRunAnalyzer:
             for i in range(run_count):
                 label = f"R{i+1}"
                 axes[1, 1].annotate(label, (seller_profits[i], buyer_utilities[i]), 
-                                   xytext=(5, 5), textcoords='offset points', fontsize=8)
+                                    xytext=(5, 5), textcoords='offset points', fontsize=8)
             
             # Save with configuration-specific filename
             safe_config_name = config_key.replace('_', '-')

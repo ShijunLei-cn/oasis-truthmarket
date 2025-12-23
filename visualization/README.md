@@ -58,6 +58,16 @@ python3 visualization/compare_experiments.py \
 python3 visualization/plot_communication_effects.py \
     --experiments-dir experiments \
     --output experiments/communication_effects_rep_only.png
+
+# RQ3: Buyer communication effects (Fake vs Real channels)
+python3 visualization/RQ3_figs.py \
+    --experiments-dir experiments \
+    --output experiments/RQ3_buyer_communication_effects.png
+
+# RQ4: Seller communication effects (Fake vs Real channels)
+python3 visualization/RQ4_figs.py \
+    --experiments-dir experiments \
+    --output experiments/RQ4_seller_communication_effects.png
 ```
 
 ### 3. Using Python API
@@ -125,6 +135,20 @@ compare_experiments({
 - Compare 4 communication conditions (no communication, buyer communication, seller communication, both-way communication)
 - Generate 6 subplots: seller profit, buyer utility, dishonest product count, transaction rating, transaction count, total revenue
 - Use line charts with shaded areas to show mean ± standard deviation
+
+### RQ3 Visualization (`RQ3_figs.py`)
+
+- `create_rq3_plot()`: Create buyer communication effects visualization
+- Compare Fake vs Real communication channels for buyer communication
+- Compare across both market types (reputation_only and reputation_and_warrant)
+- Generate 6 subplots with mean ± std visualization
+
+### RQ4 Visualization (`RQ4_figs.py`)
+
+- `create_rq4_plot()`: Create seller communication effects visualization
+- Compare Fake vs Real communication channels for seller communication
+- Compare across both market types (reputation_only and reputation_and_warrant)
+- Generate 6 subplots with mean ± std visualization
 
 ## Configuration File Format
 
