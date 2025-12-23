@@ -65,6 +65,7 @@ class SocialEnvironment(Environment):
         # === market-sim: add a flag to distinguish modes ===
         self.is_market_sim = False 
         self.config = config if config else SimulationConfig()
+        self.communication_channel_type = "Fake"  # Fake or Real
 
     def get_product_listings_for_env(self) -> str:
         """Query all products on sale from database and format as string."""
@@ -100,7 +101,12 @@ class SocialEnvironment(Environment):
         return listings
 
     def get_posts_communication_for_env(self) -> str:
-        """Query all posts from database and format as string with structured information."""
+        """Query all posts from database and format as string with structured information.
+        
+        Args:
+            current_user_id: The user_id of the current agent viewing the environment.
+                           Used for filtering posts in Fake communication channel mode.
+        """
         if not os.path.exists(self.db_path):
             return "No posts are currently available."
             
@@ -119,6 +125,12 @@ class SocialEnvironment(Environment):
                 posts_env = "Here is the list of posts currently available:\n\n"
                 for p in posts:
                     post_id, content, structured_info, user_id, created_at = p
+                    
+                    # Filter for Fake Communication Channel: only show current agent's own posts
+                    if self.communication_channel_type == "Fake" and self.action.agent_id is not None:
+                        if user_id != self.action.agent_id:
+                            continue  # Skip posts from other agents
+                    
                     # Format structured_info display based on content
                     if structured_info:
                         # Check if it's a seller tag (Pro-Fraud, Anti-Fraud, Neutral) or buyer feedback
@@ -133,6 +145,7 @@ class SocialEnvironment(Environment):
                             structured_info_str = f" [Structured Info: {structured_info}]"
                     else:
                         structured_info_str = ""
+
                     posts_env += f"- Post ID: {post_id}, Author ID: {user_id}\n"
                     posts_env += f"  Content: {content}\n"
                     if structured_info_str:

@@ -20,7 +20,8 @@ load_dotenv(override=True)
 
 
 async def run_experiment(experiment_name: str, market_type: str, 
-                        communication_type: str, run_id: int):
+                        communication_type: str, run_id: int,
+                        communication_channel_type: str = "Fake"):
     """
     Run a single experiment with specified parameters
     
@@ -29,6 +30,7 @@ async def run_experiment(experiment_name: str, market_type: str,
         market_type: Type of market
         communication_type: Type of communication
         run_id: Run identifier
+        communication_channel_type: Type of communication channel ("Fake" or "Real")
     """
     # Create experiment directory
     exp_dir = f"experiments/{experiment_name}"
@@ -39,9 +41,15 @@ async def run_experiment(experiment_name: str, market_type: str,
     db_path = os.path.join(exp_dir, db_filename)
     
     print(f"\n--- Running {db_filename} ---")
+    print(f"  Communication Channel Type: {communication_channel_type}")
     
     # Run simulation
-    await run_single_simulation(db_path, market_type, communication_type)
+    await run_single_simulation(
+        db_path, 
+        market_type=market_type, 
+        communication_type=communication_type,
+        communication_channel_type=communication_channel_type
+    )
     
     return db_path
 
@@ -102,7 +110,8 @@ async def run_batch_experiments():
                   f"Market: {market_type}, Communication: {comm_type}, Run: {run_id}")
             
             db_path = await run_experiment(
-                experiment_name, market_type, comm_type, run_id
+                experiment_name, market_type, comm_type, run_id,
+                communication_channel_type="Fake"
             )
             
             results.append({

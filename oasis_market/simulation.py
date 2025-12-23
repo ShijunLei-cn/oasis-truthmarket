@@ -15,8 +15,15 @@ from .logging import ActionLogger, SimulationLogger
 from .phases import (
     SellerListingPhase, BuyerPurchasePhase, BuyerRatingPhase, CommunicationPhase
 )
-
-
+from camel.models import ModelFactory
+import oasis
+from oasis import AgentGraph, make
+from oasis.social_agent.agents_generator import generate_agent_from_LLM
+from prompt import (
+    SELLER_GENERATION_SYS_PROMPT, SELLER_GENERATION_USER_PROMPT,
+    BUYER_GENERATION_SYS_PROMPT, BUYER_GENERATION_USER_PROMPT
+)
+        
 class MarketSimulation:
     """Main market simulation orchestrator"""
     
@@ -60,14 +67,7 @@ class MarketSimulation:
         Returns:
             Tuple of (agent_graph, env)
         """
-        import oasis
-        from oasis import AgentGraph, make
-        from oasis.social_agent.agents_generator import generate_agent_from_LLM
-        from prompt import (
-            SELLER_GENERATION_SYS_PROMPT, SELLER_GENERATION_USER_PROMPT,
-            BUYER_GENERATION_SYS_PROMPT, BUYER_GENERATION_USER_PROMPT
-        )
-        
+
         agent_graph = AgentGraph()
         
         # Generate seller agents
@@ -99,10 +99,12 @@ class MarketSimulation:
         # Add agents to main graph
         for agent_id, agent in seller_agent_graph.get_agents():
             agent.env.is_market_sim = True
+            agent.env.communication_channel_type = self.config.COMMUNICATION_CHANNEL_TYPE
             agent_graph.add_agent(agent)
         
         for agent_id, agent in buyer_agent_graph.get_agents():
             agent.env.is_market_sim = True
+            agent.env.communication_channel_type = self.config.COMMUNICATION_CHANNEL_TYPE
             agent_graph.add_agent(agent)
         
         # Create environment
@@ -237,7 +239,6 @@ class MarketSimulation:
         self.setup_environment()
         
         # Create model
-        from camel.models import ModelFactory
         self.model = ModelFactory.create(
             model_platform=self.config.MODEL_PLATFORM,
             model_type=self.config.MODEL_TYPE,
@@ -271,7 +272,7 @@ class MarketSimulation:
 
 # Convenience function for backward compatibility
 async def run_single_simulation(database_path: str, market_type: Optional[str] = None,
-                               communication_type: str = 'none'):
+                               communication_type: str = 'none', communication_channel_type: str = "Fake"):
     """
     Run a single market simulation (backward compatibility wrapper)
     
@@ -279,18 +280,22 @@ async def run_single_simulation(database_path: str, market_type: Optional[str] =
         database_path: Path to database file
         market_type: Type of market
         communication_type: Type of communication
+        communication_channel_type: Type of communication channel ("Fake" or "Real")
     """
     from config import SimulationConfig
     
     # Override communication type in config if needed
     original_comm_type = getattr(SimulationConfig, 'COMMUNICATION_TYPE', 'none')
+    original_comm_channel_type = getattr(SimulationConfig, 'COMMUNICATION_CHANNEL_TYPE', "Fake")
     SimulationConfig.COMMUNICATION_TYPE = communication_type
+    SimulationConfig.COMMUNICATION_CHANNEL_TYPE = communication_channel_type
     
     simulation = MarketSimulation(database_path, SimulationConfig)
     await simulation.run(market_type, communication_type)
     
     # Restore original communication type
     SimulationConfig.COMMUNICATION_TYPE = original_comm_type
+    SimulationConfig.COMMUNICATION_CHANNEL_TYPE = original_comm_channel_type
 
 
 # Test cases

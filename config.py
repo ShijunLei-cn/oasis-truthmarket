@@ -36,6 +36,7 @@ class SimulationConfig:
     EXIT_ROUND = None  # Exit market allowed rounds
     MARKET_TYPE = 'reputation_only'
     COMMUNICATION_TYPE = 'none'  # Communication type: 'none', 'seller', 'buyer', 'both'
+    COMMUNICATION_CHANNEL_TYPE = "Fake"  # Communication channel type: "Fake" or "Real"
     
     # Model configuration
     MODEL_PLATFORM = "openai"
@@ -87,6 +88,7 @@ class SimulationConfig:
             'EXIT_ROUND': cls.EXIT_ROUND,
             'MARKET_TYPE': cls.MARKET_TYPE,
             'COMMUNICATION_TYPE': cls.COMMUNICATION_TYPE,
+            'COMMUNICATION_CHANNEL_TYPE': cls.COMMUNICATION_CHANNEL_TYPE,
             'MODEL_PLATFORM': cls.MODEL_PLATFORM,
             'MODEL_TYPE': cls.MODEL_TYPE
         }

@@ -61,6 +61,14 @@ Examples:
         help='Communication type: none, seller, buyer, or both (default: none)'
     )
     
+    parser.add_argument(
+        '-cc', '--communication-channel-type',
+        dest='communication_channel_type',
+        choices=['Fake', 'Real'],
+        default='Real',
+        help='Communication channel type: Fake or Real (default: Fake)'
+    )
+    
     return parser.parse_args()
 
 
@@ -78,6 +86,8 @@ async def main():
     print(f"Database: {args.db_path}")
     print(f"Market Type: {args.market_type or SimulationConfig.MARKET_TYPE}")
     print(f"Communication: {args.communication_type}")
+    print(f"Communication Channel Type: {args.communication_channel_type}")
+    print("=" * 60)
     print(f"Sellers: {SimulationConfig.NUM_SELLERS}")
     print(f"Buyers: {SimulationConfig.NUM_BUYERS}")
     print(f"Rounds: {SimulationConfig.SIMULATION_ROUNDS}")
@@ -87,8 +97,10 @@ async def main():
     await run_single_simulation(
         args.db_path,
         market_type=args.market_type,
-        communication_type=args.communication_type
+        communication_type=args.communication_type,
+        communication_channel_type=args.communication_channel_type
     )
+    
 
 
 if __name__ == "__main__":
