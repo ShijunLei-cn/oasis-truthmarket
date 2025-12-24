@@ -784,14 +784,14 @@ class SocialAction:
         return await self.perform_action(self.agent_id,
                                          ActionType.LISTEN_FROM_GROUP.value)
 
-    async def list_product(self, advertised_quality: str, product_quality: str, has_warrant: bool = False):
+    async def list_product(self, advertised_quality: str, product_quality: str, has_warrant: bool = False, price: float = None):
         r"""List a product for sale in the market for the current round.
 
         This method invokes an asynchronous action to list a product for sale
         in the market. The product can have different advertised and actual
-        qualities, and optionally include a truth warrant. Upon successful
-        execution, it returns a dictionary indicating success and the ID of the
-        newly created product listing.
+        qualities, and optionally include a truth warrant. You can also specify
+        a custom price for the product. Upon successful execution, it returns a
+        dictionary indicating success and the ID of the newly created product listing.
 
         Args:
             advertised_quality (str): The quality of the product advertised to
@@ -802,6 +802,10 @@ class SocialAction:
                 product. Defaults to False. A truth warrant allows buyers to
                 challenge the product if the advertised quality does not match
                 the actual quality.
+            price (float, optional): The price you want to set for this product.
+                If not specified, the system will use default pricing based on
+                advertised quality (HQ: 5.0, LQ: 3.0). You can set any price
+                you want to maximize your profit or compete with other sellers.
 
         Returns:
             dict: A dictionary with two key-value pairs. The 'success' key
@@ -817,6 +821,8 @@ class SocialAction:
             "product_quality": product_quality,
             "has_warrant": has_warrant,
         }
+        if price is not None:
+            product_details["price"] = float(price)
         return await self.perform_action(product_details, 
                                         ActionType.LIST_PRODUCT.value)
 
