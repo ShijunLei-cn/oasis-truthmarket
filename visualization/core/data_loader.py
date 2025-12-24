@@ -104,23 +104,10 @@ class ExperimentDataLoader:
         self.paths = SimulationConfig.get_experiment_paths(experiment_id)
         self.run_data = {}
         self.config = self._load_config()
+        self.experiment_config = self._load_experiment_config()  # Load experiment-level config
     
     def _load_config(self) -> Dict[str, Any]:
-        """Load experiment configuration from config.json or experiment_config.json"""
-        # Try config_file first (if exists)
-        config_file = self.paths.get('config_file')
-        if config_file and os.path.exists(config_file):
-            try:
-                with open(config_file, 'r', encoding='utf-8') as f:
-                    config = json.load(f)
-                    # If it's experiment_config.json format, extract simulation_config
-                    if 'simulation_config' in config:
-                        return config['simulation_config']
-                    return config
-            except Exception as e:
-                print(f"Warning: Could not load config file: {e}")
-        
-        # Try experiment_config.json as fallback
+        """Load simulation configuration from experiment_config.json (simulation_config field)"""
         exp_config_file = os.path.join(self.paths['experiment_dir'], 'experiment_config.json')
         if os.path.exists(exp_config_file):
             try:
@@ -130,6 +117,28 @@ class ExperimentDataLoader:
                         return config['simulation_config']
             except Exception:
                 pass
+        
+        return {}
+    
+    def _load_experiment_config(self) -> Dict[str, Any]:
+        """Load experiment-level configuration from experiment_config.json"""
+        exp_config_file = os.path.join(self.paths['experiment_dir'], 'experiment_config.json')
+        if os.path.exists(exp_config_file):
+            try:
+                with open(exp_config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    # Return experiment-level config (excluding simulation_config)
+                    exp_config = {
+                        'experiment_id': config.get('experiment_id'),
+                        'market_type': config.get('market_type'),
+                        'communication_type': config.get('communication_type'),
+                        'communication_channel_type': config.get('communication_channel_type'),
+                        'runs': config.get('runs'),
+                        'timestamp': config.get('timestamp')
+                    }
+                    return exp_config
+            except Exception as e:
+                print(f"Warning: Could not load experiment config: {e}")
         
         return {}
     

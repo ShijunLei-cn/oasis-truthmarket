@@ -255,7 +255,6 @@ class SocialEnvironment(Environment):
                 simulation_rounds=self.config.SIMULATION_ROUNDS,
                 cumulative_utility=agent.cumulative_utility,
                 available_products=available_products,
-                seller_reputation_info=seller_reputation_info
             )
             
         elif market_phase == "rating" and role == "buyer":

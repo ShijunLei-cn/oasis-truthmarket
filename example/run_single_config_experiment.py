@@ -39,7 +39,8 @@ async def run_experiment(experiment_id: str, market_type: str,
     os.makedirs(exp_dir, exist_ok=True)
     
     # Generate database path
-    db_filename = f"run_{run_id}_{market_type}_{communication_type}.db"
+    # Include communication_channel_type in filename to avoid conflicts
+    db_filename = f"run_{run_id}_{market_type}_{communication_type}_{communication_channel_type}.db"
     db_path = os.path.join(exp_dir, db_filename)
     
     print(f"\n--- Running {db_filename} ---")

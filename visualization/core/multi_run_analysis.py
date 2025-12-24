@@ -47,13 +47,13 @@ class MultiRunAnalyzer:
         """
         if not self.run_data:
             return {
-                'experiment_id': self.experiment_id,
+            'experiment_id': self.experiment_id,
                 'total_runs': 0,
-                'summary_stats': {},
-                'round_stats': {},
-                'seller_profit_by_run': {},
-                'buyer_utility_by_run': {}
-            }
+            'summary_stats': {},
+            'round_stats': {},
+            'seller_profit_by_run': {},
+            'buyer_utility_by_run': {}
+        }
         
         # Use StatisticsCalculator for calculation
         calculator = StatisticsCalculator(self.run_data)
@@ -87,18 +87,35 @@ class MultiRunAnalyzer:
         Parse configuration from run_key (filename)
         
         Args:
-            run_key: Run key (e.g., 'run_1_reputation_only_both')
+            run_key: Run key (e.g., 'run_1_reputation_only_both_Fake', 'run_Fake_reputation_only_seller_1', or 'run_1_reputation_only_both')
             
         Returns:
             Tuple of (market_type, communication_type) or (None, None) if cannot parse
         """
-        # Pattern: run_<number>_<market_type>_<communication_type>
+        # Pattern 1: run_<communication_channel_type>_<market_type>_<communication_type>_<number>
+        # Examples: run_Fake_reputation_only_seller_1, run_Real_reputation_and_warrant_buyer_2
+        match = re.match(r'run_(Fake|Real)_(reputation_only|reputation_and_warrant)_(none|seller|buyer|both)_\d+', run_key)
+        if match:
+            market_type = match.group(2)
+            comm_type = match.group(3)
+            return (market_type, comm_type)
+        
+        # Pattern 2: run_<number>_<market_type>_<communication_type>_<communication_channel_type>
+        # Examples: run_1_reputation_only_both_Fake, run_2_reputation_and_warrant_none_Real
+        match = re.match(r'run_\d+_(reputation_only|reputation_and_warrant)_(none|seller|buyer|both)_(Fake|Real)', run_key)
+        if match:
+            market_type = match.group(1)
+            comm_type = match.group(2)
+            return (market_type, comm_type)
+        
+        # Pattern 3: run_<number>_<market_type>_<communication_type> (legacy format without channel type)
         # Examples: run_1_reputation_only_both, run_2_reputation_and_warrant_none
         match = re.match(r'run_\d+_(reputation_only|reputation_and_warrant)_(none|seller|buyer|both)', run_key)
         if match:
             market_type = match.group(1)
             comm_type = match.group(2)
             return (market_type, comm_type)
+        
         return (None, None)
     
     def _format_config_label(self, market_type: str, comm_type: str) -> str:
@@ -137,28 +154,39 @@ class MultiRunAnalyzer:
         if not self.run_data:
             return {}
         
-        # Group runs by configuration
-        config_groups = {}
+        # Get configuration from experiment_config.json (more reliable than parsing filename)
+        exp_config = self.data_loader.experiment_config
+        if not exp_config:
+            # Fallback to parsing filename if config not available
+            print("Warning: experiment_config.json not found, falling back to filename parsing")
+            return self._prepare_config_grouped_data_from_filenames()
+        
+        market_type = exp_config.get('market_type')
+        comm_type = exp_config.get('communication_type')
+        
+        if not market_type or not comm_type:
+            print("Warning: market_type or communication_type not found in experiment_config.json, falling back to filename parsing")
+            return self._prepare_config_grouped_data_from_filenames()
+        
+        # All runs in this experiment share the same configuration
+        config_key = f"{market_type}_{comm_type}"
+        config_groups = {
+            config_key: {
+                'market_type': market_type,
+                'comm_type': comm_type,
+                'run_keys': [],
+                'seller_profits': [],
+                'honest_profits': [],
+                'dishonest_profits': [],
+                'buyer_utilities': [],
+                'transaction_counts': [],
+                'honest_transaction_counts': [],
+                'dishonest_transaction_counts': []
+            }
+        }
+        
+        # Group runs by configuration (all runs in same experiment share same config)
         for run_key, data in self.run_data.items():
-            market_type, comm_type = self._parse_config_from_run_key(run_key)
-            if market_type is None or comm_type is None:
-                continue
-            
-            config_key = f"{market_type}_{comm_type}"
-            if config_key not in config_groups:
-                config_groups[config_key] = {
-                    'market_type': market_type,
-                    'comm_type': comm_type,
-                    'run_keys': [],
-                    'seller_profits': [],
-                    'honest_profits': [],
-                    'dishonest_profits': [],
-                    'buyer_utilities': [],
-                    'transaction_counts': [],
-                    'honest_transaction_counts': [],
-                    'dishonest_transaction_counts': []
-                }
-            
             transactions = data.get('transactions', pd.DataFrame())
             products = data.get('product', pd.DataFrame())
             
@@ -166,7 +194,7 @@ class MultiRunAnalyzer:
                 continue
             
             config_groups[config_key]['run_keys'].append(run_key)
-            
+                
             # Calculate profits and utilities (same logic as StatisticsCalculator)
             if not products.empty and 'product_id' in transactions.columns:
                 merged = transactions.merge(
@@ -223,7 +251,108 @@ class MultiRunAnalyzer:
             config_groups[config_key]['dishonest_transaction_counts'].append(int(dishonest_transaction_count))
             config_groups[config_key]['transaction_counts'].append(int(honest_transaction_count + dishonest_transaction_count))
         
-        # Calculate statistics for each config
+        return self._calculate_config_statistics(config_groups)
+    
+    def _prepare_config_grouped_data_from_filenames(self) -> Dict[str, Any]:
+        """
+        Fallback method: Prepare data grouped by configuration by parsing filenames
+        
+        Returns:
+            Dictionary containing grouped data by configuration
+        """
+        if not self.run_data:
+            return {}
+        
+        # Group runs by configuration (parsing from filename)
+        config_groups = {}
+        for run_key, data in self.run_data.items():
+            market_type, comm_type = self._parse_config_from_run_key(run_key)
+            if market_type is None or comm_type is None:
+                continue
+            
+            config_key = f"{market_type}_{comm_type}"
+            if config_key not in config_groups:
+                config_groups[config_key] = {
+                    'market_type': market_type,
+                    'comm_type': comm_type,
+                    'run_keys': [],
+                    'seller_profits': [],
+                    'honest_profits': [],
+                    'dishonest_profits': [],
+                    'buyer_utilities': [],
+                    'transaction_counts': [],
+                    'honest_transaction_counts': [],
+                    'dishonest_transaction_counts': []
+                }
+            
+            transactions = data.get('transactions', pd.DataFrame())
+            products = data.get('product', pd.DataFrame())
+            
+            if transactions.empty:
+                continue
+            
+            config_groups[config_key]['run_keys'].append(run_key)
+                
+            # Calculate profits and utilities (same logic as main method)
+            if not products.empty and 'product_id' in transactions.columns:
+                merged = transactions.merge(
+                    products[['product_id', 'advertised_quality', 'true_quality']],
+                    on='product_id',
+                    how='left'
+                )
+                
+                dishonest_mask = (
+                    (merged['advertised_quality'] == 'HQ') & 
+                    (merged['true_quality'] == 'LQ')
+                )
+                
+                if 'seller_profit' in merged.columns:
+                    dishonest_profit = merged[dishonest_mask]['seller_profit'].fillna(0).sum()
+                    honest_profit = merged[~dishonest_mask]['seller_profit'].fillna(0).sum()
+                else:
+                    dishonest_profit = 0
+                    honest_profit = 0
+                
+                if 'buyer_utility' in merged.columns:
+                    dishonest_buyer_utility = merged[dishonest_mask]['buyer_utility'].fillna(0).sum()
+                    honest_buyer_utility = merged[~dishonest_mask]['buyer_utility'].fillna(0).sum()
+                else:
+                    dishonest_buyer_utility = 0
+                    honest_buyer_utility = 0
+                
+                dishonest_transaction_count = len(merged[dishonest_mask])
+                honest_transaction_count = len(merged[~dishonest_mask])
+            else:
+                # No product data available, use transactions directly
+                if 'seller_profit' in transactions.columns:
+                    honest_profit = transactions['seller_profit'].fillna(0).sum()
+                    dishonest_profit = 0
+                else:
+                    honest_profit = 0
+                    dishonest_profit = 0
+                
+                if 'buyer_utility' in transactions.columns:
+                    honest_buyer_utility = transactions['buyer_utility'].fillna(0).sum()
+                    dishonest_buyer_utility = 0
+                else:
+                    honest_buyer_utility = 0
+                    dishonest_buyer_utility = 0
+                
+                honest_transaction_count = len(transactions)
+                dishonest_transaction_count = 0
+            
+            config_groups[config_key]['honest_profits'].append(float(honest_profit))
+            config_groups[config_key]['dishonest_profits'].append(float(dishonest_profit))
+            config_groups[config_key]['seller_profits'].append(float(honest_profit + dishonest_profit))
+            config_groups[config_key]['buyer_utilities'].append(float(honest_buyer_utility + dishonest_buyer_utility))
+            config_groups[config_key]['honest_transaction_counts'].append(int(honest_transaction_count))
+            config_groups[config_key]['dishonest_transaction_counts'].append(int(dishonest_transaction_count))
+            config_groups[config_key]['transaction_counts'].append(int(honest_transaction_count + dishonest_transaction_count))
+        
+        return self._calculate_config_statistics(config_groups)
+    
+    def _calculate_config_statistics(self, config_groups: Dict[str, Any]) -> Dict[str, Any]:
+        """Calculate statistics for configuration groups"""
         config_stats = {}
         config_labels = []
         
@@ -266,9 +395,18 @@ class MultiRunAnalyzer:
         os.makedirs(out_dir, exist_ok=True)
         
         # Get configuration-grouped data
-        grouped_data = self._prepare_config_grouped_data()
-        if not grouped_data or not grouped_data.get('config_groups'):
-            print("Warning: Could not prepare configuration-grouped data")
+        try:
+            grouped_data = self._prepare_config_grouped_data()
+            if not grouped_data:
+                print("Warning: _prepare_config_grouped_data returned None or empty dict")
+                return
+            if not grouped_data.get('config_groups'):
+                print(f"Warning: config_groups is missing or empty. Keys in grouped_data: {list(grouped_data.keys())}")
+                return
+        except Exception as e:
+            print(f"Error in _prepare_config_grouped_data: {e}")
+            import traceback
+            traceback.print_exc()
             return
         
         setup_plot_style()
@@ -368,7 +506,7 @@ class MultiRunAnalyzer:
             for i in range(run_count):
                 label = f"R{i+1}"
                 axes[1, 1].annotate(label, (seller_profits[i], buyer_utilities[i]), 
-                                    xytext=(5, 5), textcoords='offset points', fontsize=8)
+                                   xytext=(5, 5), textcoords='offset points', fontsize=8)
             
             # Save with configuration-specific filename
             safe_config_name = config_key.replace('_', '-')
@@ -381,9 +519,24 @@ class MultiRunAnalyzer:
         os.makedirs(out_dir, exist_ok=True)
         
         # Get configuration-grouped data
-        grouped_data = self._prepare_config_grouped_data()
-        if not grouped_data or not grouped_data.get('config_labels'):
-            print("Warning: Could not prepare configuration-grouped data, falling back to all-runs view")
+        try:
+            grouped_data = self._prepare_config_grouped_data()
+            if not grouped_data:
+                print("Warning: _prepare_config_grouped_data returned None or empty dict")
+                # Fallback to old method
+                data = self._prepare_cross_run_data()
+                if not data:
+                    return
+                # ... (old plotting code as fallback)
+                return
+            if not grouped_data.get('config_labels'):
+                print(f"Warning: config_labels is missing. Keys in grouped_data: {list(grouped_data.keys())}")
+                return
+        except Exception as e:
+            print(f"Error in _prepare_config_grouped_data: {e}")
+            import traceback
+            traceback.print_exc()
+            return
             # Fallback to old method
             data = self._prepare_cross_run_data()
             if not data:
@@ -479,9 +632,18 @@ class MultiRunAnalyzer:
         os.makedirs(out_dir, exist_ok=True)
         
         # Get configuration-grouped data
-        grouped_data = self._prepare_config_grouped_data()
-        if not grouped_data or not grouped_data.get('config_groups'):
-            print("Warning: Could not prepare configuration-grouped data for round progression")
+        try:
+            grouped_data = self._prepare_config_grouped_data()
+            if not grouped_data:
+                print("Warning: _prepare_config_grouped_data returned None or empty dict for round progression")
+                return
+            if not grouped_data.get('config_groups'):
+                print(f"Warning: config_groups is missing for round progression. Keys: {list(grouped_data.keys())}")
+                return
+        except Exception as e:
+            print(f"Error in _prepare_config_grouped_data for round progression: {e}")
+            import traceback
+            traceback.print_exc()
             return
         
         setup_plot_style()
