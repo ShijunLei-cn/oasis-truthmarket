@@ -2,11 +2,11 @@
 
 | Metric | Reputation-Only (Mean ± Std) | Reputation+Warrant (Mean ± Std) | Change (%) | p-value |
 |---|---|---|---|---|
-| Buyer Utility | 161.70 ± 24.61 | 196.30 ± 8.09 | 21.4% | 0.0008 |
-| Seller Profit | 192.50 ± 9.36 | 199.30 ± 7.81 | 3.5% | 0.1116 |
-| Transactions | 61.80 ± 3.97 | 66.30 ± 2.53 | 7.3% | 0.0102 |
-| Deception Rate | 9.20 ± 5.34 | 2.20 ± 1.78 | -76.1% | 0.0015 |
-| Market Efficiency | 354.20 ± 32.91 | 395.60 ± 15.09 | 11.7% | 0.0030 |
+| Buyer Utility | 146.80 ± 6.40 | 119.20 ± 25.70 | -18.8% | 0.0707 |
+| Seller Profit | 146.00 ± 8.00 | 150.00 ± 27.47 | 2.7% | 0.7869 |
+| Transactions | 49.60 ± 0.80 | 46.00 ± 3.03 | -7.3% | 0.0508 |
+| Deception Rate | 0.20 ± 0.40 | 2.40 ± 1.85 | 1100.0% | 0.0490 |
+| Market Efficiency | 292.80 ± 14.40 | 269.20 ± 18.27 | -8.1% | 0.0770 |
 
 ```latex
 \begin{table}[htbp]
@@ -17,11 +17,11 @@
 \toprule
 Metric & Reputation-Only (Mean ± Std) & Reputation+Warrant (Mean ± Std) & Change (%) & p-value \\
 \midrule
-Buyer Utility & 161.70 ± 24.61 & 196.30 ± 8.09 & 21.4% & 0.0008 \\
-Seller Profit & 192.50 ± 9.36 & 199.30 ± 7.81 & 3.5% & 0.1116 \\
-Transactions & 61.80 ± 3.97 & 66.30 ± 2.53 & 7.3% & 0.0102 \\
-Deception Rate & 9.20 ± 5.34 & 2.20 ± 1.78 & -76.1% & 0.0015 \\
-Market Efficiency & 354.20 ± 32.91 & 395.60 ± 15.09 & 11.7% & 0.0030 \\
+Buyer Utility & 146.80 ± 6.40 & 119.20 ± 25.70 & -18.8% & 0.0707 \\
+Seller Profit & 146.00 ± 8.00 & 150.00 ± 27.47 & 2.7% & 0.7869 \\
+Transactions & 49.60 ± 0.80 & 46.00 ± 3.03 & -7.3% & 0.0508 \\
+Deception Rate & 0.20 ± 0.40 & 2.40 ± 1.85 & 1100.0% & 0.0490 \\
+Market Efficiency & 292.80 ± 14.40 & 269.20 ± 18.27 & -8.1% & 0.0770 \\
 \bottomrule
 \end{tabular}
 \end{table}
