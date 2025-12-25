@@ -58,6 +58,9 @@ class AgentManager:
         # Update agent attributes
         agent.reputation_score = state['reputation_score']
         agent.history_summary = visible_history_string
+        # Store budget in agent for potential use
+        if 'budget' in state:
+            agent.current_budget = state['budget']
         
         return state, visible_history_string
     

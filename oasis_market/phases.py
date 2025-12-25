@@ -75,7 +75,13 @@ class SellerListingPhase(MarketPhase):
                 # Update environment state
                 self.env.current_round = round_num
                 
-                # Prepare round prompt
+                # Prepare round prompt with budget information
+                from prompt import MarketEnv_prompt
+                budget = state.get('budget', 10.0)
+                total_profit = state.get('total_profit', 0)
+                reputation_score = state.get('reputation_score', 0)
+                
+                # Add budget information to the prompt
                 seller_round_prompt = SELLER_ROUND_PROMPT.format(
                     history_summary=visible_history_string
                 )

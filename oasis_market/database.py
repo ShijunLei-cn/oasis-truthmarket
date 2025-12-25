@@ -66,7 +66,7 @@ class MarketDatabase:
         if not os.path.exists(self.database_path) or not self._table_exists('user'):
             # Return initial states if database doesn't exist or tables not initialized
             if role == 'seller':
-                return {'reputation_score': 0, 'total_profit': 0}
+                return {'reputation_score': 0, 'total_profit': 0, 'budget': 5.0}
             else:
                 return {'cumulative_utility': 0, 'total_utility': 0}
         
@@ -75,14 +75,15 @@ class MarketDatabase:
         
         state = {}
         if role == 'seller':
-            # Get seller basic information
+            # Get seller basic information including budget
             cursor.execute(
-                "SELECT reputation_score, profit_utility_score FROM user WHERE agent_id = ?",
+                "SELECT reputation_score, profit_utility_score, budget FROM user WHERE agent_id = ?",
                 (agent_id,)
             )
             result = cursor.fetchone()
             state['reputation_score'] = result[0] if result else 0
             state['total_profit'] = result[1] if result else 0
+            state['budget'] = result[2] if result and len(result) > 2 and result[2] is not None else 10.0
             
             # Get sales information for this round
             if round_num > 0:

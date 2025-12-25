@@ -1783,11 +1783,26 @@ class Platform:
             else:
                 price = self.market_params['hq_price'] if adv_q == 'HQ' else self.market_params['lq_price']
 
+            # Check budget before listing product
             self.pl_utils._execute_db_command("SELECT budget FROM user WHERE agent_id = ?", (seller_id,))
-            current_budget = self.db_cursor.fetchone()[0]
+            budget_result = self.db_cursor.fetchone()
+            if not budget_result:
+                return {"success": False, "error": f"Seller {seller_id} not found in database."}
+            
+            current_budget = budget_result[0]
+            if current_budget is None:
+                current_budget = 10.0  # Default budget if None
+            
             if current_budget < cost:
-                raise ValueError(f"Not enough budget to list product. Current budget: {current_budget}, Cost: {cost}")
+                quality_name = "High Quality (HQ)" if prod_q == 'HQ' else "Low Quality (LQ)"
+                return {
+                    "success": False, 
+                    "error": f"Insufficient budget to list {quality_name} product. "
+                             f"Required: ${cost:.2f}, Available: ${current_budget:.2f}. "
+                             f"Please choose a product quality that fits your budget or wait until you have more funds."
+                }
 
+            # Deduct production cost from budget
             self.pl_utils._execute_db_command("UPDATE user SET budget = budget - ? WHERE agent_id = ?", (cost, seller_id), commit=True)
 
             insert_query = (

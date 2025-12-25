@@ -13,8 +13,8 @@ class SimulationConfig:
     
     # Experiment configuration
     RUNS = 10
-    NUM_SELLERS = 10
-    NUM_BUYERS = 10
+    NUM_SELLERS = 5
+    NUM_BUYERS = 5
     SIMULATION_ROUNDS = 10
 
     # Market parameters

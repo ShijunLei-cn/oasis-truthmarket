@@ -236,6 +236,23 @@ class SocialEnvironment(Environment):
             # Seller in listing phase: observe previous phase purchase feedback and current market status
             previous_feedback = self._get_previous_feedback(agent)
             total_profit = getattr(agent, 'total_profit', 0)
+            # Get budget from agent or database
+            budget = getattr(agent, 'current_budget', None)
+            if budget is None:
+                # Try to get from database if not in agent
+                db_path = get_db_path()
+                if db_path and os.path.exists(db_path):
+                    try:
+                        conn = sqlite3.connect(db_path)
+                        cursor = conn.cursor()
+                        cursor.execute("SELECT budget FROM user WHERE agent_id = ?", (agent.social_agent_id,))
+                        result = cursor.fetchone()
+                        budget = result[0] if result and result[0] is not None else 5.0  # Seller default budget
+                        conn.close()
+                    except Exception:
+                        budget = 5.0  # Seller default budget
+                else:
+                    budget = 5.0  # Seller default budget
             
             return MarketEnv_prompt.SELLER_LISTING_ENV.format(
                 previous_feedback=previous_feedback,
@@ -243,6 +260,7 @@ class SocialEnvironment(Environment):
                 simulation_rounds=self.config.SIMULATION_ROUNDS,
                 reputation_score=agent.reputation_score,
                 total_profit=total_profit,
+                budget=budget,
             )
             
         elif market_phase == "purchase" and role == "buyer":

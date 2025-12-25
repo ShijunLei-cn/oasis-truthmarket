@@ -77,7 +77,14 @@ class SocialAgent(ChatAgent):
         self.env = SocialEnvironment(SocialAction(agent_id, self.channel), db_path=db_path)
         
         # Agent state attributes
-        self.initial_budget = 10  # Seller and Buyer initial budget in simulation
+        # Set initial budget based on role: seller=5, buyer=10
+        role = user_info.profile.get("role") if user_info.profile else None
+        if role == "seller":
+            self.initial_budget = 5.0
+        elif role == "buyer":
+            self.initial_budget = 10.0
+        else:
+            self.initial_budget = 10.0  # Default for unknown roles
         self.reputation_score = 0    # Seller reputation
         self.cumulative_utility = 0  # Buyer cumulative utility
         self.history_summary = "This is the first round. You have no past performance data."
