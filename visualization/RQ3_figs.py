@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """
-RQ3 Visualization: Buyer Communication Effects
-Analyze seller Fraud Attitude Tags and buyer Transaction Feedback from posts
+RQ3 Visualization: Group-Level Deception Dynamics
+When sellers can observe market behavior, does group-level deception emerge through social learning?
+
+This visualization analyzes seller Fraud Attitude Tags from posts to examine whether deceptive 
+strategies spread through agent observation and imitation, potentially leading to market-wide 
+degradation of trust.
 """
 
 import sys
@@ -126,7 +130,8 @@ def aggregate_condition_data(experiments_dir: str, experiment_ids: List[str],
             continue
         
         # Find all actions.json files in this experiment directory
-        pattern = f"*{market_type}_{communication_type}_actions.json"
+        # Pattern: run_*_reputation_only_seller*_actions.json or run_*_reputation_and_warrant_seller*_actions.json
+        pattern = f"*{market_type}_{communication_type}*_actions.json"
         actions_files = glob.glob(os.path.join(exp_dir, pattern))
         all_actions_files.extend(actions_files)
     
@@ -181,27 +186,28 @@ def aggregate_condition_data(experiments_dir: str, experiment_ids: List[str],
 
 def create_rq3_plot(experiments_dir: str, output_file: str):
     """
-    Create RQ3 visualization: Buyer Communication Effects
-    Analyze seller Fraud Attitude Tags and buyer Transaction Feedback
+    Create RQ3 visualization: Group-Level Deception Dynamics
+    Analyze seller Fraud Attitude Tags to examine group-level deception emergence
     """
     
-    # Define experiment IDs
-    r_fake_id = 'r_wbc_F'
-    r_real_id = 'r_wbc_R'
-    rw_fake_id = 'rw_wbc_F'
-    rw_real_id = 'rw_wbc_R'
+    # Define experiment IDs (seller communication experiments)
+    r_fake_id = 'r_wsc_F'
+    r_real_id = 'r_wsc_R'
+    rw_fake_id = 'rw_wsc_F'
+    rw_real_id = 'rw_wsc_R'
     
     # Aggregate data for each condition
-    # Note: For buyer communication experiments, we analyze both seller tags and buyer feedback
+    # Note: For seller communication experiments, we analyze seller Fraud Attitude Tags
+    # to examine whether deceptive strategies spread through social learning
     condition_data = {
         'r_fake': aggregate_condition_data(experiments_dir, [r_fake_id], 
-                                          'reputation_only', 'buyer'),
+                                          'reputation_only', 'seller'),
         'r_real': aggregate_condition_data(experiments_dir, [r_real_id], 
-                                          'reputation_only', 'buyer'),
+                                          'reputation_only', 'seller'),
         'rw_fake': aggregate_condition_data(experiments_dir, [rw_fake_id], 
-                                            'reputation_and_warrant', 'buyer'),
+                                            'reputation_and_warrant', 'seller'),
         'rw_real': aggregate_condition_data(experiments_dir, [rw_real_id], 
-                                             'reputation_and_warrant', 'buyer'),
+                                             'reputation_and_warrant', 'seller'),
     }
     
     # Get all rounds
@@ -231,7 +237,7 @@ def create_rq3_plot(experiments_dir: str, output_file: str):
     
     ax.set_xlabel('Round', fontweight='bold')
     ax.set_ylabel('Pro-Fraud Tag Count', fontweight='bold')
-    ax.set_title('Seller Pro-Fraud Attitude Tags Over Rounds', fontweight='bold')
+    ax.set_title('Group-Level Pro-Fraud Attitude Tags Over Rounds', fontweight='bold')
     ax.legend(loc='best')
     ax.grid(True, alpha=0.3, linestyle='--')
     ax.set_xticks(all_rounds[::2] if len(all_rounds) > 10 else all_rounds)
@@ -253,7 +259,7 @@ def create_rq3_plot(experiments_dir: str, output_file: str):
     
     ax.set_xlabel('Round', fontweight='bold')
     ax.set_ylabel('Anti-Fraud Tag Count', fontweight='bold')
-    ax.set_title('Seller Anti-Fraud Attitude Tags Over Rounds', fontweight='bold')
+    ax.set_title('Group-Level Anti-Fraud Attitude Tags Over Rounds', fontweight='bold')
     ax.legend(loc='best')
     ax.grid(True, alpha=0.3, linestyle='--')
     ax.set_xticks(all_rounds[::2] if len(all_rounds) > 10 else all_rounds)
@@ -275,7 +281,7 @@ def create_rq3_plot(experiments_dir: str, output_file: str):
     
     ax.set_xlabel('Round', fontweight='bold')
     ax.set_ylabel('Neutral Tag Count', fontweight='bold')
-    ax.set_title('Seller Neutral Attitude Tags Over Rounds', fontweight='bold')
+    ax.set_title('Group-Level Neutral Attitude Tags Over Rounds', fontweight='bold')
     ax.legend(loc='best')
     ax.grid(True, alpha=0.3, linestyle='--')
     ax.set_xticks(all_rounds[::2] if len(all_rounds) > 10 else all_rounds)
@@ -362,7 +368,7 @@ def main():
     import argparse
     
     parser = argparse.ArgumentParser(
-        description='Generate RQ3 visualization: Buyer Communication Effects'
+        description='Generate RQ3 visualization: Group-Level Deception Dynamics'
     )
     parser.add_argument(
         '--experiments-dir',
@@ -371,7 +377,7 @@ def main():
     )
     parser.add_argument(
         '--output',
-        default='experiments/RQ3_buyer_communication_effects.png',
+        default='experiments/RQ3_group_deception_dynamics.png',
         help='Output file path'
     )
     

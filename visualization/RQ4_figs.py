@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """
-RQ4 Visualization: Seller Communication Effects
-Analyze seller Fraud Attitude Tags and buyer Transaction Feedback from posts
+RQ4 Visualization: Buyer Adaptation Mechanisms
+When buyers can share information, do they collectively adapt to avoid dishonest sellers over time?
+
+This visualization analyzes buyer Transaction Feedback from posts to examine the defensive 
+capabilities of buyer agents and their ability to learn from shared experiences to improve 
+market outcomes.
 """
 
 import sys
@@ -126,7 +130,8 @@ def aggregate_condition_data(experiments_dir: str, experiment_ids: List[str],
             continue
         
         # Find all actions.json files in this experiment directory
-        pattern = f"*{market_type}_{communication_type}_actions.json"
+        # Pattern: run_*_reputation_only_buyer*_actions.json or run_*_reputation_and_warrant_buyer*_actions.json
+        pattern = f"*{market_type}_{communication_type}*_actions.json"
         actions_files = glob.glob(os.path.join(exp_dir, pattern))
         all_actions_files.extend(actions_files)
     
@@ -181,28 +186,28 @@ def aggregate_condition_data(experiments_dir: str, experiment_ids: List[str],
 
 def create_rq4_plot(experiments_dir: str, output_file: str):
     """
-    Create RQ4 visualization: Seller Communication Effects
-    Analyze seller Fraud Attitude Tags and buyer Transaction Feedback
+    Create RQ4 visualization: Buyer Adaptation Mechanisms
+    Analyze buyer Transaction Feedback to examine collective adaptation to avoid dishonest sellers
     """
     
-    # Define experiment IDs
-    r_fake_id = 'r_wsc_F'
-    r_real_id = 'r_wsc_R'
-    rw_fake_id = 'rw_wsc_F'
-    rw_real_id = 'rw_wsc_R'
+    # Define experiment IDs (buyer communication experiments)
+    r_fake_id = 'r_wbc_F'
+    r_real_id = 'r_wbc_R'
+    rw_fake_id = 'rw_wbc_F'
+    rw_real_id = 'rw_wbc_R'
     
     # Aggregate data for each condition
-    # Note: For seller communication experiments, we analyze seller tags
-    # Buyer feedback may be limited or from other phases
+    # Note: For buyer communication experiments, we analyze buyer Transaction Feedback
+    # to examine how buyers collectively adapt to avoid dishonest sellers
     condition_data = {
         'r_fake': aggregate_condition_data(experiments_dir, [r_fake_id], 
-                                          'reputation_only', 'seller'),
+                                          'reputation_only', 'buyer'),
         'r_real': aggregate_condition_data(experiments_dir, [r_real_id], 
-                                          'reputation_only', 'seller'),
+                                          'reputation_only', 'buyer'),
         'rw_fake': aggregate_condition_data(experiments_dir, [rw_fake_id], 
-                                            'reputation_and_warrant', 'seller'),
+                                            'reputation_and_warrant', 'buyer'),
         'rw_real': aggregate_condition_data(experiments_dir, [rw_real_id], 
-                                             'reputation_and_warrant', 'seller'),
+                                             'reputation_and_warrant', 'buyer'),
     }
     
     # Get all rounds
@@ -298,7 +303,7 @@ def create_rq4_plot(experiments_dir: str, output_file: str):
     
     ax.set_xlabel('Round', fontweight='bold')
     ax.set_ylabel('Fraudulent Feedback Count', fontweight='bold')
-    ax.set_title('Buyer Fraudulent Transaction Feedback Over Rounds', fontweight='bold')
+    ax.set_title('Buyer Adaptation: Fraudulent Feedback Over Rounds', fontweight='bold')
     ax.legend(loc='best')
     ax.grid(True, alpha=0.3, linestyle='--')
     ax.set_xticks(all_rounds[::2] if len(all_rounds) > 10 else all_rounds)
@@ -320,7 +325,7 @@ def create_rq4_plot(experiments_dir: str, output_file: str):
     
     ax.set_xlabel('Round', fontweight='bold')
     ax.set_ylabel('Honest Feedback Count', fontweight='bold')
-    ax.set_title('Buyer Honest Transaction Feedback Over Rounds', fontweight='bold')
+    ax.set_title('Buyer Adaptation: Honest Feedback Over Rounds', fontweight='bold')
     ax.legend(loc='best')
     ax.grid(True, alpha=0.3, linestyle='--')
     ax.set_xticks(all_rounds[::2] if len(all_rounds) > 10 else all_rounds)
@@ -347,7 +352,7 @@ def create_rq4_plot(experiments_dir: str, output_file: str):
     
     ax.set_xlabel('Round', fontweight='bold')
     ax.set_ylabel('Total Feedback Count', fontweight='bold')
-    ax.set_title('Total Buyer Transaction Feedback Over Rounds', fontweight='bold')
+    ax.set_title('Buyer Adaptation: Total Feedback Over Rounds', fontweight='bold')
     ax.legend(loc='best')
     ax.grid(True, alpha=0.3, linestyle='--')
     ax.set_xticks(all_rounds[::2] if len(all_rounds) > 10 else all_rounds)
@@ -363,7 +368,7 @@ def main():
     import argparse
     
     parser = argparse.ArgumentParser(
-        description='Generate RQ4 visualization: Seller Communication Effects'
+        description='Generate RQ4 visualization: Buyer Adaptation Mechanisms'
     )
     parser.add_argument(
         '--experiments-dir',
@@ -372,7 +377,7 @@ def main():
     )
     parser.add_argument(
         '--output',
-        default='experiments/RQ4_seller_communication_effects.png',
+        default='experiments/RQ4_buyer_adaptation_mechanisms.png',
         help='Output file path'
     )
     
