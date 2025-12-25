@@ -12,7 +12,7 @@ class SimulationConfig:
     """Market simulation configuration class"""
     
     # Experiment configuration
-    RUNS = 10
+    RUNS = 5
     NUM_SELLERS = 5
     NUM_BUYERS = 5
     SIMULATION_ROUNDS = 10

@@ -146,21 +146,6 @@ MODEL_BASE_URL=your_base_url_here  # Optional
    - Sellers can offer truth warrants
    - Buyers can challenge false warrants
 
-## Analysis Tools
-
-After running experiments, use the analysis scripts in the parent directory:
-
-```bash
-# Analyze individual runs
-python ../analyze_individual_runs.py experiments/exp_20240101_120000
-
-# Generate aggregated analysis
-python ../analyze_aggregated_results.py experiments/exp_20240101_120000
-
-# Compare different communication types
-python ../compare_communication_effects.py experiments/exp_20240101_120000
-```
-
 ## Tips for Running Experiments
 
 1. **Test First**: Run a single simulation to verify setup
@@ -196,7 +181,4 @@ python ./example/run_batch_experiments.py 2
 
 # 3. Run full experiment
 python ./example/run_batch_experiments.py 10
-
-# 4. Analyze results
-python ../analyze_aggregated_results.py experiments/exp_*
 ```

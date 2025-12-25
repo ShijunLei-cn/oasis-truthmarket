@@ -51,23 +51,7 @@ python ./example/run_single_config_experiment.py \
 echo ""
 echo "=========================================="
 echo "RQ3 experiments completed!"
-echo "Generating visualization..."
 echo "=========================================="
-
-
-# Analyze collusion behavior for all seller communication experiments
-echo ""
-echo "=========================================="
-echo "Running Collusion Analysis for Seller Communication Experiments..."
-echo "=========================================="
-
-python3 visualization/overseer_draw.py --experiment-ids r_wsc_F r_wsc_R rw_wsc_F rw_wsc_R
-
-echo ""
-echo "Collusion analysis complete!"
-echo "Results saved in: analysis/communication_effects/"
-echo "=========================================="
-
 
 echo ""
 echo "RQ3 analysis complete!"
