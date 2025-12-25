@@ -1700,18 +1700,24 @@ class Platform:
             
             self.pl_utils._execute_db_command("SELECT budget FROM user WHERE agent_id = ?", (buyer_id,))
             current_budget = self.db_cursor.fetchone()[0]
+            if current_budget is None:
+                current_budget = 10.0  # Buyer default budget
             if current_budget < price:
                 raise ValueError(f"Not enough budget to purchase this product. Current budget: {current_budget}, Price: {price}")
             
-            
-            # Calculate seller profit: selling price - production cost - warranty cost
+            # Calculate seller profit: selling price - production cost
             seller_profit = price - cost
             
             # Calculate buyer utility: product quality utility - purchase price
             # High quality product utility is 8, low quality product utility is 5
             utility = SimulationConfig.MARKET_PARAMS['hq_utility'] if true_quality == 'HQ' else SimulationConfig.MARKET_PARAMS['lq_utility']
             buyer_utility = utility - price
-            self.pl_utils._execute_db_command("UPDATE user SET budget = budget + ? WHERE agent_id = ?", (buyer_utility, buyer_id), commit=True)
+            
+            # Update buyer budget: deduct price first, then add utility (net: budget + buyer_utility)
+            # This is equivalent to: budget = budget - price + utility = budget + (utility - price)
+            self.pl_utils._execute_db_command("UPDATE user SET budget = budget + ? WHERE agent_id = ?", (utility - price, buyer_id), commit=True)
+            
+            # Update seller budget: add profit from sale
             self.pl_utils._execute_db_command("UPDATE user SET budget = budget + ? WHERE agent_id = ?", (seller_profit, seller_id), commit=True)
 
 
@@ -1791,7 +1797,7 @@ class Platform:
             
             current_budget = budget_result[0]
             if current_budget is None:
-                current_budget = 10.0  # Default budget if None
+                current_budget = 5.0  # Seller default budget
             
             if current_budget < cost:
                 quality_name = "High Quality (HQ)" if prod_q == 'HQ' else "Low Quality (LQ)"
@@ -1896,7 +1902,7 @@ class Platform:
             seller_penalty = 0
             buyer_reward = 0
             buyer_challenge_cost = self.market_params['challenge_cost']
-            self.pl_utils._execute_db_command("UPDATE user SET profit_utility_score = profit_utility_score - ? WHERE user_id = ?", (buyer_challenge_cost, buyer_id), commit=True)
+            self.pl_utils._execute_db_command("UPDATE user SET profit_utility_score = profit_utility_score - ? WHERE agent_id = ?", (buyer_challenge_cost, buyer_id), commit=True)
             self.pl_utils._execute_db_command("UPDATE transactions SET is_challenged = 1, challenge_cost = ? WHERE product_id = ? AND buyer_id = ?", (buyer_challenge_cost, product_id, buyer_id), commit=True)
 
             # 4. Determine challenge result and settle
@@ -1906,10 +1912,10 @@ class Platform:
                 status = 'challenged_success'
                 seller_penalty = self.market_params['warrant_escrow']
                 # Penalize seller
-                self.pl_utils._execute_db_command("UPDATE user SET profit_utility_score = profit_utility_score - ? WHERE user_id = ?", (seller_penalty, seller_id), commit=True)
+                self.pl_utils._execute_db_command("UPDATE user SET profit_utility_score = profit_utility_score - ? WHERE agent_id = ?", (seller_penalty, seller_id), commit=True)
                 # Reward buyer (refund + warranty as reward)
                 buyer_reward = self.market_params['warrant_escrow'] + buyer_challenge_cost
-                self.pl_utils._execute_db_command("UPDATE user SET profit_utility_score = profit_utility_score + ? WHERE user_id = ?", (buyer_reward, buyer_id), commit=True)
+                self.pl_utils._execute_db_command("UPDATE user SET profit_utility_score = profit_utility_score + ? WHERE agent_id = ?", (buyer_reward, buyer_id), commit=True)
                 
                 # Calculate new seller_profit and buyer_utility after challenge
                 new_seller_profit = original_seller_profit - seller_penalty
@@ -1932,8 +1938,9 @@ class Platform:
                 )
             
             # 5. Update budget and product status
-            self.pl_utils._execute_db_command("UPDATE user SET budget = budget + ? WHERE user_id = ?", (buyer_reward-buyer_challenge_cost, buyer_id), commit=True)
-            self.pl_utils._execute_db_command("UPDATE user SET budget = budget + ? WHERE user_id = ?", (-seller_penalty, seller_id), commit=True)
+            # Note: buyer_id is agent_id, seller_id from transactions table is user_id (which equals agent_id)
+            self.pl_utils._execute_db_command("UPDATE user SET budget = budget + ? WHERE agent_id = ?", (buyer_reward-buyer_challenge_cost, buyer_id), commit=True)
+            self.pl_utils._execute_db_command("UPDATE user SET budget = budget + ? WHERE agent_id = ?", (-seller_penalty, seller_id), commit=True)
             self.pl_utils._execute_db_command("UPDATE product SET status = ? WHERE product_id = ?", (status, product_id), commit=True)
 
             # 6. Record in trace table

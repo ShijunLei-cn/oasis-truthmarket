@@ -32,28 +32,28 @@ class Seller_prompt:
         lq_price = params['lq_price']
         
         return {
-            "reputation_only": (
-                "Available Actions:\n"
+        "reputation_only": (
+            "Available Actions:\n"
                 f"- `list_product(advertised_quality: str, product_quality: str, price: float = None)`: Your primary action to make a profit.\n"
-                "  - `advertised_quality`: What you tell buyers ('HQ' or 'LQ')\n"
-                "  - `product_quality`: What you actually produce ('HQ' or 'LQ')\n"
+            "  - `advertised_quality`: What you tell buyers ('HQ' or 'LQ')\n"
+            "  - `product_quality`: What you actually produce ('HQ' or 'LQ')\n"
                 f"  - `price`: (Optional) The price you want to set for this product. If not specified, defaults to HQ: ${hq_price:.1f}, LQ: ${lq_price:.1f}. You can set any positive price to maximize profit or compete with other sellers.\n"
-                "  - Note: `has_warrant` is NOT available in this market\n"
-                "- `exit_market()`: Exit the market\n"
-                "- `reenter_market()`: Re-enter with fresh reputation (available at round {reentry_round})"
-            ),
-            "reputation_and_warrant": (
-                "Available Actions:\n"
+            "  - Note: `has_warrant` is NOT available in this market\n"
+            "- `exit_market()`: Exit the market\n"
+            "- `reenter_market()`: Re-enter with fresh reputation (available at round {reentry_round})"
+        ),
+        "reputation_and_warrant": (
+            "Available Actions:\n"
                 f"- `list_product(advertised_quality: str, product_quality: str, has_warrant: bool, price: float = None)`: Your primary action to make a profit.\n"
-                "  - `advertised_quality`: What you tell buyers ('HQ' or 'LQ')\n"
-                "  - `product_quality`: What you actually produce ('HQ' or 'LQ')\n"
-                "  - `has_warrant`: Whether to offer a Truth Warrant (True/False)\n"
+            "  - `advertised_quality`: What you tell buyers ('HQ' or 'LQ')\n"
+            "  - `product_quality`: What you actually produce ('HQ' or 'LQ')\n"
+            "  - `has_warrant`: Whether to offer a Truth Warrant (True/False)\n"
                 f"  - `price`: (Optional) The price you want to set for this product. If not specified, defaults to HQ: ${hq_price:.1f}, LQ: ${lq_price:.1f}. You can set any positive price to maximize profit or compete with other sellers.\n"
-                "- `exit_market()`: Exit the market\n"
-                "- `reenter_market()`: Re-enter with fresh reputation (available at round {reentry_round})"
-            ),
-        }
-    
+            "- `exit_market()`: Exit the market\n"
+            "- `reenter_market()`: Re-enter with fresh reputation (available at round {reentry_round})"
+        ),
+    }
+
     # Keep ACTIONS as class property for backward compatibility
     ACTIONS = ClassProperty(lambda cls: cls.get_actions())
 
@@ -72,7 +72,7 @@ class Seller_prompt:
         lq_default_profit_hq = lq_price - hq_cost
         
         return {
-            "reputation_only": (
+        "reputation_only": (
                 f"""
 **Production Costs:**
 - HQ production cost: ${hq_cost:.1f}
@@ -94,8 +94,8 @@ Profit = (Price you set) - (Production cost)
 
 Note: Producing LQ and selling as HQ with a high price can earn very high profit BUT damages your reputation!
 """
-            ).strip(),
-            "reputation_and_warrant": (
+        ).strip(),
+        "reputation_and_warrant": (
                 f"""
 **Production Costs:**
 - HQ production cost: ${hq_cost:.1f}
@@ -119,9 +119,9 @@ Note: Producing LQ and selling as HQ with a high price can earn very high profit
 
 Note: If you offer a warrant on a misleading claim (LQ advertised as HQ) and get challenged, you lose ${warrant_escrow:.1f} penalty!
 """
-            ).strip(),
-        }
-    
+        ).strip(),
+    }
+
     # Keep PAYOFF_MATRIX as class property for backward compatibility
     PAYOFF_MATRIX = ClassProperty(lambda cls: cls.get_payoff_matrix())
 
@@ -191,7 +191,7 @@ Please actively take actions and participate in the market. Do not repeatedly re
 If you do not take any action in this round, it means you have missed a valuable profit opportunity.
 
 """
-        )
+    )
     
     # Keep MASTER_PROMPT as class property for backward compatibility
     MASTER_PROMPT = ClassProperty(lambda cls: cls.get_master_prompt())
@@ -246,7 +246,7 @@ Make each seller distinct by varying:
         lq_profit = lq_price - lq_cost
         
         return {
-            "reputation_only": """
+        "reputation_only": """
 ## Reputation System Only
 1. **Reputation**: Buyers can rate each transaction on a scale from -2 to +2:
    - +2 = very good, +1 = good, 0 = neutral, -1 = bad, -2 = very bad
@@ -272,7 +272,7 @@ Make each seller distinct by varying:
      - This overrides any sales income from that transaction
    - Your warrant is only at risk if you are challenged for false advertising
         """,
-        }
+    }
     
     # Keep MARKET_RULES as class property for backward compatibility
     MARKET_RULES = ClassProperty(lambda cls: cls.get_market_rules())
@@ -338,23 +338,23 @@ class Buyer_prompt:
         warrant_escrow = params['warrant_escrow']
         
         return {
-            "reputation_only": (
-                "Available Actions:\n"
-                "1. `purchase_product_id(product_id: int)`: Purchase a product by its product_id\n"
-                "2. `rate_transaction(transaction_id: int, rating: int)`: Rate a transaction after purchase\n"
-                "   - rating scale: -2 (very bad), -1 (bad), 0 (neutral), +1 (good), +2 (very good)\n"
-            ),
-            "reputation_and_warrant": (
-                "Available Actions:\n"
-                "1. `purchase_product_id(product_id: int)`: Purchase a product by its product_id\n"
-                "2. `rate_transaction(transaction_id: int, rating: int)`: Rate a transaction after purchase\n"
-                "   - rating scale: -2 (very bad), -1 (bad), 0 (neutral), +1 (good), +2 (very good)\n"
+        "reputation_only": (
+            "Available Actions:\n"
+            "1. `purchase_product_id(product_id: int)`: Purchase a product by its product_id\n"
+            "2. `rate_transaction(transaction_id: int, rating: int)`: Rate a transaction after purchase\n"
+            "   - rating scale: -2 (very bad), -1 (bad), 0 (neutral), +1 (good), +2 (very good)\n"
+        ),
+        "reputation_and_warrant": (
+            "Available Actions:\n"
+            "1. `purchase_product_id(product_id: int)`: Purchase a product by its product_id\n"
+            "2. `rate_transaction(transaction_id: int, rating: int)`: Rate a transaction after purchase\n"
+            "   - rating scale: -2 (very bad), -1 (bad), 0 (neutral), +1 (good), +2 (very good)\n"
                 f"3. `challenge_warrant(product_id: int)`: Challenge a warranted product after purchase (costs ${challenge_cost:.1f})\n"
-                "   - Only use if you received LQ when HQ was advertised with a warrant\n"
+            "   - Only use if you received LQ when HQ was advertised with a warrant\n"
                 f"   - Successful challenge earns you ${warrant_escrow:.1f} points!\n"
-            ),
-        }
-    
+        ),
+    }
+
     # Keep ACTIONS as class property for backward compatibility
     ACTIONS = ClassProperty(lambda cls: cls.get_actions())
 
@@ -370,7 +370,7 @@ class Buyer_prompt:
         lq_price = params['lq_price']
         
         return {
-            "reputation_only": (
+        "reputation_only": (
                 f"""
 **Product Utility Values:**
 - HQ (High Quality) product utility: ${hq_utility:.1f}
@@ -392,8 +392,8 @@ Utility = (Product Quality Utility) - (Purchase Price)
 - If you pay for HQ but receive LQ, you get cheated (utility = ${lq_utility:.1f} - price, which could be negative if price > ${lq_utility:.1f})
 - You never get cheated when buying LQ (worst case: you get what you paid for)
 """
-            ).strip(),
-            "reputation_and_warrant": (
+        ).strip(),
+        "reputation_and_warrant": (
                 f"""
 **Product Utility Values:**
 - HQ (High Quality) product utility: ${hq_utility:.1f}
@@ -429,9 +429,9 @@ Utility = (Product Quality Utility) - (Purchase Price)
 - Successful challenges (catching LQ advertised as HQ) earn you ${warrant_escrow:.1f} net reward (${warrant_escrow:.1f} warrant escrow + ${challenge_cost:.1f} challenge cost refund - ${challenge_cost:.1f} challenge cost = ${warrant_escrow:.1f})
 - Failed challenges cost you ${challenge_cost:.1f}
 """
-            ).strip(),
-        }
-    
+        ).strip(),
+    }
+
     # Keep PAYOFF_MATRIX as class property for backward compatibility
     PAYOFF_MATRIX = ClassProperty(lambda cls: cls.get_payoff_matrix())
 
@@ -489,7 +489,7 @@ Based on all the information above, decide which product you should purchase to 
 3. Whether the product has a warranty (seller has something at risk)
 4. Your potential returns
 """
-        )
+    )
     
     # Keep MASTER_PROMPT as class property for backward compatibility
     MASTER_PROMPT = ClassProperty(lambda cls: cls.get_master_prompt())
@@ -534,7 +534,7 @@ Make each buyer distinct by varying:
         warrant_escrow = params['warrant_escrow']
         
         return {
-            "reputation_only": """
+        "reputation_only": """
 ## Reputation System Only
 1. You can rate each transaction on a scale from -2 to +2:
    - +2 = very good, +1 = good, 0 = neutral, -1 = bad, -2 = very bad
@@ -558,7 +558,7 @@ Make each buyer distinct by varying:
    - **If the warrant was honest**: You lose your ${challenge_cost:.1f} challenge fee
    - Only challenge warranted products where you received lower quality than advertised!
         """,
-        }
+    }
     
     # Keep MARKET_RULES as class property for backward compatibility
     MARKET_RULES = ClassProperty(lambda cls: cls.get_market_rules())

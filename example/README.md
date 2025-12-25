@@ -88,13 +88,12 @@ experiments/
 └── exp_20240101_120000/
     ├── experiment_config.json
     ├── results_summary.json
-    ├── run_1_reputation_only_none.db
-    ├── run_1_reputation_only_buyer.db
-    ├── run_1_reputation_only_seller.db
-    ├── run_1_reputation_only_both.db
-    ├── run_1_reputation_and_warrant_none.db
+    ├── run_1.db
+    ├── run_2.db
+    ├── run_3.db
     └── ...
 ```
+Note: Database files use simple naming format `run_i.db`. Detailed configuration information is saved in `experiment_config.json`.
 
 ## Configuration
 
