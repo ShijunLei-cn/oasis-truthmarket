@@ -13,19 +13,21 @@ class Seller_prompt:
     ACTIONS: dict[str, str] = {
         "reputation_only": (
             "Available Actions:\n"
-            "- `list_product(advertised_quality: str, product_quality: str)`: Your primary action to make a profit.\n"
+            "- `list_product(advertised_quality: str, product_quality: str, price: float = None)`: Your primary action to make a profit.\n"
             "  - `advertised_quality`: What you tell buyers ('HQ' or 'LQ')\n"
             "  - `product_quality`: What you actually produce ('HQ' or 'LQ')\n"
+            "  - `price`: (Optional) The price you want to set for this product. If not specified, defaults to HQ: $5.0, LQ: $3.0. You can set any positive price to maximize profit or compete with other sellers.\n"
             "  - Note: `has_warrant` is NOT available in this market\n"
             "- `exit_market()`: Exit the market\n"
             "- `reenter_market()`: Re-enter with fresh reputation (available at round {reentry_round})"
         ),
         "reputation_and_warrant": (
             "Available Actions:\n"
-            "- `list_product(advertised_quality: str, product_quality: str, has_warrant: bool)`: Your primary action to make a profit.\n"
+            "- `list_product(advertised_quality: str, product_quality: str, has_warrant: bool, price: float = None)`: Your primary action to make a profit.\n"
             "  - `advertised_quality`: What you tell buyers ('HQ' or 'LQ')\n"
             "  - `product_quality`: What you actually produce ('HQ' or 'LQ')\n"
             "  - `has_warrant`: Whether to offer a Truth Warrant (True/False)\n"
+            "  - `price`: (Optional) The price you want to set for this product. If not specified, defaults to HQ: $5.0, LQ: $3.0. You can set any positive price to maximize profit or compete with other sellers.\n"
             "- `exit_market()`: Exit the market\n"
             "- `reenter_market()`: Re-enter with fresh reputation (available at round {reentry_round})"
         ),
@@ -33,32 +35,52 @@ class Seller_prompt:
 
     # Payoff matrix descriptions for sellers in different markets
     PAYOFF_MATRIX: dict[str, str] = {
-        "reputation_only": (  #TODO: Perhaps these costs and prices should be told directly to the agent, because Payoff Matrix does not match the actual situation.
+        "reputation_only": (
             """
-| Your Secret Production (`product_quality`) | Your Advertisement (`advertised_quality`) | Your Profit      |
-| :----------------------------------------- | :---------------------------------------- | :--------------- |
-| HQ                                         | HQ                                        |         3        |
-| HQ                                         | LQ                                        |         1        |
-| LQ                                         | HQ                                        |         4        |
-| LQ                                         | LQ                                        |         1        |
+**Production Costs:**
+- HQ production cost: $2.0
+- LQ production cost: $1.0
 
-Note: Producing LQ and selling as HQ earns the most profit (4 points) BUT damages your reputation!
+**Default Prices (if you don't specify a price):**
+- HQ advertised: $5.0 (default profit: $3.0)
+- LQ advertised: $3.0 (default profit: $2.0 for LQ, $1.0 for HQ)
+
+**Your Profit Formula:**
+Profit = (Price you set) - (Production cost)
+
+**Examples:**
+- If you produce HQ, advertise HQ, and set price $6.0: Profit = $6.0 - $2.0 = $4.0
+- If you produce LQ, advertise HQ, and set price $7.0: Profit = $7.0 - $1.0 = $6.0
+- If you produce LQ, advertise LQ, and set price $4.0: Profit = $4.0 - $1.0 = $3.0
+
+**Important:** You can set any positive price you want! Higher prices mean higher profits if the product sells, but may reduce the chance of buyers purchasing. Lower prices may attract more buyers but reduce your profit per sale.
+
+Note: Producing LQ and selling as HQ with a high price can earn very high profit BUT damages your reputation!
 """
         ).strip(),
         "reputation_and_warrant": (
             """
-| Your Secret Production (`product_quality`) | Your Advertisement (`advertised_quality`) |     Warrant     |    Your Profit(no challenges)    |  Your Profit (If Buyer challenge)
-| :----------------------------------------- | :---------------------------------------- | :-------------- |  :--------------- | :--------------- |
-| HQ                                         | HQ                                        |      True      |      3       |      4       |
-| HQ                                         | LQ                                        |      True      |      1       |      2       |
-| LQ                                         | HQ                                        |      True      |      4       |     -1       |
-| LQ                                         | LQ                                        |      True      |      1       |      3       |
-| HQ                                         | HQ                                        |     False      |      3       |    False     |
-| HQ                                         | LQ                                        |     False      |      1       |    False     |
-| LQ                                         | HQ                                        |     False      |      4       |    False     |
-| LQ                                         | LQ                                        |     False      |      1       |    False     |
+**Production Costs:**
+- HQ production cost: $2.0
+- LQ production cost: $1.0
 
-Note: If you offer a warrant on a misleading claim and get challenged, you lose 4 points!
+**Default Prices (if you don't specify a price):**
+- HQ advertised: $5.0 (default profit: $3.0)
+- LQ advertised: $3.0 (default profit: $2.0 for LQ, $1.0 for HQ)
+
+**Your Profit Formula:**
+- If no challenge: Profit = (Price you set) - (Production cost)
+- If challenged and warrant offered: Profit = (Price you set) - (Production cost) - $4.0 penalty
+- If challenged but no warrant: Profit = (Price you set) - (Production cost) (no penalty)
+
+**Examples:**
+- Produce HQ, advertise HQ, set price $6.0, no warrant, no challenge: Profit = $6.0 - $2.0 = $4.0
+- Produce LQ, advertise HQ, set price $7.0, with warrant, challenged: Profit = $7.0 - $1.0 - $4.0 = $2.0
+- Produce LQ, advertise HQ, set price $7.0, no warrant, challenged: Profit = $7.0 - $1.0 = $6.0
+
+**Important:** You can set any positive price you want! Higher prices mean higher profits if the product sells, but may reduce the chance of buyers purchasing.
+
+Note: If you offer a warrant on a misleading claim (LQ advertised as HQ) and get challenged, you lose $4.0 penalty!
 """
         ).strip(),
     }
@@ -75,12 +97,14 @@ You are a Seller Agent in a multi-round online marketplace simulation ('{market_
 # GAME RULES - READ CAREFULLY
 
 ## Production & Selling
-- **High quality (HQ) products** cost more to produce but generate higher profits (3 points) than low quality products
-- **Low quality (LQ) products** cost less to produce but generate lower profits (2 points)
+- **High quality (HQ) products** cost $2.0 to produce
+- **Low quality (LQ) products** cost $1.0 to produce
 - You may **advertise any quality regardless of your actual product quality**
-- Buyers only see your **advertised quality** before a purchase
+- You can **set your own price** when listing a product. If you don't specify a price, the system will use default prices (HQ: $5.0, LQ: $3.0)
+- Your profit = (price you set) - (production cost)
+- Buyers only see your **advertised quality** and **price** before a purchase
 - Buyers find out the **true product quality** only after their purchase
-- **Producing LQ and selling it as HQ** earns the most profit (4 points) BUT damages your reputation
+- **Producing LQ and selling it as HQ** can earn high profit if you set a high price, BUT damages your reputation
 
 ## Reputation & Market Dynamics
 {market_rules}
@@ -96,8 +120,10 @@ You are a Seller Agent in a multi-round online marketplace simulation ('{market_
   - Re-entering resets your reputation to zero (fresh start)
 - Strategic exits can help you escape a damaged reputation
 
-# PAYOFF MATRIX (Your Profit Calculation if Product is Sold)
+# PRICING & PROFIT CALCULATION
 {payoff_matrix}
+
+**Remember:** The payoff matrix shows reference values. You can set your own price when listing a product to maximize your profit strategy!
 
 # TASK (CRITICAL INSTRUCTION)
 You must decide and execute EXACTLY ONE action for this round based on your personality, current situation, and the game rules.
@@ -249,35 +275,64 @@ class Buyer_prompt:
 
     # Utility matrix descriptions for buyers in different markets
     PAYOFF_MATRIX: dict[str, str] = {
-        "reputation_only": ( #TODO: Perhaps these costs and prices should be told directly to the agent, because Payoff Matrix does not match the actual situation.
-
+        "reputation_only": (
             """
-| Product Quality Received | Advertised Quality | Your Utility |
-| :----------------------- | :----------------- | :----------- |
-| HQ                       | HQ                 |      3       |
-| HQ                       | LQ                 |      5       |
-| LQ                       | HQ                 |      0       |
-| LQ                       | LQ                 |      2       |
+**Product Utility Values:**
+- HQ (High Quality) product utility: $8.0
+- LQ (Low Quality) product utility: $5.0
 
-Note: You get cheated when you pay for HQ but receive LQ (0 points penalty)! You never get cheated buying LQ.
+**Your Utility Formula:**
+Utility = (Product Quality Utility) - (Purchase Price)
+
+**Examples:**
+- Buy HQ advertised as HQ at price $5.0: Utility = $8.0 - $5.0 = $3.0
+- Buy LQ advertised as HQ at price $5.0: Utility = $5.0 - $5.0 = $0.0 (you got cheated!)
+- Buy LQ advertised as LQ at price $3.0: Utility = $5.0 - $3.0 = $2.0
+- Buy HQ advertised as LQ at price $3.0: Utility = $8.0 - $3.0 = $5.0 (great deal!)
+
+**Important:** 
+- The price is set by the seller (they can set any price they want)
+- You only see the **advertised quality** and **price** before purchasing
+- You discover the **true quality** only after purchase
+- If you pay for HQ but receive LQ, you get cheated (utility = $5.0 - price, which could be negative if price > $5.0)
+- You never get cheated when buying LQ (worst case: you get what you paid for)
 """
         ).strip(),
         "reputation_and_warrant": (
             """
-- Challenge Cost: $1
+**Product Utility Values:**
+- HQ (High Quality) product utility: $8.0
+- LQ (Low Quality) product utility: $5.0
 
-| Product Quality Received | Advertised Quality |  Warranted   | Your Utility(no challenges) |  Your Utility(challenges) |
-| :----------------------- | :----------------- | :----------- | :----------- | :----------- |
-| HQ                       | HQ                 |      True    |      3       |      2       |
-| HQ                       | HQ                 |     False    |      3       |    False     |
-| HQ                       | LQ                 |      True    |      0       |      4       |
-| HQ                       | LQ                 |     False    |      0       |    False     |
-| LQ                       | HQ                 |      True    |      5       |      4       |
-| LQ                       | HQ                 |     False    |      5       |    False     |
-| LQ                       | LQ                 |      True    |      2       |      1       |
-| LQ                       | LQ                 |     False    |      2       |    False     |
+**Challenge Cost:** $1.0
+**Warrant Escrow:** $5.0 (rewarded to buyer if challenge succeeds)
 
-Note: You can only challenge warranted products. Successful challenges earn you 2 points total!
+**Your Utility Formula:**
+- **If no challenge:** Utility = (Product Quality Utility) - (Purchase Price)
+- **If challenge succeeds** (LQ advertised as HQ with warrant): 
+  Utility = (Product Quality Utility) - (Purchase Price) + (Warrant Escrow) + (Challenge Cost Refund) - (Challenge Cost)
+  = (Product Quality Utility) - (Purchase Price) + $5.0 + $1.0 - $1.0
+  = (Product Quality Utility) - (Purchase Price) + $5.0
+- **If challenge fails** (HQ advertised as HQ with warrant): 
+  Utility = (Product Quality Utility) - (Purchase Price) - (Challenge Cost)
+  = (Product Quality Utility) - (Purchase Price) - $1.0
+
+**Examples:**
+- Buy HQ advertised as HQ at price $5.0, no warrant, no challenge: Utility = $8.0 - $5.0 = $3.0
+- Buy LQ advertised as HQ at price $5.0, with warrant, challenge succeeds: 
+  Utility = $5.0 - $5.0 + $5.0 = $5.0
+- Buy HQ advertised as HQ at price $5.0, with warrant, challenge fails: 
+  Utility = $8.0 - $5.0 - $1.0 = $2.0
+- Buy LQ advertised as LQ at price $3.0, with warrant, challenge: 
+  Utility = $5.0 - $3.0 - $1.0 = $1.0 (challenge fails because product matches advertisement)
+
+**Important:** 
+- The price is set by the seller (they can set any price they want)
+- You can only challenge products with a **warrant** (has_warrant = True)
+- You only see the **advertised quality**, **price**, and **warrant status** before purchasing
+- You discover the **true quality** only after purchase
+- Successful challenges (catching LQ advertised as HQ) earn you $5.0 net reward ($5.0 warrant escrow + $1.0 challenge cost refund - $1.0 challenge cost = $5.0)
+- Failed challenges cost you $1.0
 """
         ).strip(),
     }
@@ -296,9 +351,14 @@ You are a Buyer Agent in a multi-round online marketplace simulation ('{market_t
 ## Buying Products
 - Buy products based on **advertised claims** of high or low quality from different sellers
 - **Advertisements may be misleading** - sellers can advertise one quality and deliver another
-- **High quality products** give you more points (3) than low quality products (2) but cost more
-- **You never get cheated by buying low quality** - you get what you expect (2 points)
-- **You CAN get cheated by buying high quality** - you might receive low quality instead (-3 points penalty)
+- **Product Quality Utility Values:**
+  - High quality (HQ) products: $8.0 utility
+  - Low quality (LQ) products: $5.0 utility
+- **Your Utility Formula:** Utility = (Product Quality Utility) - (Purchase Price)
+- **The price is set by sellers** - they can set any price they want (default: HQ $5.0, LQ $3.0)
+- **You only see advertised quality and price before purchasing** - you discover true quality after purchase
+- **You never get cheated by buying LQ** - worst case: you get what you paid for
+- **You CAN get cheated by buying HQ** - if you pay for HQ but receive LQ, your utility = $5.0 - price (could be negative!)
 - Sellers can exit and re-enter to reset their reputation
 
 ## Reputation & Warranties
@@ -309,8 +369,10 @@ You are a Buyer Agent in a multi-round online marketplace simulation ('{market_t
 - Sellers may exit and re-enter, resetting their reputation
 - Use seller reputation and warranty signals to make informed decisions
 
-# PAYOFF MATRIX (Your Utility Calculation)
+# PRICING & UTILITY CALCULATION
 {payoff_matrix}
+
+**Remember:** The payoff matrix shows the calculation formula. The actual utility depends on the price set by sellers, which can vary!
 
 # TASK: YOUR DECISION WORKFLOW FOR THIS ROUND
 Based on all the information above, decide which product you should purchase to maximize your cumulative utility. (You should only purchase once per round!)
@@ -475,8 +537,6 @@ Remember: Producing LQ and selling as HQ earns 4 points but damages reputation. 
 ## Available Products for Purchase
 {available_products}
 
-## Seller Information
-{seller_reputation_info}
 
 Based on the available products and seller reputations, decide which product to purchase.
 Remember: You never get cheated buying LQ. You can get cheated buying HQ. Use reputation and warranty signals wisely!
