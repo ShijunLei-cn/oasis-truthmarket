@@ -1882,14 +1882,18 @@ class Platform:
 
             # 4. Determine challenge result and settle
             challenge_successful = (true_q == 'LQ' and adv_q == 'HQ')
+            
+            # Get escrow amount based on advertised quality
+            escrow_key = 'hq_warrant_escrow' if adv_q == 'HQ' else 'lq_warrant_escrow'
+            warrant_escrow = self.market_params.get(escrow_key, 8.0)
 
             if challenge_successful:
                 status = 'challenged_success'
-                seller_penalty = self.market_params['warrant_escrow']
+                seller_penalty = warrant_escrow
                 # Penalize seller
                 self.pl_utils._execute_db_command("UPDATE user SET profit_utility_score = profit_utility_score - ? WHERE user_id = ?", (seller_penalty, seller_id), commit=True)
                 # Reward buyer (refund + warranty as reward)
-                buyer_reward = self.market_params['warrant_escrow'] + buyer_challenge_cost
+                buyer_reward = warrant_escrow + buyer_challenge_cost
                 self.pl_utils._execute_db_command("UPDATE user SET profit_utility_score = profit_utility_score + ? WHERE user_id = ?", (buyer_reward, buyer_id), commit=True)
                 
                 # Calculate new seller_profit and buyer_utility after challenge
