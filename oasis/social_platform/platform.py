@@ -1912,6 +1912,10 @@ class Platform:
 
             # 4. Determine challenge result and settle
             challenge_successful = (true_q == 'LQ' and adv_q == 'HQ')
+            
+            # Get escrow amount based on advertised quality
+            escrow_key = 'hq_warrant_escrow' if adv_q == 'HQ' else 'lq_warrant_escrow'
+            warrant_escrow = self.market_params.get(escrow_key, 8.0)
 
             if challenge_successful:
                 status = 'challenged_success'
