@@ -177,10 +177,7 @@ class SocialAgent(ChatAgent):
         user_msg_content += (
             "\n## Notice:\n"
             """
-            You can execute your action in either of the following ways:
-            
-            1. **Preferred method**: Use tool_call to directly call the available tools.
-            2. **Alternative method**: If tool_call is not available, output your action as JSON:
+            Output your action as JSON in the following format:
             
             <THOUGHT>
             1. Analyze the current situation and requirements.

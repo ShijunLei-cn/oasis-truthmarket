@@ -1790,6 +1790,7 @@ class Platform:
                 price = self.market_params['hq_price'] if adv_q == 'HQ' else self.market_params['lq_price']
 
             # Check budget before listing product
+            # Note: Escrow is NOT deducted at listing time, only deducted if challenge succeeds
             self.pl_utils._execute_db_command("SELECT budget FROM user WHERE agent_id = ?", (seller_id,))
             budget_result = self.db_cursor.fetchone()
             if not budget_result:
@@ -1902,6 +1903,10 @@ class Platform:
             seller_penalty = 0
             buyer_reward = 0
             buyer_challenge_cost = self.market_params['challenge_cost']
+            warrant_escrow = self.market_params['warrant_escrow']
+            
+            # Deduct challenge cost from buyer's budget and profit_utility_score
+            self.pl_utils._execute_db_command("UPDATE user SET budget = budget - ? WHERE agent_id = ?", (buyer_challenge_cost, buyer_id), commit=True)
             self.pl_utils._execute_db_command("UPDATE user SET profit_utility_score = profit_utility_score - ? WHERE agent_id = ?", (buyer_challenge_cost, buyer_id), commit=True)
             self.pl_utils._execute_db_command("UPDATE transactions SET is_challenged = 1, challenge_cost = ? WHERE product_id = ? AND buyer_id = ?", (buyer_challenge_cost, product_id, buyer_id), commit=True)
 
@@ -1910,11 +1915,17 @@ class Platform:
 
             if challenge_successful:
                 status = 'challenged_success'
-                seller_penalty = self.market_params['warrant_escrow']
-                # Penalize seller
+                seller_penalty = warrant_escrow
+                buyer_reward = warrant_escrow  # Buyer gets the escrow
+                
+                # Seller loses the escrow: deduct from both budget and profit_utility_score
+                self.pl_utils._execute_db_command("UPDATE user SET budget = budget - ? WHERE agent_id = ?", (seller_penalty, seller_id), commit=True)
                 self.pl_utils._execute_db_command("UPDATE user SET profit_utility_score = profit_utility_score - ? WHERE agent_id = ?", (seller_penalty, seller_id), commit=True)
-                # Reward buyer (refund + warranty as reward)
-                buyer_reward = self.market_params['warrant_escrow'] + buyer_challenge_cost
+                
+                # Buyer gets the escrow (refund of challenge cost + escrow reward)
+                # Budget: already deducted challenge_cost, now add back challenge_cost + escrow = net + escrow
+                # profit_utility_score: already deducted challenge_cost, now add escrow = net + escrow - challenge_cost
+                self.pl_utils._execute_db_command("UPDATE user SET budget = budget + ? WHERE agent_id = ?", (buyer_challenge_cost + buyer_reward, buyer_id), commit=True)
                 self.pl_utils._execute_db_command("UPDATE user SET profit_utility_score = profit_utility_score + ? WHERE agent_id = ?", (buyer_reward, buyer_id), commit=True)
                 
                 # Calculate new seller_profit and buyer_utility after challenge
@@ -1928,7 +1939,9 @@ class Platform:
                 )
             else:
                 status = 'challenged_fail'
-                # Challenge failed, buyer loses challenge cost
+                # Challenge failed: buyer loses challenge cost, seller keeps everything (no escrow was deducted)
+                # Seller: no penalty, escrow was never deducted
+                # Buyer: challenge cost already deducted from budget and profit_utility_score, no refund
                 new_seller_profit = original_seller_profit  # Seller profit unchanged
                 new_buyer_utility = original_buyer_utility - buyer_challenge_cost  # Buyer loses challenge cost
                 
@@ -1936,11 +1949,6 @@ class Platform:
                     "UPDATE transactions SET challenge_reward = 0, challenge_penalty = 0, seller_profit = ?, buyer_utility = ? WHERE transaction_id = ?",
                     (new_seller_profit, new_buyer_utility, transaction_id), commit=True
                 )
-            
-            # 5. Update budget and product status
-            # Note: buyer_id is agent_id, seller_id from transactions table is user_id (which equals agent_id)
-            self.pl_utils._execute_db_command("UPDATE user SET budget = budget + ? WHERE agent_id = ?", (buyer_reward-buyer_challenge_cost, buyer_id), commit=True)
-            self.pl_utils._execute_db_command("UPDATE user SET budget = budget + ? WHERE agent_id = ?", (-seller_penalty, seller_id), commit=True)
             self.pl_utils._execute_db_command("UPDATE product SET status = ? WHERE product_id = ?", (status, product_id), commit=True)
 
             # 6. Record in trace table

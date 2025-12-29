@@ -7,7 +7,7 @@ import random
 import sqlite3
 from typing import Dict, List, Any, Optional, Tuple
 from oasis.environment.env_action import LLMAction
-from prompt import SELLER_ROUND_PROMPT, BUYER_ROUND_PROMPT
+from prompt import SELLER_ROUND_PROMPT, BUYER_ROUND_PROMPT, MarketEnv_prompt
 
 
 class MarketPhase:
@@ -76,7 +76,6 @@ class SellerListingPhase(MarketPhase):
                 self.env.current_round = round_num
                 
                 # Prepare round prompt with budget information
-                from prompt import MarketEnv_prompt
                 budget = state.get('budget', 10.0)
                 total_profit = state.get('total_profit', 0)
                 reputation_score = state.get('reputation_score', 0)

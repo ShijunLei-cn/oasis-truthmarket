@@ -15,7 +15,7 @@ python ./example/run_single_config_experiment.py \
     --market-type reputation_only \
     --communication none \
     --communication-channel-type Fake \
-    --runs 5
+    --runs 10
 
 # Reputation and warrant market (no communication)
 echo ""
@@ -25,7 +25,7 @@ python ./example/run_single_config_experiment.py \
     --market-type reputation_and_warrant \
     --communication none \
     --communication-channel-type Fake \
-    --runs 5
+    --runs 10
 
 echo ""
 echo "=========================================="
