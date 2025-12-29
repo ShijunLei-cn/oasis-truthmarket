@@ -1903,7 +1903,6 @@ class Platform:
             seller_penalty = 0
             buyer_reward = 0
             buyer_challenge_cost = self.market_params['challenge_cost']
-            warrant_escrow = self.market_params['warrant_escrow']
             
             # Deduct challenge cost from buyer's budget and profit_utility_score
             self.pl_utils._execute_db_command("UPDATE user SET budget = budget - ? WHERE agent_id = ?", (buyer_challenge_cost, buyer_id), commit=True)
@@ -1911,7 +1910,8 @@ class Platform:
             self.pl_utils._execute_db_command("UPDATE transactions SET is_challenged = 1, challenge_cost = ? WHERE product_id = ? AND buyer_id = ?", (buyer_challenge_cost, product_id, buyer_id), commit=True)
 
             # 4. Determine challenge result and settle
-            challenge_successful = (true_q == 'LQ' and adv_q == 'HQ')
+            # A challenge is successful if the true quality does not match the advertised quality
+            challenge_successful = (true_q != adv_q)
             
             # Get escrow amount based on advertised quality
             escrow_key = 'hq_warrant_escrow' if adv_q == 'HQ' else 'lq_warrant_escrow'

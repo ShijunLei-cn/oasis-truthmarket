@@ -65,7 +65,8 @@ class Seller_prompt:
         lq_cost = params['lq_cost']
         hq_price = params['hq_price']
         lq_price = params['lq_price']
-        warrant_escrow = params['warrant_escrow']
+        hq_warrant_escrow = params['hq_warrant_escrow']
+        lq_warrant_escrow = params['lq_warrant_escrow']
         
         hq_default_profit = hq_price - hq_cost
         lq_default_profit_lq = lq_price - lq_cost
@@ -107,17 +108,19 @@ Note: Producing LQ and selling as HQ with a high price can earn very high profit
 
 **Your Profit Formula:**
 - If no challenge: Profit = (Price you set) - (Production cost)
-- If challenged and warrant offered: Profit = (Price you set) - (Production cost) - ${warrant_escrow:.1f} penalty
+- If challenged and warrant offered: Profit = (Price you set) - (Production cost) - (Warrant Escrow) penalty
+  - **Penalty for HQ advertised claim**: -${hq_warrant_escrow:.1f}
+  - **Penalty for LQ advertised claim**: -${lq_warrant_escrow:.1f}
 - If challenged but no warrant: Profit = (Price you set) - (Production cost) (no penalty)
 
 **Examples:**
 - Produce HQ, advertise HQ, set price ${hq_price + 1:.1f}, no warrant, no challenge: Profit = ${hq_price + 1:.1f} - ${hq_cost:.1f} = ${hq_price + 1 - hq_cost:.1f}
-- Produce LQ, advertise HQ, set price ${hq_price + 2:.1f}, with warrant, challenged: Profit = ${hq_price + 2:.1f} - ${lq_cost:.1f} - ${warrant_escrow:.1f} = ${hq_price + 2 - lq_cost - warrant_escrow:.1f}
+- Produce LQ, advertise HQ, set price ${hq_price + 2:.1f}, with warrant, challenged: Profit = ${hq_price + 2:.1f} - ${lq_cost:.1f} - ${hq_warrant_escrow:.1f} = ${hq_price + 2 - lq_cost - hq_warrant_escrow:.1f}
 - Produce LQ, advertise HQ, set price ${hq_price + 2:.1f}, no warrant, challenged: Profit = ${hq_price + 2:.1f} - ${lq_cost:.1f} = ${hq_price + 2 - lq_cost:.1f}
 
 **Important:** You can set any positive price you want! Higher prices mean higher profits if the product sells, but may reduce the chance of buyers purchasing.
 
-Note: If you offer a warrant on a misleading claim (LQ advertised as HQ) and get challenged, you lose ${warrant_escrow:.1f} penalty!
+Note: If you offer a warrant on a misleading claim (LQ advertised as HQ) and get challenged, you lose the corresponding Warrant Escrow penalty!
 """
         ).strip(),
     }
@@ -236,7 +239,8 @@ Make each seller distinct by varying:
         """Get market rules descriptions with dynamic parameters"""
         params = cls._get_market_params()
         challenge_cost = params['challenge_cost']
-        warrant_escrow = params['warrant_escrow']
+        hq_warrant_escrow = params['hq_warrant_escrow']
+        lq_warrant_escrow = params['lq_warrant_escrow']
         hq_cost = params['hq_cost']
         lq_cost = params['lq_cost']
         hq_price = params['hq_price']
@@ -268,8 +272,10 @@ Make each seller distinct by varying:
    - **If you warrant and advertise honestly**: You keep all your profits (${hq_profit:.1f} for HQ→HQ or ${lq_profit:.1f} for LQ→LQ)
    - **If you warrant and advertise misleadingly** (e.g., advertise HQ, produce LQ):
      - A buyer can challenge your warrant for ${challenge_cost:.1f}
-     - If challenged, you LOSE ${warrant_escrow:.1f} points from your profit (heavy penalty: -${warrant_escrow:.1f} total)
-     - This overrides any sales income from that transaction
+     - If challenged, you LOSE points from your profit based on your advertised claim:
+       - **Catching misleading HQ claim**: Lose ${hq_warrant_escrow:.1f} points
+       - **Catching misleading LQ claim**: Lose ${lq_warrant_escrow:.1f} points
+     - This penalty overrides any sales income from that transaction
    - Your warrant is only at risk if you are challenged for false advertising
         """,
     }
@@ -299,7 +305,7 @@ While you wait, here's a reminder of the game mechanics:
 • You may offer a Truth Warrant for your product (has_warrant=True)
 • This signals to buyers that your advertised quality is truthful
 • **Warranted products only**: Buyers can challenge if they feel cheated by misleading quality
-• If your warranted claim was misleading and challenged: you lose 4 points penalty
+• If your warranted claim was misleading and challenged: you lose points from your profit based on your claim (e.g., $8 for HQ claims)
 • If your warranted claim was honest: you keep all profits
 • Your warrant is only at risk if challenged
 
@@ -335,7 +341,7 @@ class Buyer_prompt:
         """Get available action descriptions for buyers in different markets"""
         params = cls._get_market_params()
         challenge_cost = params['challenge_cost']
-        warrant_escrow = params['warrant_escrow']
+        hq_warrant_escrow = params['hq_warrant_escrow']
         
         return {
         "reputation_only": (
@@ -351,7 +357,7 @@ class Buyer_prompt:
             "   - rating scale: -2 (very bad), -1 (bad), 0 (neutral), +1 (good), +2 (very good)\n"
                 f"3. `challenge_warrant(product_id: int)`: Challenge a warranted product after purchase (costs ${challenge_cost:.1f})\n"
             "   - Only use if you received LQ when HQ was advertised with a warrant\n"
-                f"   - Successful challenge earns you ${warrant_escrow:.1f} points!\n"
+                f"   - Successful challenge earns you reward points (e.g., ${hq_warrant_escrow:.1f} for HQ claims)!\n"
         ),
     }
 
@@ -365,7 +371,8 @@ class Buyer_prompt:
         hq_utility = params['hq_utility']
         lq_utility = params['lq_utility']
         challenge_cost = params['challenge_cost']
-        warrant_escrow = params['warrant_escrow']
+        hq_warrant_escrow = params['hq_warrant_escrow']
+        lq_warrant_escrow = params['lq_warrant_escrow']
         hq_price = params['hq_price']
         lq_price = params['lq_price']
         
@@ -400,14 +407,16 @@ Utility = (Product Quality Utility) - (Purchase Price)
 - LQ (Low Quality) product utility: ${lq_utility:.1f}
 
 **Challenge Cost:** ${challenge_cost:.1f}
-**Warrant Escrow:** ${warrant_escrow:.1f} (rewarded to buyer if challenge succeeds)
+**Warrant Escrow (based on advertised quality):**
+- HQ claim escrow: ${hq_warrant_escrow:.1f}
+- LQ claim escrow: ${lq_warrant_escrow:.1f}
 
 **Your Utility Formula:**
 - **If no challenge:** Utility = (Product Quality Utility) - (Purchase Price)
 - **If challenge succeeds** (LQ advertised as HQ with warrant): 
   Utility = (Product Quality Utility) - (Purchase Price) + (Warrant Escrow) + (Challenge Cost Refund) - (Challenge Cost)
-  = (Product Quality Utility) - (Purchase Price) + ${warrant_escrow:.1f} + ${challenge_cost:.1f} - ${challenge_cost:.1f}
-  = (Product Quality Utility) - (Purchase Price) + ${warrant_escrow:.1f}
+  = (Product Quality Utility) - (Purchase Price) + ${hq_warrant_escrow:.1f} + ${challenge_cost:.1f} - ${challenge_cost:.1f}
+  = (Product Quality Utility) - (Purchase Price) + ${hq_warrant_escrow:.1f}
 - **If challenge fails** (HQ advertised as HQ with warrant): 
   Utility = (Product Quality Utility) - (Purchase Price) - (Challenge Cost)
   = (Product Quality Utility) - (Purchase Price) - ${challenge_cost:.1f}
@@ -415,7 +424,7 @@ Utility = (Product Quality Utility) - (Purchase Price)
 **Examples:**
 - Buy HQ advertised as HQ at price ${hq_price:.1f}, no warrant, no challenge: Utility = ${hq_utility:.1f} - ${hq_price:.1f} = ${hq_utility - hq_price:.1f}
 - Buy LQ advertised as HQ at price ${hq_price:.1f}, with warrant, challenge succeeds: 
-  Utility = ${lq_utility:.1f} - ${hq_price:.1f} + ${warrant_escrow:.1f} = ${lq_utility - hq_price + warrant_escrow:.1f}
+  Utility = ${lq_utility:.1f} - ${hq_price:.1f} + ${hq_warrant_escrow:.1f} = ${lq_utility - hq_price + hq_warrant_escrow:.1f}
 - Buy HQ advertised as HQ at price ${hq_price:.1f}, with warrant, challenge fails: 
   Utility = ${hq_utility:.1f} - ${hq_price:.1f} - ${challenge_cost:.1f} = ${hq_utility - hq_price - challenge_cost:.1f}
 - Buy LQ advertised as LQ at price ${lq_price:.1f}, with warrant, challenge: 
@@ -426,7 +435,7 @@ Utility = (Product Quality Utility) - (Purchase Price)
 - You can only challenge products with a **warrant** (has_warrant = True)
 - You only see the **advertised quality**, **price**, and **warrant status** before purchasing
 - You discover the **true quality** only after purchase
-- Successful challenges (catching LQ advertised as HQ) earn you ${warrant_escrow:.1f} net reward (${warrant_escrow:.1f} warrant escrow + ${challenge_cost:.1f} challenge cost refund - ${challenge_cost:.1f} challenge cost = ${warrant_escrow:.1f})
+- Successful challenges (catching LQ advertised as HQ) earn you net reward based on advertised escrow (${hq_warrant_escrow:.1f} for HQ claims).
 - Failed challenges cost you ${challenge_cost:.1f}
 """
         ).strip(),
@@ -531,7 +540,8 @@ Make each buyer distinct by varying:
         """Get market rules descriptions with dynamic parameters"""
         params = cls._get_market_params()
         challenge_cost = params['challenge_cost']
-        warrant_escrow = params['warrant_escrow']
+        hq_warrant_escrow = params['hq_warrant_escrow']
+        lq_warrant_escrow = params['lq_warrant_escrow']
         
         return {
         "reputation_only": """
@@ -554,7 +564,9 @@ Make each buyer distinct by varying:
    - If a product has a **"Truth Warrant"** (has_warrant=True), the seller has staked their claim
    - This signals the seller is confident their advertised quality is truthful
    - **To challenge a warrant**: It costs you ${challenge_cost:.1f}
-   - **If you win the challenge** (advertised HQ but received LQ): You earn ${warrant_escrow:.1f} points total (great reward!)
+   - **If you win the challenge** (advertised HQ but received LQ): You earn reward points total based on the claim:
+     - **Winning challenge against HQ claim**: Earn ${hq_warrant_escrow:.1f} points
+     - **Winning challenge against LQ claim**: Earn ${lq_warrant_escrow:.1f} points
    - **If the warrant was honest**: You lose your ${challenge_cost:.1f} challenge fee
    - Only challenge warranted products where you received lower quality than advertised!
         """,
@@ -584,7 +596,7 @@ While you wait, here's a reminder of the game mechanics:
 
 ## Challenging (if available)
 • It costs you **$1** to challenge any warranted claim
-• If a warranted product promised higher quality than you received, you will **win the challenge and earn 4 points**
+• If a warranted product promised higher quality than you received, you will **win the challenge and earn reward points total based on the claim (e.g., $8 for HQ claims)**
 • Only challenge warranted products where you suspect you were cheated!
 
 ## Rating System
@@ -685,7 +697,7 @@ Remember: You never get cheated buying LQ. You can get cheated buying HQ. Use re
 Based on your purchase experience and the product details, decide how to rate this transaction.
 Rate on a scale from -2 to +2: -2 (very bad), -1 (bad), 0 (neutral), +1 (good), +2 (very good)
 
-If you were cheated (advertised HQ, received LQ) on a warranted product, you can challenge for $1 to earn 4 points!
+If you were cheated (advertised HQ, received LQ) on a warranted product, you can challenge for $1 to earn reward points (e.g., $8 for HQ claims)!
 """
     )
 
