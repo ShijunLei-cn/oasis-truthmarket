@@ -1782,12 +1782,9 @@ class Platform:
 
             cost = self.market_params['hq_cost'] if prod_q == 'HQ' else self.market_params['lq_cost']
             
-            # Use seller-specified price if provided, otherwise use default pricing strategy
-            # Default: high quality products fixed price 5, low quality products fixed price 3
-            if "price" in product_details and product_details["price"] is not None:
-                price = float(product_details["price"])
-            else:
-                price = self.market_params['hq_price'] if adv_q == 'HQ' else self.market_params['lq_price']
+            # Price is fixed by the market - sellers cannot set custom prices
+            # Fixed prices: high quality products = hq_price, low quality products = lq_price
+            price = self.market_params['hq_price'] if adv_q == 'HQ' else self.market_params['lq_price']
 
             # Check budget before listing product
             # Note: Escrow is NOT deducted at listing time, only deducted if challenge succeeds

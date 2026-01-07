@@ -789,9 +789,10 @@ class SocialAction:
 
         This method invokes an asynchronous action to list a product for sale
         in the market. The product can have different advertised and actual
-        qualities, and optionally include a truth warrant. You can also specify
-        a custom price for the product. Upon successful execution, it returns a
-        dictionary indicating success and the ID of the newly created product listing.
+        qualities, and optionally include a truth warrant. The price is fixed
+        by the market based on advertised quality and cannot be customized.
+        Upon successful execution, it returns a dictionary indicating success
+        and the ID of the newly created product listing.
 
         Args:
             advertised_quality (str): The quality of the product advertised to
@@ -802,10 +803,9 @@ class SocialAction:
                 product. Defaults to False. A truth warrant allows buyers to
                 challenge the product if the advertised quality does not match
                 the actual quality.
-            price (float, optional): The price you want to set for this product.
-                If not specified, the system will use default pricing based on
-                advertised quality (HQ: 5.0, LQ: 3.0). You can set any price
-                you want to maximize your profit or compete with other sellers.
+            price (float, optional): DEPRECATED - Price is fixed by the market
+                and this parameter is ignored. Prices are automatically set
+                based on advertised quality (HQ: fixed price, LQ: fixed price).
 
         Returns:
             dict: A dictionary with two key-value pairs. The 'success' key
@@ -821,8 +821,7 @@ class SocialAction:
             "product_quality": product_quality,
             "has_warrant": has_warrant,
         }
-        if price is not None:
-            product_details["price"] = float(price)
+        # Price parameter is ignored - price is fixed by the market
         return await self.perform_action(product_details, 
                                         ActionType.LIST_PRODUCT.value)
 
