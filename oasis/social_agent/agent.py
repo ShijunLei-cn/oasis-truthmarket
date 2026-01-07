@@ -457,7 +457,7 @@ class SocialAgent(ChatAgent):
             "role":
             self.system_message.role_name,
             "content":
-            self.system_message.content.split("# RESPONSE FORMAT")[0],
+            self.system_message.content.split("# RESPONSE METHOD")[0],
         }] + openai_messages + [{
             "role": "user",
             "content": self.test_prompt
@@ -496,7 +496,7 @@ class SocialAgent(ChatAgent):
             "role":
             self.system_message.role_name,
             "content":
-            self.system_message.content.split("# RESPONSE FORMAT")[0],
+            self.system_message.content.split("# RESPONSE METHOD")[0],
         }] + openai_messages + [{
             "role": "user",
             "content": interview_prompt
