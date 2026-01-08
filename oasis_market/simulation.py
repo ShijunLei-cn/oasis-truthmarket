@@ -135,7 +135,12 @@ class MarketSimulation:
                 new_state = self.db_manager.get_agent_state(agent_id, 'seller', round_num=round_num)
                 
                 # Calculate round profit
-                round_profit = (round_summary.get('price', 0) - round_summary.get('cost', 0)) * round_summary.get('sold_numbers', 0)
+                # Use total_revenue - total_cost if available, otherwise use the old method
+                if 'total_revenue' in round_summary and 'total_cost' in round_summary:
+                    round_profit = round_summary.get('total_revenue', 0) - round_summary.get('total_cost', 0)
+                else:
+                    # Fallback to old calculation method
+                    round_profit = (round_summary.get('price', 0) - round_summary.get('cost', 0)) * round_summary.get('sold_numbers', 0)
                 total_profit = new_state.get('total_profit', 0)
                 
                 # Calculate next round reputation
@@ -308,25 +313,27 @@ class MarketSimulation:
     
     def _clear_unsold_products(self):
         """
-        Delete all unsold products at the end of each round.
+        Mark all unsold products as 'expired' at the end of each round.
         Products with status 'on_sale' and is_sold = 0 are considered unsold.
+        This preserves product data for later analysis instead of deleting it.
         """
         # Connect to database
         conn = sqlite3.connect(self.database_path)
         cursor = conn.cursor()
         
         try:
-            # Delete all unsold products (status = 'on_sale' and is_sold = 0)
+            # Update all unsold products (status = 'on_sale' and is_sold = 0) to 'expired'
             cursor.execute("""
-                DELETE FROM product 
+                UPDATE product 
+                SET status = 'expired'
                 WHERE status = 'on_sale' AND is_sold = 0
             """)
             
-            deleted_count = cursor.rowcount
+            updated_count = cursor.rowcount
             conn.commit()
             
-            if deleted_count > 0:
-                print(f"Cleared {deleted_count} unsold product(s) at the end of the round.")
+            if updated_count > 0:
+                print(f"Marked {updated_count} unsold product(s) as expired at the end of the round.")
         except Exception as e:
             print(f"Warning: Error clearing unsold products: {e}")
             conn.rollback()

@@ -1763,6 +1763,127 @@ class Platform:
         except Exception as e:
             return {"success": False, "error": str(e)}
     
+    async def purchase_products(self, agent_id: int, product_ids: list):
+        """Handle buyer purchasing multiple products backend logic."""
+        buyer_id = agent_id
+        current_time = self.sandbox_clock.get_time_step()
+        
+        try:
+            if not product_ids or len(product_ids) == 0:
+                return {"success": False, "error": "No product IDs specified."}
+            
+            transactions = []
+            failed_purchases = []
+            
+            # Get buyer's current budget
+            self.pl_utils._execute_db_command("SELECT budget FROM user WHERE agent_id = ?", (buyer_id,))
+            budget_result = self.db_cursor.fetchone()
+            if not budget_result:
+                return {"success": False, "error": f"Buyer {buyer_id} not found in database."}
+            
+            current_budget = budget_result[0]
+            if current_budget is None:
+                current_budget = 18.0  # Buyer default budget
+            
+            # Process each product purchase
+            for product_id in product_ids:
+                try:
+                    # Get product details
+                    product_check_query = """
+                        SELECT user_id, status, advertised_quality, true_quality, has_warrant, 
+                               price, cost
+                        FROM product WHERE product_id = ?
+                    """
+                    self.pl_utils._execute_db_command(product_check_query, (product_id,))
+                    product_result = self.db_cursor.fetchone()
+                    
+                    if not product_result:
+                        failed_purchases.append({"product_id": product_id, "error": "Product not found"})
+                        continue
+                    
+                    seller_id, status, advertised_quality, true_quality, has_warrant, price, cost = product_result
+                    
+                    # Check if product is available
+                    if status != 'on_sale':
+                        failed_purchases.append({"product_id": product_id, "error": "Product not available for purchase"})
+                        continue
+                    
+                    # Check budget
+                    if current_budget < price:
+                        failed_purchases.append({"product_id": product_id, "error": f"Insufficient budget. Required: ${price:.2f}, Available: ${current_budget:.2f}"})
+                        continue
+                    
+                    # Calculate seller profit and buyer utility
+                    seller_profit = price - cost
+                    utility = SimulationConfig.MARKET_PARAMS['hq_utility'] if true_quality == 'HQ' else SimulationConfig.MARKET_PARAMS['lq_utility']
+                    buyer_utility = utility - price
+                    
+                    # Update budgets
+                    current_budget += (utility - price)  # Buyer budget update
+                    self.pl_utils._execute_db_command("UPDATE user SET budget = budget + ? WHERE agent_id = ?", (utility - price, buyer_id), commit=True)
+                    self.pl_utils._execute_db_command("UPDATE user SET budget = budget + ? WHERE agent_id = ?", (seller_profit, seller_id), commit=True)
+                    
+                    # Update product status
+                    self.pl_utils._execute_db_command("UPDATE product SET is_sold = 1, status = 'sold' WHERE product_id = ?", (product_id,), commit=True)
+                    
+                    # Insert transaction
+                    transaction_insert_query = """
+                        INSERT INTO transactions (
+                            product_id, seller_id, buyer_id, round_number, 
+                            seller_profit, buyer_utility, created_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """
+                    self.pl_utils._execute_db_command(
+                        transaction_insert_query,
+                        (product_id, seller_id, buyer_id, self.sandbox_clock.get_round_step(), 
+                         seller_profit, buyer_utility, current_time),
+                        commit=True
+                    )
+                    transaction_id = self.db_cursor.lastrowid
+                    
+                    # Update profit/utility scores
+                    self.pl_utils._execute_db_command(
+                        "UPDATE user SET profit_utility_score = profit_utility_score + ? WHERE agent_id = ?",
+                        (seller_profit, seller_id), commit=True
+                    )
+                    self.pl_utils._execute_db_command(
+                        "UPDATE user SET profit_utility_score = profit_utility_score + ? WHERE agent_id = ?",
+                        (buyer_utility, buyer_id), commit=True
+                    )
+                    
+                    transactions.append({
+                        "transaction_id": transaction_id,
+                        "product_id": product_id,
+                        "seller_id": seller_id,
+                        "advertised_quality": advertised_quality,
+                        "true_quality": true_quality,
+                        "has_warrant": bool(has_warrant),
+                        "seller_profit": seller_profit,
+                        "buyer_utility": buyer_utility,
+                        "purchase_price": price,
+                    })
+                except Exception as e:
+                    failed_purchases.append({"product_id": product_id, "error": str(e)})
+            
+            # Record trace
+            action_info = {
+                "product_ids": product_ids,
+                "transactions": transactions,
+                "total_transactions": len(transactions),
+                "failed_purchases": failed_purchases
+            }
+            self.pl_utils._record_trace(buyer_id, ActionType.PURCHASE_PRODUCTS.value, action_info, current_time)
+            
+            return {
+                "success": True,
+                "agent_id": buyer_id,
+                "transactions": transactions,
+                "total_transactions": len(transactions),
+                "failed_purchases": failed_purchases if failed_purchases else None
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
     async def list_product(self, agent_id: int, product_details: dict):
         """Handle seller listing product backend logic."""
         seller_id = agent_id
@@ -1822,6 +1943,153 @@ class Platform:
         except Exception as e:
             return {"success": False, "error": str(e)}
     
+    async def list_products(self, agent_id: int, products_data: dict):
+        """Handle seller listing multiple products backend logic."""
+        seller_id = agent_id
+        current_time = self.sandbox_clock.get_time_step()
+        round_number = self.sandbox_clock.get_round_step()
+        
+        try:
+            products_list = products_data.get("products", [])
+            if not products_list:
+                return {"success": False, "error": "No products specified in the products list."}
+            
+            # Get seller's current budget
+            self.pl_utils._execute_db_command("SELECT budget FROM user WHERE agent_id = ?", (seller_id,))
+            budget_result = self.db_cursor.fetchone()
+            if not budget_result:
+                return {"success": False, "error": f"Seller {seller_id} not found in database."}
+            
+            current_budget = budget_result[0]
+            if current_budget is None:
+                current_budget = 60.0  # Seller default budget
+            
+            # Validate product specifications and calculate costs
+            product_specs = []
+            remaining_budget = current_budget
+            
+            for product_spec in products_list:
+                adv_q = product_spec.get("advertised_quality")
+                prod_q = product_spec.get("product_quality")
+                has_warrant = product_spec.get("has_warrant", False)
+                quantity = product_spec.get("quantity", 1)
+                
+                if adv_q not in ['HQ', 'LQ'] or prod_q not in ['HQ', 'LQ']:
+                    return {"success": False, "error": f"Invalid quality specification. Must be 'HQ' or 'LQ'."}
+                
+                if quantity < 1:
+                    return {"success": False, "error": f"Quantity must be at least 1."}
+                
+                cost_per_product = self.market_params['hq_cost'] if prod_q == 'HQ' else self.market_params['lq_cost']
+                
+                product_specs.append({
+                    "advertised_quality": adv_q,
+                    "product_quality": prod_q,
+                    "has_warrant": has_warrant,
+                    "requested_quantity": quantity,
+                    "cost_per_product": cost_per_product
+                })
+            
+            # Create products with partial fulfillment support
+            product_ids = []
+            total_cost = 0
+            failed_specs = []
+            insert_query = (
+                "INSERT INTO product (user_id, created_at, true_quality, advertised_quality, price, cost, has_warrant, is_sold, status, round_number) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            )
+            
+            for spec in product_specs:
+                adv_q = spec["advertised_quality"]
+                prod_q = spec["product_quality"]
+                has_warrant = spec["has_warrant"]
+                requested_quantity = spec["requested_quantity"]
+                cost_per_product = spec["cost_per_product"]
+                price = self.market_params['hq_price'] if adv_q == 'HQ' else self.market_params['lq_price']
+                
+                # Calculate how many products can be created with remaining budget
+                max_affordable = int(remaining_budget / cost_per_product) if cost_per_product > 0 else 0
+                actual_quantity = min(requested_quantity, max_affordable)
+                
+                if actual_quantity > 0:
+                    # Create products that can be afforded
+                    for _ in range(actual_quantity):
+                        self.pl_utils._execute_db_command(
+                            insert_query,
+                            (seller_id, current_time, prod_q, adv_q, price, cost_per_product, has_warrant, False, 'on_sale', round_number),
+                            commit=True
+                        )
+                        product_ids.append(self.db_cursor.lastrowid)
+                    
+                    cost_for_this_spec = cost_per_product * actual_quantity
+                    total_cost += cost_for_this_spec
+                    remaining_budget -= cost_for_this_spec
+                    
+                    # Track if not all requested products were created
+                    if actual_quantity < requested_quantity:
+                        failed_specs.append({
+                            "specification": {
+                                "advertised_quality": adv_q,
+                                "product_quality": prod_q,
+                                "has_warrant": has_warrant
+                            },
+                            "requested": requested_quantity,
+                            "created": actual_quantity,
+                            "missing": requested_quantity - actual_quantity,
+                            "reason": "Insufficient budget"
+                        })
+                else:
+                    # Cannot afford any products of this specification
+                    failed_specs.append({
+                        "specification": {
+                            "advertised_quality": adv_q,
+                            "product_quality": prod_q,
+                            "has_warrant": has_warrant
+                        },
+                        "requested": requested_quantity,
+                        "created": 0,
+                        "missing": requested_quantity,
+                        "reason": "Insufficient budget"
+                    })
+            
+            # Deduct total production cost from budget
+            if total_cost > 0:
+                self.pl_utils._execute_db_command("UPDATE user SET budget = budget - ? WHERE agent_id = ?", (total_cost, seller_id), commit=True)
+            
+            # Record trace for the batch listing
+            action_info = {
+                "product_ids": product_ids,
+                "total_products": len(product_ids),
+                "total_cost": total_cost,
+                "failed_specs": failed_specs if failed_specs else None
+            }
+            self.pl_utils._record_trace(seller_id, ActionType.LIST_PRODUCTS.value, action_info, current_time)
+            
+            # Return result with partial fulfillment information
+            if len(product_ids) == 0:
+                return {
+                    "success": False,
+                    "error": f"Insufficient budget to create any products. Required at least ${product_specs[0]['cost_per_product']:.2f}, Available: ${current_budget:.2f}.",
+                    "product_ids": [],
+                    "total_products": 0,
+                    "total_cost": 0,
+                    "failed_specs": failed_specs
+                }
+            else:
+                result = {
+                    "success": True,
+                    "product_ids": product_ids,
+                    "total_products": len(product_ids),
+                    "total_cost": total_cost
+                }
+                if failed_specs:
+                    result["partial_fulfillment"] = True
+                    result["failed_specs"] = failed_specs
+                    result["message"] = f"Created {len(product_ids)} product(s), but {sum(s['missing'] for s in failed_specs)} product(s) could not be created due to insufficient budget."
+                return result
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
     async def rate_transaction(self, agent_id: int, rating_details: dict):
         """Handle buyer rating transaction backend logic."""
         buyer_id = agent_id
@@ -1847,6 +2115,65 @@ class Platform:
             self.pl_utils._record_trace(buyer_id, ActionType.RATE_TRANSACTION.value, action_info, current_time)
 
             return {"success": True}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    async def rate_transactions(self, agent_id: int, ratings_data: list):
+        """Handle buyer rating multiple transactions backend logic."""
+        buyer_id = agent_id
+        current_time = self.sandbox_clock.get_time_step()
+        
+        try:
+            if not ratings_data or len(ratings_data) == 0:
+                return {"success": False, "error": "No ratings specified."}
+            
+            ratings = []
+            failed_ratings = []
+            
+            for rating_spec in ratings_data:
+                try:
+                    transaction_id = rating_spec.get("transaction_id")
+                    rating = rating_spec.get("rating")
+                    
+                    if transaction_id is None or rating is None:
+                        failed_ratings.append({"spec": rating_spec, "error": "Missing transaction_id or rating"})
+                        continue
+                    
+                    # Find transaction and get seller ID
+                    trans_query = "SELECT seller_id FROM transactions WHERE transaction_id = ?"
+                    self.pl_utils._execute_db_command(trans_query, (transaction_id,))
+                    result = self.db_cursor.fetchone()
+                    if not result:
+                        failed_ratings.append({"transaction_id": transaction_id, "error": "Transaction not found"})
+                        continue
+                    seller_id = result[0]
+                    
+                    # Update rating in transaction table
+                    update_trans_query = "UPDATE transactions SET rating = ? WHERE transaction_id = ?"
+                    self.pl_utils._execute_db_command(update_trans_query, (rating, transaction_id), commit=True)
+                    
+                    ratings.append({
+                        "transaction_id": transaction_id,
+                        "rating": rating,
+                        "seller_id": seller_id
+                    })
+                except Exception as e:
+                    failed_ratings.append({"spec": rating_spec, "error": str(e)})
+            
+            # Record trace
+            action_info = {
+                "ratings": ratings,
+                "total_ratings": len(ratings),
+                "failed_ratings": failed_ratings
+            }
+            self.pl_utils._record_trace(buyer_id, ActionType.RATE_TRANSACTIONS.value, action_info, current_time)
+            
+            return {
+                "success": True,
+                "ratings": ratings,
+                "total_ratings": len(ratings),
+                "failed_ratings": failed_ratings if failed_ratings else None
+            }
         except Exception as e:
             return {"success": False, "error": str(e)}
             
@@ -1953,7 +2280,131 @@ class Platform:
             return {"success": True, "challenge_successful": challenge_successful}
         except Exception as e:
             return {"success": False, "error": str(e)}
-
+    
+    async def challenge_warrants(self, agent_id: int, challenges_data: list):
+        """Handle buyer challenging multiple warrants backend logic."""
+        buyer_id = agent_id
+        current_time = self.sandbox_clock.get_time_step()
+        
+        try:
+            if not challenges_data or len(challenges_data) == 0:
+                return {"success": False, "error": "No challenges specified."}
+            
+            challenges = []
+            failed_challenges = []
+            
+            for challenge_spec in challenges_data:
+                try:
+                    transaction_id = challenge_spec.get("transaction_id")
+                    rating = challenge_spec.get("rating")
+                    
+                    if transaction_id is None or rating is None:
+                        failed_challenges.append({"spec": challenge_spec, "error": "Missing transaction_id or rating"})
+                        continue
+                    
+                    # Find transaction and get seller ID and product ID
+                    trans_query = "SELECT seller_id, product_id FROM transactions WHERE transaction_id = ?"
+                    self.pl_utils._execute_db_command(trans_query, (transaction_id,))
+                    result = self.db_cursor.fetchone()
+                    if not result:
+                        failed_challenges.append({"transaction_id": transaction_id, "error": "Transaction not found"})
+                        continue
+                    seller_id, product_id = result
+                    
+                    # Update rating in transaction table
+                    update_trans_query = "UPDATE transactions SET rating = ? WHERE transaction_id = ?"
+                    self.pl_utils._execute_db_command(update_trans_query, (rating, transaction_id), commit=True)
+                    
+                    # Query product and transaction information
+                    query = """
+                        SELECT p.true_quality, p.advertised_quality, p.has_warrant, p.price, 
+                               t.is_challenged, t.transaction_id, t.seller_profit, t.buyer_utility
+                        FROM product p JOIN transactions t ON p.product_id = t.product_id
+                        WHERE p.product_id = ? AND t.transaction_id = ?
+                    """
+                    self.pl_utils._execute_db_command(query, (product_id, transaction_id))
+                    result = self.db_cursor.fetchone()
+                    
+                    if not result:
+                        failed_challenges.append({"transaction_id": transaction_id, "error": "Transaction record not found"})
+                        continue
+                    
+                    true_q, adv_q, has_warrant, price, is_challenged, transaction_id, original_seller_profit, original_buyer_utility = result
+                    
+                    if not has_warrant:
+                        failed_challenges.append({"transaction_id": transaction_id, "error": "Product has no warranty"})
+                        continue
+                    if is_challenged:
+                        failed_challenges.append({"transaction_id": transaction_id, "error": "Already challenged"})
+                        continue
+                    
+                    # Process challenge
+                    seller_penalty = 0
+                    buyer_reward = 0
+                    buyer_challenge_cost = self.market_params['challenge_cost']
+                    
+                    # Deduct challenge cost
+                    self.pl_utils._execute_db_command("UPDATE user SET budget = budget - ? WHERE agent_id = ?", (buyer_challenge_cost, buyer_id), commit=True)
+                    self.pl_utils._execute_db_command("UPDATE user SET profit_utility_score = profit_utility_score - ? WHERE agent_id = ?", (buyer_challenge_cost, buyer_id), commit=True)
+                    
+                    # Check if challenge succeeds (advertised quality != true quality)
+                    if adv_q != true_q:
+                        # Challenge succeeds
+                        if adv_q == 'HQ':
+                            seller_penalty = self.market_params['hq_warrant_escrow']
+                            buyer_reward = self.market_params['hq_warrant_escrow']
+                        else:
+                            seller_penalty = self.market_params['lq_warrant_escrow']
+                            buyer_reward = self.market_params['lq_warrant_escrow']
+                        
+                        # Apply penalties and rewards
+                        self.pl_utils._execute_db_command("UPDATE user SET budget = budget - ? WHERE agent_id = ?", (seller_penalty, seller_id), commit=True)
+                        self.pl_utils._execute_db_command("UPDATE user SET profit_utility_score = profit_utility_score - ? WHERE agent_id = ?", (seller_penalty, seller_id), commit=True)
+                        
+                        # Budget: already deducted challenge_cost, now add back challenge_cost + escrow = net + escrow
+                        self.pl_utils._execute_db_command("UPDATE user SET budget = budget + ? WHERE agent_id = ?", (buyer_challenge_cost + buyer_reward, buyer_id), commit=True)
+                        self.pl_utils._execute_db_command("UPDATE user SET profit_utility_score = profit_utility_score + ? WHERE agent_id = ?", (buyer_challenge_cost + buyer_reward, buyer_id), commit=True)
+                        
+                        # Update transaction
+                        self.pl_utils._execute_db_command("UPDATE transactions SET is_challenged = 1, challenge_cost = ? WHERE transaction_id = ?", (buyer_challenge_cost, transaction_id), commit=True)
+                        
+                        # Update product status
+                        self.pl_utils._execute_db_command("UPDATE product SET status = ? WHERE product_id = ?", ('challenged_success', product_id), commit=True)
+                    else:
+                        # Challenge fails
+                        self.pl_utils._execute_db_command("UPDATE transactions SET is_challenged = 1, challenge_cost = ? WHERE transaction_id = ?", (buyer_challenge_cost, transaction_id), commit=True)
+                        self.pl_utils._execute_db_command("UPDATE product SET status = ? WHERE product_id = ?", ('challenged_fail', product_id), commit=True)
+                    
+                    challenges.append({
+                        "challenge_id": transaction_id,  # Using transaction_id as challenge identifier
+                        "transaction_id": transaction_id,
+                        "product_id": product_id,
+                        "seller_id": seller_id,
+                        "challenge_succeeded": adv_q != true_q,
+                        "seller_penalty": seller_penalty,
+                        "buyer_reward": buyer_reward,
+                        "challenge_cost": buyer_challenge_cost
+                    })
+                except Exception as e:
+                    failed_challenges.append({"spec": challenge_spec, "error": str(e)})
+            
+            # Record trace
+            action_info = {
+                "challenges": challenges,
+                "total_challenges": len(challenges),
+                "failed_challenges": failed_challenges
+            }
+            self.pl_utils._record_trace(buyer_id, ActionType.CHALLENGE_WARRANTS.value, action_info, current_time)
+            
+            return {
+                "success": True,
+                "challenges": challenges,
+                "total_challenges": len(challenges),
+                "failed_challenges": failed_challenges if failed_challenges else None
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+            
     async def exit_market(self, agent_id: int, message: Any):
         """Handle seller exiting market backend logic (conceptual intent)."""
         seller_id = agent_id

@@ -30,25 +30,59 @@ class Seller_prompt:
         params = cls._get_market_params()
         hq_price = params['hq_price']
         lq_price = params['lq_price']
+        hq_cost = params['hq_cost']
+        lq_cost = params['lq_cost']
         
         return {
         "reputation_only": (
             "Available Actions:\n"
-                f"- `list_product(advertised_quality: str, product_quality: str)`: Your primary action to make a profit.\n"
-            "  - `advertised_quality`: What you tell buyers ('HQ' or 'LQ')\n"
-            "  - `product_quality`: What you actually produce ('HQ' or 'LQ')\n"
-                f"  - Note: Price is FIXED by the market. HQ products are priced at ${hq_price:.1f}, LQ products are priced at ${lq_price:.1f}. You cannot change the price.\n"
+                f"- `list_products(products: list)`: List products for sale. You must use this action to list products.\n"
+            "  - `products`: A list of product specifications. Each product is a dict with:\n"
+            "    - `advertised_quality` (str): What you tell buyers ('HQ' or 'LQ')\n"
+            "    - `product_quality` (str): What you actually produce ('HQ' or 'LQ')\n"
+            "    - `quantity` (int, optional): Number of products with this specification (default: 1)\n"
+            "  - **IMPORTANT**: You can list MULTIPLE DIFFERENT TYPES of products in a single call. This allows you to:\n"
+            "    * Diversify your product portfolio (e.g., mix of HQ and LQ products)\n"
+            "    * Target different buyer segments simultaneously\n"
+            "    * Balance risk and profit by offering various quality combinations\n"
+            "    * Maximize your budget utilization across different product types\n"
+                f"  - Example 1 (multiple types): list_products([{{{{\"advertised_quality\": \"HQ\", \"product_quality\": \"HQ\", \"quantity\": 2}}}}, {{{{ \"advertised_quality\": \"LQ\", \"product_quality\": \"LQ\", \"quantity\": 1}}}}])\n"
+                f"  - Example 2 (single type): list_products([{{{{\"advertised_quality\": \"HQ\", \"product_quality\": \"LQ\", \"quantity\": 5}}}}])\n"
+                f"  - Production Costs: HQ products cost ${hq_cost:.1f} to produce, LQ products cost ${lq_cost:.1f} to produce\n"
+                f"  - Fixed Prices: HQ products are priced at ${hq_price:.1f}, LQ products are priced at ${lq_price:.1f}. You cannot change the price.\n"
             "  - Note: `has_warrant` is NOT available in this market\n"
             "- `exit_market()`: Exit the market\n"
             "- `reenter_market()`: Re-enter with fresh reputation (available at round {reentry_round})"
         ),
         "reputation_and_warrant": (
             "Available Actions:\n"
-                f"- `list_product(advertised_quality: str, product_quality: str, has_warrant: bool)`: Your primary action to make a profit.\n"
-            "  - `advertised_quality`: What you tell buyers ('HQ' or 'LQ')\n"
-            "  - `product_quality`: What you actually produce ('HQ' or 'LQ')\n"
-            "  - `has_warrant`: Whether to offer a Truth Warrant (True/False)\n"
-                f"  - Note: Price is FIXED by the market. HQ products are priced at ${hq_price:.1f}, LQ products are priced at ${lq_price:.1f}. You cannot change the price.\n"
+                f"- `list_products(products: list)`: List products for sale. You must use this action to list products.\n"
+            "  - `products`: A list of product specifications. Each product is a dict with:\n"
+            "    - `advertised_quality` (str): What you tell buyers ('HQ' or 'LQ')\n"
+            "    - `product_quality` (str): What you actually produce ('HQ' or 'LQ')\n"
+            "    - `has_warrant` (bool, optional): Whether to offer a Truth Warrant (default: False)\n"
+            "    - `quantity` (int, optional): Number of products with this specification (default: 1)\n"
+            "  - **CRITICAL**: Each unique combination of (advertised_quality, product_quality, has_warrant) is a DIFFERENT product type.\n"
+            "    For example, (LQ, HQ, has_warrant=True) and (LQ, HQ, has_warrant=False) are TWO different product types.\n"
+            "    You can specify different quantities for each unique combination in a single `list_products()` call.\n"
+            "  - **IMPORTANT**: You can list MULTIPLE DIFFERENT TYPES of products in a single call. This allows you to:\n"
+            "    * Diversify your product portfolio (e.g., mix of HQ and LQ products, with or without warrants)\n"
+            "    * Target different buyer segments simultaneously\n"
+            "    * Balance risk and profit by offering various quality and warranty combinations\n"
+            "    * Maximize your budget utilization across different product types\n"
+            "  - **Examples of different product type combinations**:\n"
+            "    * (HQ, HQ, has_warrant=True) - Honest high quality with warrant\n"
+            "    * (HQ, HQ, has_warrant=False) - Honest high quality without warrant\n"
+            "    * (HQ, LQ, has_warrant=True) - Fraudulent high quality claim with warrant (risky!)\n"
+            "    * (HQ, LQ, has_warrant=False) - Fraudulent high quality claim without warrant\n"
+            "    * (LQ, LQ, has_warrant=True) - Honest low quality with warrant\n"
+            "    * (LQ, LQ, has_warrant=False) - Honest low quality without warrant\n"
+            "    * (LQ, HQ, has_warrant=True) - Under-advertising with warrant\n"
+            "    * (LQ, HQ, has_warrant=False) - Under-advertising without warrant\n"
+                f"  - Example 1 (multiple types with different warrant status): list_products([{{{{\"advertised_quality\": \"HQ\", \"product_quality\": \"HQ\", \"has_warrant\": True, \"quantity\": 2}}}}, {{{{ \"advertised_quality\": \"HQ\", \"product_quality\": \"HQ\", \"has_warrant\": False, \"quantity\": 3}}}}, {{{{ \"advertised_quality\": \"LQ\", \"product_quality\": \"LQ\", \"quantity\": 1}}}}])\n"
+                f"  - Example 2 (fraudulent with and without warrant): list_products([{{{{\"advertised_quality\": \"HQ\", \"product_quality\": \"LQ\", \"has_warrant\": True, \"quantity\": 2}}}}, {{{{ \"advertised_quality\": \"HQ\", \"product_quality\": \"LQ\", \"has_warrant\": False, \"quantity\": 5}}}}])\n"
+                f"  - Production Costs: HQ products cost ${hq_cost:.1f} to produce, LQ products cost ${lq_cost:.1f} to produce\n"
+                f"  - Fixed Prices: HQ products are priced at ${hq_price:.1f}, LQ products are priced at ${lq_price:.1f}. You cannot change the price.\n"
             "- `exit_market()`: Exit the market\n"
             "- `reenter_market()`: Re-enter with fresh reputation (available at round {reentry_round})"
         ),
@@ -186,8 +220,9 @@ You must decide and execute EXACTLY ONE action for this round based on your pers
 **Instructions:**
 1. **Assess your situation**: Analyze your current reputation and past performance from the summary
 2. **Consider your strategy**: Should you build trust or maximize short-term profit? Should you exit and rebrand?
-3. **Formulate a plan**: Based on your PERSONALITY, decide your plan for this round
-4. **Execute the action**: You MUST call one of the available functions
+3. **Product portfolio strategy**: When using `list_products()`, consider listing multiple different product types (e.g., mix of HQ and LQ products with different advertised/actual quality combinations) in a single call. This allows you to diversify your offerings, target different buyer segments, balance risk and profit, and maximize budget utilization.
+4. **Formulate a plan**: Based on your PERSONALITY, decide your plan for this round
+5. **Execute the action**: You MUST call one of the available functions
 
 Provide your step-by-step reasoning first, then execute your chosen function call.
 Please actively take actions and participate in the market. Do not repeatedly refuse to execute any action.
@@ -346,18 +381,34 @@ class Buyer_prompt:
         return {
         "reputation_only": (
             "Available Actions:\n"
-            "1. `purchase_product_id(product_id: int)`: Purchase a product by its product_id\n"
-            "2. `rate_transaction(transaction_id: int, rating: int)`: Rate a transaction after purchase\n"
-            "   - rating scale: -2 (very bad), -1 (bad), 0 (neutral), +1 (good), +2 (very good)\n"
+            "1. `purchase_products(product_ids: list)`: Purchase multiple products by their product_ids. You must use this action to purchase products.\n"
+            "   - `product_ids`: A list of product IDs (integers) to purchase\n"
+            "   - Example: purchase_products([123, 124, 125])\n"
+            "2. `rate_transactions(ratings: list)`: Rate multiple transactions after purchase. You must use this action to rate transactions.\n"
+            "   - `ratings`: A list of rating specifications. Each rating is a dict with:\n"
+            "     - `transaction_id` (int): The transaction ID to rate\n"
+            "     - `rating` (int): The rating value (range: -2 to 2)\n"
+            "   - Rating scale: -2 (very bad), -1 (bad), 0 (neutral), +1 (good), +2 (very good)\n"
+            "   - Example: rate_transactions([{{{{\"transaction_id\": 456, \"rating\": 2}}}}, {{{{ \"transaction_id\": 457, \"rating\": 1}}}}])\n"
         ),
         "reputation_and_warrant": (
             "Available Actions:\n"
-            "1. `purchase_product_id(product_id: int)`: Purchase a product by its product_id\n"
-            "2. `rate_transaction(transaction_id: int, rating: int)`: Rate a transaction after purchase\n"
-            "   - rating scale: -2 (very bad), -1 (bad), 0 (neutral), +1 (good), +2 (very good)\n"
-                f"3. `challenge_warrant(product_id: int)`: Challenge a warranted product after purchase (costs ${challenge_cost:.1f})\n"
+            "1. `purchase_products(product_ids: list)`: Purchase multiple products by their product_ids. You must use this action to purchase products.\n"
+            "   - `product_ids`: A list of product IDs (integers) to purchase\n"
+            "   - Example: purchase_products([123, 124, 125])\n"
+            "2. `rate_transactions(ratings: list)`: Rate multiple transactions after purchase. You must use this action to rate transactions.\n"
+            "   - `ratings`: A list of rating specifications. Each rating is a dict with:\n"
+            "     - `transaction_id` (int): The transaction ID to rate\n"
+            "     - `rating` (int): The rating value (range: -2 to 2)\n"
+            "   - Rating scale: -2 (very bad), -1 (bad), 0 (neutral), +1 (good), +2 (very good)\n"
+            "   - Example: rate_transactions([{{{{\"transaction_id\": 456, \"rating\": 2}}}}, {{{{ \"transaction_id\": 457, \"rating\": 1}}}}])\n"
+                f"3. `challenge_warrants(challenges: list)`: Challenge multiple warranted products after purchase. You must use this action to challenge warrants (costs ${challenge_cost:.1f} per challenge).\n"
+            "   - `challenges`: A list of challenge specifications. Each challenge is a dict with:\n"
+            "     - `transaction_id` (int): The transaction ID to challenge\n"
+            "     - `rating` (int): The rating value (range: -2 to 2)\n"
             "   - Only use if you received LQ when HQ was advertised with a warrant\n"
                 f"   - Successful challenge earns you reward points (e.g., ${hq_warrant_escrow:.1f} for HQ claims)!\n"
+            "   - Example: challenge_warrants([{{{{\"transaction_id\": 456, \"rating\": -2}}}}, {{{{ \"transaction_id\": 457, \"rating\": -1}}}}])\n"
         ),
     }
 
@@ -741,7 +792,36 @@ def format_seller_history(history_log: list) -> str:
 
     history_string = "Here is a summary of your performance in previous rounds:\n"
     for entry in history_log:
-        history_string += f"- Round {entry['round']}: Listed a True_quality {entry['true_quality']} and advertised_quality {entry['advertised_quality']} product. Sold: {entry['is_sold']} and got {entry['sold_numbers']} products. Round Profit: {entry['profit']:.2f}. New Reputation: {entry['reputation']:.1f}. Total Profit: {entry.get('total_profit', 0):.2f}\n"
+        round_num = entry['round']
+        true_quality = entry.get('true_quality', 'N/A')
+        advertised_quality = entry.get('advertised_quality', 'N/A')
+        warrant = entry.get('warrant', False)
+        is_sold = entry.get('is_sold', 0)
+        sold_numbers = entry.get('sold_numbers', 0)
+        profit = entry.get('profit', 0)
+        reputation = entry.get('reputation', 0)
+        total_profit = entry.get('total_profit', 0)
+        
+        # Check if there are multiple product groups (different combinations)
+        product_groups = entry.get('product_groups')
+        total_listed = entry.get('total_products_listed', 1)
+        
+        if product_groups and len(product_groups) > 1:
+            # Multiple product types in this round
+            history_string += f"- Round {round_num}: Listed {total_listed} products with {len(product_groups)} different specifications:\n"
+            for (adv_q, true_q, has_warr), group_info in product_groups.items():
+                count = group_info['count']
+                sold = group_info['sold_count']
+                warrant_str = "with warrant" if has_warr else "without warrant"
+                history_string += f"  * {count} products: advertised as {adv_q}, true quality {true_q}, {warrant_str} (sold: {sold})\n"
+            history_string += f"  Total sold: {sold_numbers} products. Round Profit: {profit:.2f}. New Reputation: {reputation:.1f}. Total Profit: {total_profit:.2f}\n"
+        else:
+            # Single product type or backward compatibility
+            warrant_str = "with warrant" if warrant else "without warrant"
+            if total_listed > 1:
+                history_string += f"- Round {round_num}: Listed {total_listed} products (True_quality {true_quality}, advertised_quality {advertised_quality}, {warrant_str}). Sold: {sold_numbers} products. Round Profit: {profit:.2f}. New Reputation: {reputation:.1f}. Total Profit: {total_profit:.2f}\n"
+            else:
+                history_string += f"- Round {round_num}: Listed a True_quality {true_quality} and advertised_quality {advertised_quality} product ({warrant_str}). Sold: {is_sold} and got {sold_numbers} products. Round Profit: {profit:.2f}. New Reputation: {reputation:.1f}. Total Profit: {total_profit:.2f}\n"
 
     return history_string
 

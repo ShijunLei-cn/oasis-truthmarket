@@ -478,36 +478,58 @@ class RQ2Visualizer:
                     run_ids.append(run_id)
                     
                     # Ensure quality values are strings and strip whitespace
+                    # Handle potential NULL values by converting to string first, then handling 'None'/'nan'
                     transactions['advertised_quality'] = transactions['advertised_quality'].astype(str).str.strip()
                     transactions['true_quality'] = transactions['true_quality'].astype(str).str.strip()
                     
+                    # Filter out any invalid quality values (None, nan, empty strings)
+                    # These should not be considered in dishonest/honest classification
+                    valid_quality_mask = (
+                        (transactions['advertised_quality'].isin(['HQ', 'LQ'])) &
+                        (transactions['true_quality'].isin(['HQ', 'LQ']))
+                    )
+                    
                     # Identify dishonest transactions: advertised HQ but delivered LQ
+                    # Only consider transactions with valid quality values
                     dishonest_mask = (
+                        valid_quality_mask &
                         (transactions['advertised_quality'] == 'HQ') & 
                         (transactions['true_quality'] == 'LQ')
                     )
                     
-                    # Calculate profits
+                    # Honest transactions: all valid transactions that are not dishonest
+                    honest_mask = valid_quality_mask & ~dishonest_mask
+                    
+                    # Calculate profits (only for valid transactions)
                     dishonest_profit = transactions[dishonest_mask]['seller_profit'].fillna(0).sum()
-                    honest_profit = transactions[~dishonest_mask]['seller_profit'].fillna(0).sum()
+                    honest_profit = transactions[honest_mask]['seller_profit'].fillna(0).sum()
                     total_profit = honest_profit + dishonest_profit
                     
-                    # Calculate utilities
+                    # Calculate utilities (all transactions, including invalid ones)
                     total_utility = transactions['buyer_utility'].fillna(0).sum()
                     
                     # Count transactions
                     dishonest_count = len(transactions[dishonest_mask])
-                    honest_count = len(transactions[~dishonest_mask])
+                    honest_count = len(transactions[honest_mask])
                     total_count = len(transactions)
                     
                     # Count deceptions (all products, not just transactions)
                     # Ensure quality values are strings
-                    products['advertised_quality'] = products['advertised_quality'].astype(str).str.strip()
-                    products['true_quality'] = products['true_quality'].astype(str).str.strip()
-                    deception_count = len(products[
-                        (products['advertised_quality'] == 'HQ') & 
-                        (products['true_quality'] == 'LQ')
-                    ])
+                    if not products.empty:
+                        products['advertised_quality'] = products['advertised_quality'].astype(str).str.strip()
+                        products['true_quality'] = products['true_quality'].astype(str).str.strip()
+                        # Filter valid quality values
+                        valid_product_mask = (
+                            (products['advertised_quality'].isin(['HQ', 'LQ'])) &
+                            (products['true_quality'].isin(['HQ', 'LQ']))
+                        )
+                        deception_count = len(products[
+                            valid_product_mask &
+                            (products['advertised_quality'] == 'HQ') & 
+                            (products['true_quality'] == 'LQ')
+                        ])
+                    else:
+                        deception_count = 0
                     
                     seller_profits.append(total_profit)
                     honest_profits.append(honest_profit)

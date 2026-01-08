@@ -104,19 +104,28 @@ class AgentManager:
             total_profit: Total profit so far
             next_reputation: Reputation for next round
         """
-        sellers_history[agent_id].append({
+        history_entry = {
             "round": round_num,
-            "true_quality": round_summary["true_quality"],
-            "advertised_quality": round_summary["advertised_quality"],
-            "warrant": round_summary["warrant"],
-            "is_sold": round_summary["is_sold"],
-            "sold_numbers": round_summary["sold_numbers"],
-            "cost": round_summary["cost"],
-            "price": round_summary["price"],
+            "true_quality": round_summary.get("true_quality"),
+            "advertised_quality": round_summary.get("advertised_quality"),
+            "warrant": round_summary.get("warrant", False),
+            "is_sold": round_summary.get("is_sold", 0),
+            "sold_numbers": round_summary.get("sold_numbers", 0),
+            "cost": round_summary.get("cost", 0),
+            "price": round_summary.get("price", 0),
             "profit": round_profit,
             "reputation": next_reputation,
             "total_profit": total_profit
-        })
+        }
+        
+        # Add detailed product groups information if available
+        if "product_groups" in round_summary:
+            history_entry["product_groups"] = round_summary["product_groups"]
+            history_entry["total_products_listed"] = round_summary.get("total_products_listed", 0)
+            history_entry["total_cost"] = round_summary.get("total_cost", 0)
+            history_entry["total_revenue"] = round_summary.get("total_revenue", 0)
+        
+        sellers_history[agent_id].append(history_entry)
     
     @staticmethod
     def store_purchase_info(agent, purchase_info: Dict) -> None:

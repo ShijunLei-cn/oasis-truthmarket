@@ -48,11 +48,15 @@ class ActionType(Enum):
     CREATE_GROUP = "create_group"
     LISTEN_FROM_GROUP = "listen_from_group"
     LIST_PRODUCT = "list_product"            # Seller listing product
+    LIST_PRODUCTS = "list_products"         # Seller listing multiple products
     EXIT_MARKET = "exit_market"              # Seller exiting market
     REENTER_MARKET = "reenter_market"        # Seller re-entering market
     PURCHASE_PRODUCT_ID = "purchase_product_id"    # Buyer purchasing product
+    PURCHASE_PRODUCTS = "purchase_products"        # Buyer purchasing multiple products
     CHALLENGE_WARRANT = "challenge_warrant"  # Buyer challenging warranty 
-    RATE_TRANSACTION = "rate_transaction"    # Buyer rating transaction 
+    CHALLENGE_WARRANTS = "challenge_warrants"  # Buyer challenging multiple warrants
+    RATE_TRANSACTION = "rate_transaction"    # Buyer rating transaction
+    RATE_TRANSACTIONS = "rate_transactions"    # Buyer rating multiple transactions 
 
     @classmethod
     def get_default_twitter_actions(cls):
@@ -87,7 +91,7 @@ class ActionType(Enum):
     def get_seller_actions(cls):
         """Return a list containing only seller-specific actions."""
         return [
-            cls.LIST_PRODUCT,
+            cls.LIST_PRODUCTS,
             cls.EXIT_MARKET,
             cls.REENTER_MARKET,
         ]
@@ -96,9 +100,9 @@ class ActionType(Enum):
     def get_buyer_actions(cls):
         """Return a list containing only buyer-specific actions."""
         return [
-            cls.PURCHASE_PRODUCT_ID,
-            cls.CHALLENGE_WARRANT,
-            cls.RATE_TRANSACTION,
+            cls.PURCHASE_PRODUCTS,
+            cls.CHALLENGE_WARRANTS,
+            cls.RATE_TRANSACTIONS,
         ]
     
     @classmethod
@@ -106,20 +110,20 @@ class ActionType(Enum):
         """Return all relevant action list based on market type."""
         if market_type == 'reputation_only':
             return [
-                cls.LIST_PRODUCT,
+                cls.LIST_PRODUCTS,
                 cls.EXIT_MARKET,
                 cls.REENTER_MARKET,
-                cls.PURCHASE_PRODUCT_ID,
-                cls.RATE_TRANSACTION,
+                cls.PURCHASE_PRODUCTS,
+                cls.RATE_TRANSACTIONS,
             ]
         else:  # Default 'reputation_and_warrant'
             return [
-                cls.LIST_PRODUCT,
+                cls.LIST_PRODUCTS,
                 cls.EXIT_MARKET,
                 cls.REENTER_MARKET,
-                cls.PURCHASE_PRODUCT_ID,
-                cls.CHALLENGE_WARRANT,
-                cls.RATE_TRANSACTION,
+                cls.PURCHASE_PRODUCTS,
+                cls.CHALLENGE_WARRANTS,
+                cls.RATE_TRANSACTIONS,
             ]    
 
 

@@ -86,7 +86,7 @@ class SellerListingPhase(MarketPhase):
                 )
                 
                 # Tools available for sellers
-                listing_tools = ['list_product']
+                listing_tools = ['list_products']
                 
                 # Conditionally add exit/re-entry tools (skip if config is None)
                 exit_round = self.config.EXIT_ROUND if self.config.EXIT_ROUND is not None else None
@@ -144,13 +144,13 @@ class BuyerPurchasePhase(MarketPhase):
             
             # Prepare round prompt
             buyer_round_prompt = (
-                "\n\nIn this phase, you are only allowed to perform the purchase_product_id action to purchase a product. "
-                "Based on the market environment, product information, and your preferences, choose whether and which product to purchase. "
-                "You cannot perform any other actions during this phase.\n"
+                "\n\nIn this phase, you are only allowed to perform the purchase_products action to purchase products. "
+                "Based on the market environment, product information, and your preferences, choose whether and which products to purchase. "
+                "You can purchase multiple products at once. You cannot perform any other actions during this phase.\n"
             )
             
             # Tools available for buyers in purchase phase
-            purchase_tools = ['purchase_product_id']
+            purchase_tools = ['purchase_products']
             buyer_actions[agent] = LLMAction(
                 extra_action=purchase_tools,
                 extra_prompt=buyer_round_prompt,
@@ -193,35 +193,57 @@ class BuyerRatingPhase(MarketPhase):
         successful_purchases = [res for res in purchase_results if res and res.get("success")]
         
         if successful_purchases:
-            for purchase_info in successful_purchases:
-                agent_id = purchase_info.get("agent_id")
+            for purchase_result in successful_purchases:
+                agent_id = purchase_result.get("agent_id")
                 if agent_id is None:
                     continue
                 
                 agent = self.agent_graph.get_agent(agent_id)
                 
-                # Tools available for buyers in rating phase
-                rating_tools = ['rate_transaction']
-                if market_type != 'reputation_only':
-                    rating_tools.append('challenge_warrant')
+                # Handle multiple transactions from purchase_products
+                transactions = purchase_result.get("transactions", [])
+                if not transactions:
+                    # Fallback: if no transactions list, treat the whole result as a single transaction
+                    transactions = [purchase_result] if purchase_result.get("transaction_id") else []
                 
-                # Store purchase information in agent
-                AgentManager.store_purchase_info(agent, purchase_info)
+                # Store all transactions information in agent
+                # Store the first transaction as last_purchase_info for backward compatibility
+                if transactions:
+                    # Get seller reputation for each transaction
+                    for transaction in transactions:
+                        seller_id = transaction.get("seller_id")
+                        if seller_id:
+                            seller_reputation = self.db_manager.get_user_reputation(seller_id)
+                            transaction["seller_reputation"] = seller_reputation
+                    
+                    # Store the first transaction as last_purchase_info (for backward compatibility with env)
+                    AgentManager.store_purchase_info(agent, transactions[0])
+                    
+                    # Store all transactions in a new attribute for rating phase
+                    agent.all_purchase_transactions = transactions
+                else:
+                    # Fallback: store the purchase_result itself if it's a single transaction
+                    AgentManager.store_purchase_info(agent, purchase_result)
+                    agent.all_purchase_transactions = [purchase_result] if purchase_result.get("transaction_id") else []
+                
+                # Tools available for buyers in rating phase
+                rating_tools = ['rate_transactions']
+                if market_type != 'reputation_only':
+                    rating_tools.append('challenge_warrants')
                 
                 # Prepare rating prompt
                 if market_type == 'reputation_only':
                     buyer_rating_prompt = (
-                        "\n\nIn this phase, you are allowed to perform the rate_transaction action to rate a transaction. "
-                        "Based on the market environment, product information, and your preferences, choose whether and which product to rate. "
-                        "You cannot perform any other actions during this phase.\n"
+                        "\n\nIn this phase, you are allowed to perform the rate_transactions action to rate transactions. "
+                        "Based on the market environment, product information, and your preferences, choose whether and which transactions to rate. "
+                        "You can rate multiple transactions at once. You cannot perform any other actions during this phase.\n"
                     )
                 else:
                     buyer_rating_prompt = (
-                        "\n\nIn this phase, you are allowed to perform the rate_transaction action to rate a transaction. "
-                        "Or perform the challenge_warrant action to challenge the warrant of a transaction. "
-                        "Based on the market environment, product information, and your preferences, choose whether and which product to rate. "
-                        "Or challenge the warrant of a transaction. "
-                        "You cannot perform any other actions during this phase.\n"
+                        "\n\nIn this phase, you are allowed to perform the rate_transactions action to rate transactions. "
+                        "Or perform the challenge_warrants action to challenge the warrants of transactions. "
+                        "Based on the market environment, product information, and your preferences, choose whether and which transactions to rate or challenge. "
+                        "You can rate or challenge multiple transactions at once. You cannot perform any other actions during this phase.\n"
                     )
                 
                 post_purchase_actions[agent] = LLMAction(

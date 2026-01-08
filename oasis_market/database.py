@@ -174,14 +174,49 @@ class MarketDatabase:
         all_results = cursor.fetchall()
         
         if all_results:
-            one_result = all_results[0]
-            summary["advertised_quality"] = one_result[0]
-            summary["true_quality"] = one_result[1]
-            summary["warrant"] = one_result[2]
-            summary["is_sold"] = one_result[3]
-            summary["sold_numbers"] = sum(1 for p in all_results if p[3])
-            summary["cost"] = one_result[4]
-            summary["price"] = one_result[5]
+            # Aggregate information from all products in this round
+            total_products = len(all_results)
+            sold_count = sum(1 for p in all_results if p[3])  # is_sold
+            
+            # Group products by (advertised_quality, true_quality, has_warrant) combination
+            product_groups = {}
+            total_cost = 0
+            total_revenue = 0
+            
+            for result in all_results:
+                adv_q, true_q, has_warrant, is_sold, cost, price = result
+                key = (adv_q, true_q, bool(has_warrant))
+                
+                if key not in product_groups:
+                    product_groups[key] = {
+                        "count": 0,
+                        "sold_count": 0,
+                        "cost": cost,
+                        "price": price
+                    }
+                
+                product_groups[key]["count"] += 1
+                if is_sold:
+                    product_groups[key]["sold_count"] += 1
+                    total_revenue += price
+                total_cost += cost
+            
+            # Store aggregated information
+            # For backward compatibility, use the first product's quality info
+            first_result = all_results[0]
+            summary["advertised_quality"] = first_result[0]
+            summary["true_quality"] = first_result[1]
+            summary["warrant"] = first_result[2]
+            summary["is_sold"] = 1 if sold_count > 0 else 0
+            summary["sold_numbers"] = sold_count
+            summary["cost"] = total_cost / total_products if total_products > 0 else 0  # Average cost
+            summary["price"] = first_result[5]  # Use first product's price
+            
+            # Store detailed product groups information
+            summary["product_groups"] = product_groups
+            summary["total_products_listed"] = total_products
+            summary["total_cost"] = total_cost
+            summary["total_revenue"] = total_revenue
         
         conn.close()
         return summary
@@ -283,6 +318,31 @@ class MarketDatabase:
         
         print(f"Market roles initialized successfully: {seller_count} sellers, {buyer_count} buyers")
         conn.close()
+    
+    def get_user_reputation(self, agent_id: int) -> float:
+        """
+        Get the reputation score of a user
+        
+        Args:
+            agent_id: Agent identifier
+            
+        Returns:
+            Reputation score (float)
+        """
+        if not os.path.exists(self.database_path) or not self._table_exists('user'):
+            return 0.0
+        
+        conn = sqlite3.connect(self.database_path)
+        cursor = conn.cursor()
+        
+        cursor.execute(
+            "SELECT reputation_score FROM user WHERE agent_id = ?",
+            (agent_id,)
+        )
+        result = cursor.fetchone()
+        conn.close()
+        
+        return float(result[0]) if result and result[0] is not None else 0.0
     
     def compute_next_round_reputation(self, agent_id: int, round_num: int, reputation_lag: int) -> int:
         """

@@ -259,7 +259,29 @@ class SocialEnvironment(Environment):
             
         elif market_phase == "rating" and role == "buyer":
             # Buyer in rating phase: observe specific product information after purchase
-            purchase_info = getattr(agent, 'last_purchase_info', {})
+            # Get all purchase transactions (for multiple purchases)
+            all_transactions = getattr(agent, 'all_purchase_transactions', None)
+            if all_transactions is None:
+                # Fallback to last_purchase_info for backward compatibility
+                purchase_info = getattr(agent, 'last_purchase_info', {})
+                all_transactions = [purchase_info] if purchase_info.get('transaction_id') else []
+            
+            # Format transactions information for display
+            if all_transactions:
+                transactions_text = "\n".join([
+                    f"  - Transaction ID: {t.get('transaction_id', 'N/A')}, "
+                    f"Product ID: {t.get('product_id', 'N/A')}, "
+                    f"Advertised: {t.get('advertised_quality', 'N/A')}, "
+                    f"True Quality: {t.get('true_quality', 'N/A')}, "
+                    f"Price: ${t.get('purchase_price', 0):.2f}, "
+                    f"Utility: {t.get('buyer_utility', 0):.2f}"
+                    for t in all_transactions
+                ])
+                # Use the first transaction for backward compatibility with BUYER_RATING_ENV format
+                purchase_info = all_transactions[0]
+            else:
+                purchase_info = getattr(agent, 'last_purchase_info', {})
+                transactions_text = "No transactions found."
             
             return MarketEnv_prompt.BUYER_RATING_ENV.format(
                 current_round=current_round,
@@ -273,7 +295,7 @@ class SocialEnvironment(Environment):
                 buyer_utility=purchase_info.get('buyer_utility', 0),
                 seller_id=purchase_info.get('seller_id', 'N/A'),
                 seller_reputation=purchase_info.get('seller_reputation', 0)
-            )
+            ) + f"\n\n## All Your Purchases in This Round:\n{transactions_text}"
             
         else:
             # Other cases return basic environment information
