@@ -15,5 +15,8 @@ python3 visualization/scripts/rq1_visualization.py \
     --input-dir "$INPUT_DIR" \
     --output-dir "$OUTPUT_DIR"
 
+python3 analysis/analyze_rq1.py "$INPUT_DIR" \
+    --output-dir "$OUTPUT_DIR"
+
 echo "Done."
 

@@ -223,4 +223,5 @@ configs
 analysis/bkp
 analysis/exp**
 visualization/bkp
+visualization/*
 **/cache/

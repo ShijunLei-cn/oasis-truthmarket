@@ -147,46 +147,23 @@ class SocialAction:
         """
         return await self.perform_action(None, ActionType.DO_NOTHING.value)
 
-    async def create_post(self, content: str, structured_info: str = None):
-        r"""Create a new post with the given content and optional structured information.
+    async def create_post(self, content: str):
+        r"""Create a new post with the given content.
 
         This method invokes an asynchronous action to create a new post based
-        on the provided content. The structured_info field serves different purposes
-        for sellers and buyers, but uses a consistent format.
+        on the provided content.
 
         Args:
             content (str): The main content of the post to be created.
-            structured_info (str, optional): Structured information following role-specific format:
-                
-                **For Sellers**: Must be one of three fraud attitude tags:
-                - "[Pro-Fraud]" - Indicates a pro-fraud strategy (willing to deceive buyers)
-                - "[Anti-Fraud]" - Indicates an anti-fraud strategy (committed to honest selling)
-                - "[Neutral]" - Indicates a neutral strategy (flexible approach)
-                
-                **For Buyers**: Transaction feedback in the format:
-                - "Seller_ID: [Fraudulent/Honest] - [brief description]"
-                Example: "Seller_5: Fraudulent - Advertised HQ but delivered LQ"
-                Example: "Seller_3: Honest - Received exactly what was advertised"
-                
-                Format: Keep it concise and structured. For buyers, always start with "Seller_ID:"
-                followed by the assessment and brief description.
 
         Returns:
-            dict: A dictionary with keys 'success' and 'post_id'. On success, may also
-                include 'structured_info' if provided.
+            dict: A dictionary with keys 'success' and 'post_id'.
 
             Example returns:
-            Seller: {'success': True, 'post_id': 50, 'structured_info': '[Pro-Fraud]'}
-            Buyer: {'success': True, 'post_id': 51, 'structured_info': 'Seller_5: Fraudulent - Advertised HQ but delivered LQ'}
-            
-        Note:
-            The structured_info field allows agents to share structured information during
-            communication phases. Sellers express their fraud attitude, while buyers provide
-            transaction feedback to help other buyers make informed decisions.
+            {'success': True, 'post_id': 50}
         """
         post_data = {
-            "content": content,
-            "structured_info": structured_info if structured_info is not None else ""
+            "content": content
         }
         return await self.perform_action(post_data, ActionType.CREATE_POST.value)
 

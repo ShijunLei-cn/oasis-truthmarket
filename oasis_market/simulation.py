@@ -163,6 +163,9 @@ class MarketSimulation:
             market_type: Type of market
             communication_type: Type of communication ('none', 'seller', 'buyer', 'both')
         """
+        # Reset budgets to initial values at the start of each round
+        self._reset_agent_budgets()
+        
         # Synchronize platform round counter
         self.env.platform.sandbox_clock.round_step = round_num
         SimulationLogger.print_round_header(round_num, self.config.SIMULATION_ROUNDS)
@@ -217,6 +220,9 @@ class MarketSimulation:
         # Update seller histories
         self.update_seller_histories(round_num)
         
+        # Clear unsold products at the end of each round
+        self._clear_unsold_products()
+        
         SimulationLogger.print_round_footer(round_num)
     
     async def run(self, market_type: Optional[str] = None, communication_type: Optional[str] = None):
@@ -268,6 +274,64 @@ class MarketSimulation:
         from utils import print_simulation_summary
         print_simulation_summary(self.database_path)
         print("\nSimulation finished")
+    
+    def _reset_agent_budgets(self):
+        """
+        Reset all agent budgets to their initial values at the start of each round.
+        Sellers get 60.0, buyers get 18.0.
+        """
+        # Connect to database
+        conn = sqlite3.connect(self.database_path)
+        cursor = conn.cursor()
+        
+        try:
+            # Reset seller budgets to 60.0
+            cursor.execute("""
+                UPDATE user 
+                SET budget = 60.0 
+                WHERE role = 'seller'
+            """)
+            
+            # Reset buyer budgets to 18.0
+            cursor.execute("""
+                UPDATE user 
+                SET budget = 18.0 
+                WHERE role = 'buyer'
+            """)
+            
+            conn.commit()
+        except Exception as e:
+            print(f"Warning: Error resetting budgets: {e}")
+            conn.rollback()
+        finally:
+            conn.close()
+    
+    def _clear_unsold_products(self):
+        """
+        Delete all unsold products at the end of each round.
+        Products with status 'on_sale' and is_sold = 0 are considered unsold.
+        """
+        # Connect to database
+        conn = sqlite3.connect(self.database_path)
+        cursor = conn.cursor()
+        
+        try:
+            # Delete all unsold products (status = 'on_sale' and is_sold = 0)
+            cursor.execute("""
+                DELETE FROM product 
+                WHERE status = 'on_sale' AND is_sold = 0
+            """)
+            
+            deleted_count = cursor.rowcount
+            conn.commit()
+            
+            if deleted_count > 0:
+                print(f"Cleared {deleted_count} unsold product(s) at the end of the round.")
+        except Exception as e:
+            print(f"Warning: Error clearing unsold products: {e}")
+            conn.rollback()
+        finally:
+            conn.close()
 
 
 # Convenience function for backward compatibility

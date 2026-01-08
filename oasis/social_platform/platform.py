@@ -411,11 +411,9 @@ class Platform:
             agent_id: ID of the agent creating the post
             post_data: Either a string (content only) or a dict with keys:
                 - content (str): Main content of the post
-                - structured_info (str, optional): Structured information for communication
-                    (e.g., product details, purchase experience, strategy tags, metadata)
         
         Returns:
-            dict: Response containing 'success', 'post_id', and optionally 'structured_info'
+            dict: Response containing 'success' and 'post_id'
         """
         if self.recsys_type == RecsysType.REDDIT:
             current_time = self.sandbox_clock.time_transfer(
@@ -428,20 +426,18 @@ class Platform:
             # Handle both string (backward compatibility) and dict formats
             if isinstance(post_data, str):
                 content = post_data
-                structured_info = ""
             else:
                 content = post_data.get("content", "")
-                structured_info = post_data.get("structured_info", "")
 
             post_insert_query = (
                 "INSERT INTO post (user_id, content, structured_info, created_at, num_likes, "
                 "num_dislikes, num_shares) VALUES (?, ?, ?, ?, ?, ?, ?)")
             self.pl_utils._execute_db_command(
-                post_insert_query, (user_id, content, structured_info, current_time, 0, 0, 0),
+                post_insert_query, (user_id, content, "", current_time, 0, 0, 0),
                 commit=True)
             post_id = self.db_cursor.lastrowid
 
-            action_info = {"content": content, "post_id": post_id, "structured_info": structured_info}
+            action_info = {"content": content, "post_id": post_id}
             self.pl_utils._record_trace(user_id, ActionType.CREATE_POST.value,
                                         action_info, current_time)
 
@@ -450,8 +446,6 @@ class Platform:
             #                  f"action={ActionType.CREATE_POST.value}, "
             #                  f"info={action_info}")
             result = {"success": True, "post_id": post_id}
-            if structured_info:
-                result["structured_info"] = structured_info
             return result
 
         except Exception as e:

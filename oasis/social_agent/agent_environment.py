@@ -116,40 +116,22 @@ class SocialEnvironment(Environment):
         try:
             # Query all posts regardless of status, ordered by creation time (newest first)
             # In market simulation, posts don't have 'on_sale' status, so we query all posts
-            # Include structured_info field for enhanced communication
             cursor.execute(
-                "SELECT post_id, content, structured_info, user_id, created_at FROM post WHERE original_post_id IS NULL ORDER BY created_at DESC, post_id DESC LIMIT 50"
+                "SELECT post_id, content, user_id, created_at FROM post WHERE original_post_id IS NULL ORDER BY created_at DESC, post_id DESC LIMIT 50"
             )
             posts = cursor.fetchall()
             if posts:
                 posts_env = "Here is the list of posts currently available:\n\n"
                 for p in posts:
-                    post_id, content, structured_info, user_id, created_at = p
+                    post_id, content, user_id, created_at = p
                     
                     # Filter for Fake Communication Channel: only show current agent's own posts
                     if self.communication_channel_type == "Fake" and self.action.agent_id is not None:
                         if user_id != self.action.agent_id:
                             continue  # Skip posts from other agents
-                    
-                    # Format structured_info display based on content
-                    if structured_info:
-                        # Check if it's a seller tag (Pro-Fraud, Anti-Fraud, Neutral) or buyer feedback
-                        if structured_info.startswith('[') and structured_info.endswith(']'):
-                            # Seller tag format
-                            structured_info_str = f" [Fraud Attitude Tag: {structured_info}]"
-                        elif structured_info.startswith('Seller_'):
-                            # Buyer feedback format
-                            structured_info_str = f" [Transaction Feedback: {structured_info}]"
-                        else:
-                            # Generic structured info
-                            structured_info_str = f" [Structured Info: {structured_info}]"
-                    else:
-                        structured_info_str = ""
 
                     posts_env += f"- Post ID: {post_id}, Author ID: {user_id}\n"
                     posts_env += f"  Content: {content}\n"
-                    if structured_info_str:
-                        posts_env += f"  {structured_info_str}\n"
                     posts_env += "\n"
         except sqlite3.Error as e:
             print(f"Database query error (get_posts_communication_for_env): {e}")
