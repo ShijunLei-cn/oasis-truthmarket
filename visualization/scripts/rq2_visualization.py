@@ -619,16 +619,20 @@ class RQ2Visualizer:
                         lq_count = len(round_prod[round_prod['true_quality'] == 'LQ'])
                         
                         # Count by honesty/dishonesty
+                        # Dishonest: advertised HQ but true LQ (over-promising)
                         dishonest_mask = (
                             (round_prod['advertised_quality'] == 'HQ') & 
                             (round_prod['true_quality'] == 'LQ')
                         )
                         honest_mask = ~dishonest_mask
                         
+                        # HQ products: can only be honest (if advertised HQ and true HQ) or honest (if advertised LQ and true HQ)
                         hq_honest = len(round_prod[honest_mask & (round_prod['true_quality'] == 'HQ')])
-                        hq_dishonest = len(round_prod[dishonest_mask & (round_prod['true_quality'] == 'HQ')])
+                        hq_dishonest = 0  # Cannot have dishonest HQ products (dishonest = advertised HQ but true LQ)
+                        
+                        # LQ products: can be honest (advertised LQ and true LQ) or dishonest (advertised HQ but true LQ)
                         lq_honest = len(round_prod[honest_mask & (round_prod['true_quality'] == 'LQ')])
-                        lq_dishonest = len(round_prod[dishonest_mask & (round_prod['true_quality'] == 'LQ')])
+                        lq_dishonest = len(round_prod[dishonest_mask])  # All dishonest products are LQ
                         
                         all_rounds_data.append({
                             'run_id': run_id,
@@ -645,12 +649,135 @@ class RQ2Visualizer:
         
         return pd.DataFrame(all_rounds_data)
     
+    def _load_transaction_quality_data(self, exp_id: str) -> pd.DataFrame:
+        """Load transaction quality data by round (only successful transactions)"""
+        exp_dir = Path(f"experiments/{exp_id}")
+        all_rounds_data = []
+        
+        for db_file in sorted(exp_dir.glob("run_*.db")):
+            run_id = int(db_file.stem.split('_')[1])
+            try:
+                conn = sqlite3.connect(db_file)
+                
+                # First, check if there are any transactions
+                tx_count = pd.read_sql_query("SELECT COUNT(*) as count FROM transactions", conn)['count'].iloc[0]
+                
+                # Load transactions with product quality information
+                # Use LEFT JOIN to ensure we capture all transactions, even if product data is missing
+                transactions = pd.read_sql_query(
+                    "SELECT t.round_number, p.advertised_quality, p.true_quality "
+                    "FROM transactions t LEFT JOIN product p ON t.product_id = p.product_id",
+                    conn
+                )
+                
+                # Debug: print transaction count info
+                if tx_count > 0 and transactions.empty:
+                    print(f"Warning: {db_file} has {tx_count} transactions but JOIN returned empty")
+                elif tx_count > 0:
+                    matched_count = len(transactions[transactions['advertised_quality'].notna()])
+                    if matched_count < tx_count:
+                        print(f"Warning: {db_file} has {tx_count} transactions but only {matched_count} matched with products")
+                
+                conn.close()
+                
+                if not transactions.empty:
+                    # Drop rows where product information is missing (NULL from LEFT JOIN)
+                    initial_count = len(transactions)
+                    transactions = transactions.dropna(subset=['advertised_quality', 'true_quality'])
+                    
+                    if transactions.empty:
+                        print(f"Warning: {db_file} has {initial_count} transaction rows but no valid product quality data after filtering NULLs")
+                        continue
+                    
+                    # Ensure quality values are strings and strip whitespace
+                    transactions['advertised_quality'] = transactions['advertised_quality'].astype(str).str.strip()
+                    transactions['true_quality'] = transactions['true_quality'].astype(str).str.strip()
+                    
+                    # Filter out 'nan' strings that might result from conversion
+                    transactions = transactions[
+                        (transactions['advertised_quality'] != 'nan') & 
+                        (transactions['true_quality'] != 'nan')
+                    ]
+                    
+                    # Filter valid quality values
+                    valid_quality_mask = (
+                        (transactions['advertised_quality'].isin(['HQ', 'LQ'])) &
+                        (transactions['true_quality'].isin(['HQ', 'LQ']))
+                    )
+                    transactions = transactions[valid_quality_mask]
+                    
+                    if transactions.empty:
+                        print(f"Warning: {db_file} has transactions but no valid HQ/LQ quality values after filtering")
+                        continue
+                    
+                    # Aggregate by round
+                    all_round_numbers = sorted(transactions['round_number'].dropna().unique())
+                    for round_num in all_round_numbers:
+                        round_num = int(round_num)
+                        round_tx = transactions[transactions['round_number'] == round_num]
+                        
+                        # Count by true quality
+                        hq_count = len(round_tx[round_tx['true_quality'] == 'HQ'])
+                        lq_count = len(round_tx[round_tx['true_quality'] == 'LQ'])
+                        
+                        # Count by honesty/dishonesty
+                        # Dishonest: advertised HQ but true LQ (over-promising)
+                        dishonest_mask = (
+                            round_tx['advertised_quality'] != round_tx['true_quality']
+                        )
+                        honest_mask = ~dishonest_mask
+                        
+                        # HQ products: can only be honest (if advertised HQ and true HQ) or honest (if advertised LQ and true HQ)
+                        hq_honest = len(round_tx[honest_mask & (round_tx['true_quality'] == 'HQ')])
+                        hq_dishonest = len(round_tx[dishonest_mask & (round_tx['true_quality'] == 'HQ')])   # Cannot have dishonest HQ products (dishonest = advertised HQ but true LQ), so this should be 0
+                        
+                        # LQ products: can be honest (advertised LQ and true LQ) or dishonest (advertised HQ but true LQ)
+                        lq_honest = len(round_tx[honest_mask & (round_tx['true_quality'] == 'LQ')])
+                        lq_dishonest = len(round_tx[dishonest_mask & (round_tx['true_quality'] == 'LQ')])  # All dishonest products are LQ
+                        
+                        all_rounds_data.append({
+                            'run_id': run_id,
+                            'round': round_num,
+                            'hq_count': hq_count,
+                            'lq_count': lq_count,
+                            'hq_honest': hq_honest,
+                            'hq_dishonest': hq_dishonest,
+                            'lq_honest': lq_honest,
+                            'lq_dishonest': lq_dishonest,
+                        })
+            except Exception as e:
+                print(f"Warning: Could not load transaction quality data from {db_file}: {e}")
+        
+        return pd.DataFrame(all_rounds_data)
+    
+    def _get_errorbar_for_rounds(self, rounds, std_dict_or_array, last_round=10):
+        """Create error bar array that only shows error for the last round
+        Args:
+            rounds: List of round numbers (sorted)
+            std_dict_or_array: dict mapping round to std value, or array aligned with rounds
+        """
+        # If it's a dict, extract values in rounds order
+        if isinstance(std_dict_or_array, dict):
+            std_values = np.array([std_dict_or_array.get(r, 0) for r in rounds])
+        else:
+            # It's already an array, assume it's aligned with rounds
+            std_values = np.array(std_dict_or_array)
+        
+        yerr = np.zeros(len(rounds))
+        if last_round in rounds:
+            last_idx = list(rounds).index(last_round)
+            if last_idx < len(std_values):
+                yerr[last_idx] = std_values[last_idx]
+        return yerr
+    
     def plot_product_quality_evolution(self):
         """5. Product Quality Evolution Over Rounds"""
         r_quality = self._load_product_quality_data(self.r_exp_id)
         rw_quality = self._load_product_quality_data(self.rw_exp_id)
+        r_tx_quality = self._load_transaction_quality_data(self.r_exp_id)
+        rw_tx_quality = self._load_transaction_quality_data(self.rw_exp_id)
         
-        fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+        fig, axes = plt.subplots(3, 2, figsize=(14, 15))
         
         # Top Left: HQ vs LQ production count
         if not r_quality.empty and not rw_quality.empty:
@@ -662,24 +789,36 @@ class RQ2Visualizer:
             rounds = sorted(set(r_hq_agg['round'].unique()) | set(rw_hq_agg['round'].unique()))
             
             # Plot HQ products
-            axes[0, 0].errorbar(rounds, r_hq_agg['mean'], yerr=r_hq_agg['std'],
+            r_hq_std_dict = dict(zip(r_hq_agg['round'], r_hq_agg['std']))
+            r_hq_yerr = self._get_errorbar_for_rounds(rounds, r_hq_std_dict)
+            r_hq_mean_dict = dict(zip(r_hq_agg['round'], r_hq_agg['mean']))
+            axes[0, 0].errorbar(rounds, [r_hq_mean_dict.get(r, 0) for r in rounds], yerr=r_hq_yerr,
                            fmt='o-', label='Reputation-Only (HQ)', color=COLORS['hq'],
                            linewidth=2, markersize=6, capsize=3, alpha=0.6)
-            axes[0, 0].errorbar(rounds, rw_hq_agg['mean'], yerr=rw_hq_agg['std'],
+            rw_hq_std_dict = dict(zip(rw_hq_agg['round'], rw_hq_agg['std']))
+            rw_hq_yerr = self._get_errorbar_for_rounds(rounds, rw_hq_std_dict)
+            rw_hq_mean_dict = dict(zip(rw_hq_agg['round'], rw_hq_agg['mean']))
+            axes[0, 0].errorbar(rounds, [rw_hq_mean_dict.get(r, 0) for r in rounds], yerr=rw_hq_yerr,
                             fmt='s-', label='Reputation+Warrant (HQ)', color=COLORS['hq_rw'],
                             linewidth=2, markersize=6, capsize=3, alpha=0.6)
             
             # Plot LQ products
-            axes[0, 0].errorbar(rounds, r_lq_agg['mean'], yerr=r_lq_agg['std'],
+            r_lq_std_dict = dict(zip(r_lq_agg['round'], r_lq_agg['std']))
+            r_lq_yerr = self._get_errorbar_for_rounds(rounds, r_lq_std_dict)
+            r_lq_mean_dict = dict(zip(r_lq_agg['round'], r_lq_agg['mean']))
+            axes[0, 0].errorbar(rounds, [r_lq_mean_dict.get(r, 0) for r in rounds], yerr=r_lq_yerr,
                            fmt='o-', label='Reputation-Only (LQ)', color=COLORS['lq'],
                            linewidth=2, markersize=6, capsize=3, alpha=0.6)
-            axes[0, 0].errorbar(rounds, rw_lq_agg['mean'], yerr=rw_lq_agg['std'],
+            rw_lq_std_dict = dict(zip(rw_lq_agg['round'], rw_lq_agg['std']))
+            rw_lq_yerr = self._get_errorbar_for_rounds(rounds, rw_lq_std_dict)
+            rw_lq_mean_dict = dict(zip(rw_lq_agg['round'], rw_lq_agg['mean']))
+            axes[0, 0].errorbar(rounds, [rw_lq_mean_dict.get(r, 0) for r in rounds], yerr=rw_lq_yerr,
                             fmt='s-', label='Reputation+Warrant (LQ)', color=COLORS['lq_rw'],
                             linewidth=2, markersize=6, capsize=3, alpha=0.6)
         
         axes[0, 0].set_xlabel('Round', fontweight='bold')
         axes[0, 0].set_ylabel('Number of Products', fontweight='bold')
-        axes[0, 0].set_title('Product Quality Production (HQ vs LQ)', fontweight='bold')
+        axes[0, 0].set_title('Product Quality Production (HQ vs LQ, True Quality)', fontweight='bold')
         axes[0, 0].legend(frameon=True, fancybox=True, shadow=True, loc='best')
         axes[0, 0].grid(True, alpha=0.3, linestyle='--')
         if not r_quality.empty:
@@ -727,7 +866,7 @@ class RQ2Visualizer:
         
         axes[0, 1].set_xlabel('Number of Products', fontweight='bold')
         axes[0, 1].set_ylabel('Density', fontweight='bold')
-        axes[0, 1].set_title('HQ vs LQ Distribution', fontweight='bold')
+        axes[0, 1].set_title('HQ vs LQ Distribution (True Quality)', fontweight='bold')
         axes[0, 1].legend(frameon=True, fancybox=True, shadow=True, loc='best')
         axes[0, 1].grid(True, alpha=0.3, linestyle='--', axis='y')
         
@@ -742,25 +881,37 @@ class RQ2Visualizer:
             
             # Plot Reputation-Only (Honest)
             # Use HQ/LQ colors to distinguish quality, keep Reputation-Only style
-            axes[1, 0].errorbar(honest_rounds, r_hq_honest_agg['mean'], yerr=r_hq_honest_agg['std'],
+            r_hq_honest_std_dict = dict(zip(r_hq_honest_agg['round'], r_hq_honest_agg['std']))
+            r_hq_honest_yerr = self._get_errorbar_for_rounds(honest_rounds, r_hq_honest_std_dict)
+            r_hq_honest_mean_dict = dict(zip(r_hq_honest_agg['round'], r_hq_honest_agg['mean']))
+            axes[1, 0].errorbar(honest_rounds, [r_hq_honest_mean_dict.get(r, 0) for r in honest_rounds], yerr=r_hq_honest_yerr,
                                fmt='o-', label='R: HQ(Honest)', color=COLORS['hq'], 
                                linewidth=2, markersize=5, capsize=2, alpha=0.6)
-            axes[1, 0].errorbar(honest_rounds, r_lq_honest_agg['mean'], yerr=r_lq_honest_agg['std'],
+            r_lq_honest_std_dict = dict(zip(r_lq_honest_agg['round'], r_lq_honest_agg['std']))
+            r_lq_honest_yerr = self._get_errorbar_for_rounds(honest_rounds, r_lq_honest_std_dict)
+            r_lq_honest_mean_dict = dict(zip(r_lq_honest_agg['round'], r_lq_honest_agg['mean']))
+            axes[1, 0].errorbar(honest_rounds, [r_lq_honest_mean_dict.get(r, 0) for r in honest_rounds], yerr=r_lq_honest_yerr,
                                fmt='s-', label='R: LQ(Honest)', color=COLORS['lq'],
                                linewidth=2, markersize=5, capsize=2, alpha=0.6)
             
             # Plot Reputation+Warrant (Honest)
             # Use hq_rw/lq_rw colors to distinguish quality and mechanism
-            axes[1, 0].errorbar(honest_rounds, rw_hq_honest_agg['mean'], yerr=rw_hq_honest_agg['std'],
+            rw_hq_honest_std_dict = dict(zip(rw_hq_honest_agg['round'], rw_hq_honest_agg['std']))
+            rw_hq_honest_yerr = self._get_errorbar_for_rounds(honest_rounds, rw_hq_honest_std_dict)
+            rw_hq_honest_mean_dict = dict(zip(rw_hq_honest_agg['round'], rw_hq_honest_agg['mean']))
+            axes[1, 0].errorbar(honest_rounds, [rw_hq_honest_mean_dict.get(r, 0) for r in honest_rounds], yerr=rw_hq_honest_yerr,
                                fmt='^-', label='RW: HQ(Honest)', color=COLORS['hq_rw'],
                                linewidth=2, markersize=5, capsize=2, alpha=0.6)
-            axes[1, 0].errorbar(honest_rounds, rw_lq_honest_agg['mean'], yerr=rw_lq_honest_agg['std'],
+            rw_lq_honest_std_dict = dict(zip(rw_lq_honest_agg['round'], rw_lq_honest_agg['std']))
+            rw_lq_honest_yerr = self._get_errorbar_for_rounds(honest_rounds, rw_lq_honest_std_dict)
+            rw_lq_honest_mean_dict = dict(zip(rw_lq_honest_agg['round'], rw_lq_honest_agg['mean']))
+            axes[1, 0].errorbar(honest_rounds, [rw_lq_honest_mean_dict.get(r, 0) for r in honest_rounds], yerr=rw_lq_honest_yerr,
                                fmt='v-', label='RW: LQ(Honest)', color=COLORS['lq_rw'],
                                linewidth=2, markersize=5, capsize=2, alpha=0.6)
         
         axes[1, 0].set_xlabel('Round', fontweight='bold')
         axes[1, 0].set_ylabel('Number of Products', fontweight='bold')
-        axes[1, 0].set_title('Product Quality by Honest', fontweight='bold')
+        axes[1, 0].set_title('Product Quality by Honest (True Quality, Listing Phase)', fontweight='bold')
         axes[1, 0].legend(frameon=True, fancybox=True, shadow=True, loc='best')
         axes[1, 0].grid(True, alpha=0.3, linestyle='--')
         if not r_quality.empty:
@@ -777,29 +928,131 @@ class RQ2Visualizer:
             
             # Plot Reputation-Only (Dishonest)
             # Use HQ/LQ colors to distinguish quality, keep Reputation-Only style
-            axes[1, 1].errorbar(dishonest_rounds, r_hq_dishonest_agg['mean'], yerr=r_hq_dishonest_agg['std'],
+            r_hq_dishonest_std_dict = dict(zip(r_hq_dishonest_agg['round'], r_hq_dishonest_agg['std']))
+            r_hq_dishonest_yerr = self._get_errorbar_for_rounds(dishonest_rounds, r_hq_dishonest_std_dict)
+            r_hq_dishonest_mean_dict = dict(zip(r_hq_dishonest_agg['round'], r_hq_dishonest_agg['mean']))
+            axes[1, 1].errorbar(dishonest_rounds, [r_hq_dishonest_mean_dict.get(r, 0) for r in dishonest_rounds], yerr=r_hq_dishonest_yerr,
                                fmt='o-', label='R: HQ(Dishonest)', color=COLORS['hq'],
                                linewidth=2, markersize=5, capsize=2, alpha=0.6)
-            axes[1, 1].errorbar(dishonest_rounds, r_lq_dishonest_agg['mean'], yerr=r_lq_dishonest_agg['std'],
+            r_lq_dishonest_std_dict = dict(zip(r_lq_dishonest_agg['round'], r_lq_dishonest_agg['std']))
+            r_lq_dishonest_yerr = self._get_errorbar_for_rounds(dishonest_rounds, r_lq_dishonest_std_dict)
+            r_lq_dishonest_mean_dict = dict(zip(r_lq_dishonest_agg['round'], r_lq_dishonest_agg['mean']))
+            axes[1, 1].errorbar(dishonest_rounds, [r_lq_dishonest_mean_dict.get(r, 0) for r in dishonest_rounds], yerr=r_lq_dishonest_yerr,
                                fmt='s-', label='R: LQ(Dishonest)', color=COLORS['lq'],
                                linewidth=2, markersize=5, capsize=2, alpha=0.6)
             
             # Plot Reputation+Warrant (Dishonest)
             # Use hq_rw/lq_rw colors to distinguish quality and mechanism
-            axes[1, 1].errorbar(dishonest_rounds, rw_hq_dishonest_agg['mean'], yerr=rw_hq_dishonest_agg['std'],
+            rw_hq_dishonest_std_dict = dict(zip(rw_hq_dishonest_agg['round'], rw_hq_dishonest_agg['std']))
+            rw_hq_dishonest_yerr = self._get_errorbar_for_rounds(dishonest_rounds, rw_hq_dishonest_std_dict)
+            rw_hq_dishonest_mean_dict = dict(zip(rw_hq_dishonest_agg['round'], rw_hq_dishonest_agg['mean']))
+            axes[1, 1].errorbar(dishonest_rounds, [rw_hq_dishonest_mean_dict.get(r, 0) for r in dishonest_rounds], yerr=rw_hq_dishonest_yerr,
                                fmt='^-', label='RW: HQ(Dishonest)', color=COLORS['hq_rw'],
                                linewidth=2, markersize=5, capsize=2, alpha=0.6)
-            axes[1, 1].errorbar(dishonest_rounds, rw_lq_dishonest_agg['mean'], yerr=rw_lq_dishonest_agg['std'],
+            rw_lq_dishonest_std_dict = dict(zip(rw_lq_dishonest_agg['round'], rw_lq_dishonest_agg['std']))
+            rw_lq_dishonest_yerr = self._get_errorbar_for_rounds(dishonest_rounds, rw_lq_dishonest_std_dict)
+            rw_lq_dishonest_mean_dict = dict(zip(rw_lq_dishonest_agg['round'], rw_lq_dishonest_agg['mean']))
+            axes[1, 1].errorbar(dishonest_rounds, [rw_lq_dishonest_mean_dict.get(r, 0) for r in dishonest_rounds], yerr=rw_lq_dishonest_yerr,
                                fmt='v-', label='RW: LQ(Dishonest)', color=COLORS['lq_rw'],
                                linewidth=2, markersize=5, capsize=2, alpha=0.6)
         
         axes[1, 1].set_xlabel('Round', fontweight='bold')
         axes[1, 1].set_ylabel('Number of Products', fontweight='bold')
-        axes[1, 1].set_title('Product Quality by Dishonest', fontweight='bold')
+        axes[1, 1].set_title('Product Quality by Dishonest (True Quality, Listing Phase)', fontweight='bold')
         axes[1, 1].legend(frameon=True, fancybox=True, shadow=True, loc='best')
         axes[1, 1].grid(True, alpha=0.3, linestyle='--')
         if not r_quality.empty:
             axes[1, 1].set_xticks(dishonest_rounds)
+        
+        # Bottom Left (Row 2, Col 0): Transaction Quality by Honest
+        if not r_tx_quality.empty and not rw_tx_quality.empty:
+            r_tx_hq_honest_agg = r_tx_quality.groupby('round')['hq_honest'].agg(['mean', 'std']).reset_index()
+            r_tx_lq_honest_agg = r_tx_quality.groupby('round')['lq_honest'].agg(['mean', 'std']).reset_index()
+            rw_tx_hq_honest_agg = rw_tx_quality.groupby('round')['hq_honest'].agg(['mean', 'std']).reset_index()
+            rw_tx_lq_honest_agg = rw_tx_quality.groupby('round')['lq_honest'].agg(['mean', 'std']).reset_index()
+            
+            tx_honest_rounds = sorted(set(r_tx_hq_honest_agg['round'].unique()) | set(rw_tx_hq_honest_agg['round'].unique()))
+            
+            # Plot Reputation-Only (Honest Transactions)
+            r_tx_hq_honest_std_dict = dict(zip(r_tx_hq_honest_agg['round'], r_tx_hq_honest_agg['std']))
+            r_tx_hq_honest_yerr = self._get_errorbar_for_rounds(tx_honest_rounds, r_tx_hq_honest_std_dict)
+            r_tx_hq_honest_mean_dict = dict(zip(r_tx_hq_honest_agg['round'], r_tx_hq_honest_agg['mean']))
+            axes[2, 0].errorbar(tx_honest_rounds, [r_tx_hq_honest_mean_dict.get(r, 0) for r in tx_honest_rounds], yerr=r_tx_hq_honest_yerr,
+                               fmt='o-', label='R: HQ(Honest)', color=COLORS['hq'], 
+                               linewidth=2, markersize=5, capsize=2, alpha=0.6)
+            r_tx_lq_honest_std_dict = dict(zip(r_tx_lq_honest_agg['round'], r_tx_lq_honest_agg['std']))
+            r_tx_lq_honest_yerr = self._get_errorbar_for_rounds(tx_honest_rounds, r_tx_lq_honest_std_dict)
+            r_tx_lq_honest_mean_dict = dict(zip(r_tx_lq_honest_agg['round'], r_tx_lq_honest_agg['mean']))
+            axes[2, 0].errorbar(tx_honest_rounds, [r_tx_lq_honest_mean_dict.get(r, 0) for r in tx_honest_rounds], yerr=r_tx_lq_honest_yerr,
+                               fmt='s-', label='R: LQ(Honest)', color=COLORS['lq'],
+                               linewidth=2, markersize=5, capsize=2, alpha=0.6)
+            
+            # Plot Reputation+Warrant (Honest Transactions)
+            rw_tx_hq_honest_std_dict = dict(zip(rw_tx_hq_honest_agg['round'], rw_tx_hq_honest_agg['std']))
+            rw_tx_hq_honest_yerr = self._get_errorbar_for_rounds(tx_honest_rounds, rw_tx_hq_honest_std_dict)
+            rw_tx_hq_honest_mean_dict = dict(zip(rw_tx_hq_honest_agg['round'], rw_tx_hq_honest_agg['mean']))
+            axes[2, 0].errorbar(tx_honest_rounds, [rw_tx_hq_honest_mean_dict.get(r, 0) for r in tx_honest_rounds], yerr=rw_tx_hq_honest_yerr,
+                               fmt='^-', label='RW: HQ(Honest)', color=COLORS['hq_rw'],
+                               linewidth=2, markersize=5, capsize=2, alpha=0.6)
+            rw_tx_lq_honest_std_dict = dict(zip(rw_tx_lq_honest_agg['round'], rw_tx_lq_honest_agg['std']))
+            rw_tx_lq_honest_yerr = self._get_errorbar_for_rounds(tx_honest_rounds, rw_tx_lq_honest_std_dict)
+            rw_tx_lq_honest_mean_dict = dict(zip(rw_tx_lq_honest_agg['round'], rw_tx_lq_honest_agg['mean']))
+            axes[2, 0].errorbar(tx_honest_rounds, [rw_tx_lq_honest_mean_dict.get(r, 0) for r in tx_honest_rounds], yerr=rw_tx_lq_honest_yerr,
+                               fmt='v-', label='RW: LQ(Honest)', color=COLORS['lq_rw'],
+                               linewidth=2, markersize=5, capsize=2, alpha=0.6)
+        
+        axes[2, 0].set_xlabel('Round', fontweight='bold')
+        axes[2, 0].set_ylabel('Number of Transactions', fontweight='bold')
+        axes[2, 0].set_title('Transaction Quality by Honest (True Quality, Transactions Done Phase)', fontweight='bold')
+        axes[2, 0].legend(frameon=True, fancybox=True, shadow=True, loc='best')
+        axes[2, 0].grid(True, alpha=0.3, linestyle='--')
+        if not r_tx_quality.empty:
+            axes[2, 0].set_xticks(tx_honest_rounds)
+        
+        # Bottom Right (Row 2, Col 1): Transaction Quality by Dishonest
+        if not r_tx_quality.empty and not rw_tx_quality.empty:
+            r_tx_hq_dishonest_agg = r_tx_quality.groupby('round')['hq_dishonest'].agg(['mean', 'std']).reset_index()
+            r_tx_lq_dishonest_agg = r_tx_quality.groupby('round')['lq_dishonest'].agg(['mean', 'std']).reset_index()
+            rw_tx_hq_dishonest_agg = rw_tx_quality.groupby('round')['hq_dishonest'].agg(['mean', 'std']).reset_index()
+            rw_tx_lq_dishonest_agg = rw_tx_quality.groupby('round')['lq_dishonest'].agg(['mean', 'std']).reset_index()
+            
+            tx_dishonest_rounds = sorted(set(r_tx_hq_dishonest_agg['round'].unique()) | set(rw_tx_hq_dishonest_agg['round'].unique()))
+            
+            # Plot Reputation-Only (Dishonest Transactions)
+            r_tx_hq_dishonest_std_dict = dict(zip(r_tx_hq_dishonest_agg['round'], r_tx_hq_dishonest_agg['std']))
+            r_tx_hq_dishonest_yerr = self._get_errorbar_for_rounds(tx_dishonest_rounds, r_tx_hq_dishonest_std_dict)
+            r_tx_hq_dishonest_mean_dict = dict(zip(r_tx_hq_dishonest_agg['round'], r_tx_hq_dishonest_agg['mean']))
+            axes[2, 1].errorbar(tx_dishonest_rounds, [r_tx_hq_dishonest_mean_dict.get(r, 0) for r in tx_dishonest_rounds], yerr=r_tx_hq_dishonest_yerr,
+                               fmt='o-', label='R: HQ(Dishonest)', color=COLORS['hq'],
+                               linewidth=2, markersize=5, capsize=2, alpha=0.6)
+            r_tx_lq_dishonest_std_dict = dict(zip(r_tx_lq_dishonest_agg['round'], r_tx_lq_dishonest_agg['std']))
+            r_tx_lq_dishonest_yerr = self._get_errorbar_for_rounds(tx_dishonest_rounds, r_tx_lq_dishonest_std_dict)
+            r_tx_lq_dishonest_mean_dict = dict(zip(r_tx_lq_dishonest_agg['round'], r_tx_lq_dishonest_agg['mean']))
+            axes[2, 1].errorbar(tx_dishonest_rounds, [r_tx_lq_dishonest_mean_dict.get(r, 0) for r in tx_dishonest_rounds], yerr=r_tx_lq_dishonest_yerr,
+                               fmt='s-', label='R: LQ(Dishonest)', color=COLORS['lq'],
+                               linewidth=2, markersize=5, capsize=2, alpha=0.6)
+            
+            # Plot Reputation+Warrant (Dishonest Transactions)
+            rw_tx_hq_dishonest_std_dict = dict(zip(rw_tx_hq_dishonest_agg['round'], rw_tx_hq_dishonest_agg['std']))
+            rw_tx_hq_dishonest_yerr = self._get_errorbar_for_rounds(tx_dishonest_rounds, rw_tx_hq_dishonest_std_dict)
+            rw_tx_hq_dishonest_mean_dict = dict(zip(rw_tx_hq_dishonest_agg['round'], rw_tx_hq_dishonest_agg['mean']))
+            axes[2, 1].errorbar(tx_dishonest_rounds, [rw_tx_hq_dishonest_mean_dict.get(r, 0) for r in tx_dishonest_rounds], yerr=rw_tx_hq_dishonest_yerr,
+                               fmt='^-', label='RW: HQ(Dishonest)', color=COLORS['hq_rw'],
+                               linewidth=2, markersize=5, capsize=2, alpha=0.6)
+            rw_tx_lq_dishonest_std_dict = dict(zip(rw_tx_lq_dishonest_agg['round'], rw_tx_lq_dishonest_agg['std']))
+            rw_tx_lq_dishonest_yerr = self._get_errorbar_for_rounds(tx_dishonest_rounds, rw_tx_lq_dishonest_std_dict)
+            rw_tx_lq_dishonest_mean_dict = dict(zip(rw_tx_lq_dishonest_agg['round'], rw_tx_lq_dishonest_agg['mean']))
+            axes[2, 1].errorbar(tx_dishonest_rounds, [rw_tx_lq_dishonest_mean_dict.get(r, 0) for r in tx_dishonest_rounds], yerr=rw_tx_lq_dishonest_yerr,
+                               fmt='v-', label='RW: LQ(Dishonest)', color=COLORS['lq_rw'],
+                               linewidth=2, markersize=5, capsize=2, alpha=0.6)
+        
+        axes[2, 1].set_xlabel('Round', fontweight='bold')
+        axes[2, 1].set_ylabel('Number of Transactions', fontweight='bold')
+        axes[2, 1].set_title('Transaction Quality by Dishonest (True Quality, Transactions Done Phase)', fontweight='bold')
+        axes[2, 1].legend(frameon=True, fancybox=True, shadow=True, loc='best')
+        axes[2, 1].grid(True, alpha=0.3, linestyle='--')
+        if not r_tx_quality.empty:
+            axes[2, 1].set_xticks(tx_dishonest_rounds)
         
         plt.tight_layout()
         plt.savefig(self.output_dir / '5_product_quality_evolution.png', dpi=300, bbox_inches='tight')

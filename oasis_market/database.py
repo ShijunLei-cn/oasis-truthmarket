@@ -199,7 +199,8 @@ class MarketDatabase:
                 if is_sold:
                     product_groups[key]["sold_count"] += 1
                     total_revenue += price
-                total_cost += cost
+                    # Only count cost for sold products
+                    total_cost += cost
             
             # Store aggregated information
             # For backward compatibility, use the first product's quality info

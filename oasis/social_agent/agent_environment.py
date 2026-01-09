@@ -232,12 +232,13 @@ class SocialEnvironment(Environment):
                         cursor = conn.cursor()
                         cursor.execute("SELECT budget FROM user WHERE agent_id = ?", (agent.social_agent_id,))
                         result = cursor.fetchone()
-                        budget = result[0] if result and result[0] is not None else 5.0  # Seller default budget
+                        default_budget = SimulationConfig.MARKET_PARAMS.get('seller_budget', 60.0)
+                        budget = result[0] if result and result[0] is not None else default_budget
                         conn.close()
                     except Exception:
-                        budget = 5.0  # Seller default budget
+                        budget = SimulationConfig.MARKET_PARAMS.get('seller_budget', 60.0)
                 else:
-                    budget = 5.0  # Seller default budget
+                    budget = SimulationConfig.MARKET_PARAMS.get('seller_budget', 60.0)
             
             return MarketEnv_prompt.SELLER_LISTING_ENV.format(
                 previous_feedback=previous_feedback,
@@ -268,22 +269,38 @@ class SocialEnvironment(Environment):
                 purchase_info = getattr(agent, 'last_purchase_info', {})
                 all_transactions = [purchase_info] if purchase_info.get('transaction_id') else []
             
+            # If no transactions, return a simple message (should not happen if BuyerRatingPhase is correct)
+            if not all_transactions or not any(t.get('transaction_id') for t in all_transactions):
+                return (
+                    f"# MARKET ENVIRONMENT OBSERVATION\n\n"
+                    f"## Your Status\n"
+                    f"- Round: {current_round}/{self.config.SIMULATION_ROUNDS}\n\n"
+                    f"You did not purchase any products in this round, so there are no transactions to rate or challenge."
+                )
+            
+            # Filter out transactions without valid transaction_id
+            valid_transactions = [t for t in all_transactions if t.get('transaction_id')]
+            if not valid_transactions:
+                return (
+                    f"# MARKET ENVIRONMENT OBSERVATION\n\n"
+                    f"## Your Status\n"
+                    f"- Round: {current_round}/{self.config.SIMULATION_ROUNDS}\n\n"
+                    f"You did not purchase any products in this round, so there are no transactions to rate or challenge."
+                )
+            
             # Format transactions information for display
-            if all_transactions:
-                transactions_text = "\n".join([
-                    f"  - Transaction ID: {t.get('transaction_id', 'N/A')}, "
-                    f"Product ID: {t.get('product_id', 'N/A')}, "
-                    f"Advertised: {t.get('advertised_quality', 'N/A')}, "
-                    f"True Quality: {t.get('true_quality', 'N/A')}, "
-                    f"Price: ${t.get('purchase_price', 0):.2f}, "
-                    f"Utility: {t.get('buyer_utility', 0):.2f}"
-                    for t in all_transactions
-                ])
-                # Use the first transaction for backward compatibility with BUYER_RATING_ENV format
-                purchase_info = all_transactions[0]
-            else:
-                purchase_info = getattr(agent, 'last_purchase_info', {})
-                transactions_text = "No transactions found."
+            transactions_text = "\n".join([
+                f"  - Transaction ID: {t.get('transaction_id', 'N/A')}, "
+                f"Product ID: {t.get('product_id', 'N/A')}, "
+                f"Advertised: {t.get('advertised_quality', 'N/A')}, "
+                f"True Quality: {t.get('true_quality', 'N/A')}, "
+                f"Price: ${t.get('purchase_price', 0):.2f}, "
+                f"Utility: {t.get('buyer_utility', 0):.2f}"
+                for t in valid_transactions
+            ])
+            
+            # Use the first transaction for backward compatibility with BUYER_RATING_ENV format
+            purchase_info = valid_transactions[0]
             
             return MarketEnv_prompt.BUYER_RATING_ENV.format(
                 current_round=current_round,

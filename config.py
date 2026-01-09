@@ -18,34 +18,38 @@ class SimulationConfig:
     SIMULATION_ROUNDS = 10
 
     # Market parameters (Updated to match economic model)
-    # MARKET_PARAMS = {
-    #     # Production costs
-    #     "hq_cost": 4.0,  # Cost C for High Quality Product
-    #     "lq_cost": 2.0,  # Cost C for Low Quality Product
-    #     # Prices
-    #     "hq_price": 8.0,  # Price P for High Quality Product
-    #     "lq_price": 3.0,  # Price P for Low Quality Product
-    #     # Consumer values (utility)
-    #     "hq_utility": 12.0,  # Value V for High Quality Product
-    #     "lq_utility": 4.0,  # Value V for Low Quality Product
-    #     # Warranty/Escrow system (quality-dependent)
-    #     "hq_warrant_escrow": 8.0,  # Escrow for HQ products (V_h - V_l = 12 - 4)
-    #     "lq_warrant_escrow": 2.0,  # Escrow for LQ products
-    #     # Challenge mechanism
-    #     "challenge_cost": 1.0,  # Cost for buyer to challenge a warrant
-    # }
-
     MARKET_PARAMS = {
-        "hq_cost": 2.0,
-        "lq_cost": 1.0,
-        "hq_price": 5.0,
-        "lq_price": 3.0,
-        "hq_utility": 8.0,
-        "lq_utility": 5.0,
-        "hq_warrant_escrow": 5.0,
-        "lq_warrant_escrow": 5.0,
-        "challenge_cost": 1.0,
+        # Production costs
+        "hq_cost": 4.0,  # Cost C for High Quality Product
+        "lq_cost": 2.0,  # Cost C for Low Quality Product
+        # Prices
+        "hq_price": 8.0,  # Price P for High Quality Product
+        "lq_price": 3.0,  # Price P for Low Quality Product
+        # Consumer values (utility)
+        "hq_utility": 12.0,  # Value V for High Quality Product
+        "lq_utility": 4.0,  # Value V for Low Quality Product
+        # Warranty/Escrow system (quality-dependent)
+        "hq_warrant_escrow": 8.0,  # Escrow for HQ products (V_h - V_l = 12 - 4)
+        "lq_warrant_escrow": 2.0,  # Escrow for LQ products
+        # Challenge mechanism
+        "challenge_cost": 1.0,  # Cost for buyer to challenge a warrant
+        # Budget configuration (refreshed at the start of each round)
+        "seller_budget": 18.0,  # Initial budget for sellers per round
+        "buyer_budget": 60.0,  # Initial budget for buyers per round
     }
+
+    # Pre version Params
+    # MARKET_PARAMS = {
+    #     "hq_cost": 2.0,
+    #     "lq_cost": 1.0,
+    #     "hq_price": 5.0,
+    #     "lq_price": 3.0,
+    #     "hq_utility": 8.0,
+    #     "lq_utility": 5.0,
+    #     "hq_warrant_escrow": 5.0,
+    #     "lq_warrant_escrow": 5.0,
+    #     "challenge_cost": 1.0,
+    # }
 
     # Market rule parameters
     REPUTATION_LAG = None  # Reputation lag display rounds
@@ -100,6 +104,7 @@ class SimulationConfig:
             'NUM_SELLERS': cls.NUM_SELLERS,
             'NUM_BUYERS': cls.NUM_BUYERS,
             'SIMULATION_ROUNDS': cls.SIMULATION_ROUNDS,
+            'MARKET_PARAMS': cls.MARKET_PARAMS,
             'REPUTATION_LAG': cls.REPUTATION_LAG,
             'REENTRY_ALLOWED_ROUND': cls.REENTRY_ALLOWED_ROUND,
             'INITIAL_WINDOW_ROUNDS': cls.INITIAL_WINDOW_ROUNDS,

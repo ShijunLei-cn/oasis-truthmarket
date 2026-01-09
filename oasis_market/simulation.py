@@ -260,6 +260,9 @@ class MarketSimulation:
         # Initialize agents and environment
         self.agent_graph, self.env = await self.initialize_agents(self.model, market_type)
         
+        # Save system prompts for all agents (Round 0)
+        self.action_logger.save_system_prompts(self.agent_graph)
+        
         # Initialize seller history
         self.sellers_history = {i+1: [] for i in range(self.config.NUM_SELLERS)}
         
@@ -283,26 +286,28 @@ class MarketSimulation:
     def _reset_agent_budgets(self):
         """
         Reset all agent budgets to their initial values at the start of each round.
-        Sellers get 60.0, buyers get 18.0.
+        Budget values are configured in SimulationConfig.MARKET_PARAMS.
         """
         # Connect to database
         conn = sqlite3.connect(self.database_path)
         cursor = conn.cursor()
         
         try:
-            # Reset seller budgets to 60.0
+            # Reset seller budgets to configured value
+            seller_budget = self.config.MARKET_PARAMS.get('seller_budget', 60.0)
             cursor.execute("""
                 UPDATE user 
-                SET budget = 60.0 
+                SET budget = ? 
                 WHERE role = 'seller'
-            """)
+            """, (seller_budget,))
             
-            # Reset buyer budgets to 18.0
+            # Reset buyer budgets to configured value
+            buyer_budget = self.config.MARKET_PARAMS.get('buyer_budget', 18.0)
             cursor.execute("""
                 UPDATE user 
-                SET budget = 18.0 
+                SET budget = ? 
                 WHERE role = 'buyer'
-            """)
+            """, (buyer_budget,))
             
             conn.commit()
         except Exception as e:

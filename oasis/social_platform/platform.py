@@ -1783,7 +1783,7 @@ class Platform:
             
             current_budget = budget_result[0]
             if current_budget is None:
-                current_budget = 18.0  # Buyer default budget
+                current_budget = SimulationConfig.MARKET_PARAMS.get('buyer_budget', 18.0)  # Buyer default budget
             
             # Process each product purchase
             for product_id in product_ids:
@@ -1813,6 +1813,20 @@ class Platform:
                         failed_purchases.append({"product_id": product_id, "error": f"Insufficient budget. Required: ${price:.2f}, Available: ${current_budget:.2f}"})
                         continue
                     
+                    # Atomically update product status to 'sold' only if it's still 'on_sale'
+                    # This prevents multiple buyers from purchasing the same product
+                    update_status_query = """
+                        UPDATE product 
+                        SET is_sold = 1, status = 'sold' 
+                        WHERE product_id = ? AND status = 'on_sale'
+                    """
+                    self.pl_utils._execute_db_command(update_status_query, (product_id,), commit=True)
+                    
+                    # Check if the update was successful (product was still available)
+                    if self.db_cursor.rowcount == 0:
+                        failed_purchases.append({"product_id": product_id, "error": "Product was already purchased by another buyer"})
+                        continue
+                    
                     # Calculate seller profit and buyer utility
                     seller_profit = price - cost
                     utility = SimulationConfig.MARKET_PARAMS['hq_utility'] if true_quality == 'HQ' else SimulationConfig.MARKET_PARAMS['lq_utility']
@@ -1822,9 +1836,6 @@ class Platform:
                     current_budget += (utility - price)  # Buyer budget update
                     self.pl_utils._execute_db_command("UPDATE user SET budget = budget + ? WHERE agent_id = ?", (utility - price, buyer_id), commit=True)
                     self.pl_utils._execute_db_command("UPDATE user SET budget = budget + ? WHERE agent_id = ?", (seller_profit, seller_id), commit=True)
-                    
-                    # Update product status
-                    self.pl_utils._execute_db_command("UPDATE product SET is_sold = 1, status = 'sold' WHERE product_id = ?", (product_id,), commit=True)
                     
                     # Insert transaction
                     transaction_insert_query = """
@@ -1962,7 +1973,7 @@ class Platform:
             
             current_budget = budget_result[0]
             if current_budget is None:
-                current_budget = 60.0  # Seller default budget
+                current_budget = SimulationConfig.MARKET_PARAMS.get('seller_budget', 60.0)  # Seller default budget
             
             # Validate product specifications and calculate costs
             product_specs = []

@@ -126,16 +126,51 @@ class OasisEnv:
             channel=self.channel, agent_graph=self.agent_graph)
 
     async def _perform_llm_action(self, agent, llm_action):
-        r"""Send the request to the llm model and execute the action.
-        """
+        r"""Send the request to the llm model and execute the action."""
         async with self.llm_semaphore:
             extra_action = llm_action.extra_action if hasattr(llm_action, 'extra_action') else None
             extra_prompt = llm_action.extra_prompt if hasattr(llm_action, 'extra_prompt') else None
             level = llm_action.level if hasattr(llm_action, 'level') else None
+            
+            # Initialize prompt storage if not exists
+            if not hasattr(self, '_last_step_prompts'):
+                self._last_step_prompts = {}
+            
+            agent_id = agent.social_agent_id
+            system_message = agent.system_message.content if hasattr(agent, 'system_message') and agent.system_message else ""
+            
             if level == 'market':
-                return await agent.perform_market_action(extra_action, extra_prompt, self.current_round, self.market_phase)
+                result = await agent.perform_market_action(extra_action, extra_prompt, self.current_round, self.market_phase)
+                
+                # Get the user message content that was sent (stored in agent if available)
+                user_message_content = getattr(agent, '_last_user_message_content', '')
+                env_prompt = getattr(agent, '_last_env_prompt', '')
+                
+                # Store prompt information
+                self._last_step_prompts[agent_id] = {
+                    'system_message': system_message,
+                    'user_message': user_message_content,
+                    'environment_prompt': env_prompt,
+                    'extra_prompt': extra_prompt or ''
+                }
+                
+                return result
             elif level == 'communication':
-                return await agent.perform_communication_action(extra_action, extra_prompt, self.current_round, self.market_phase)
+                result = await agent.perform_communication_action(extra_action, extra_prompt, self.current_round, self.market_phase)
+                
+                # Get the user message content that was sent
+                user_message_content = getattr(agent, '_last_user_message_content', '')
+                env_prompt = getattr(agent, '_last_env_prompt', '')
+                
+                # Store prompt information
+                self._last_step_prompts[agent_id] = {
+                    'system_message': system_message,
+                    'user_message': user_message_content,
+                    'environment_prompt': env_prompt,
+                    'extra_prompt': extra_prompt or ''
+                }
+                
+                return result
 
 
     async def _perform_interview_action(self, agent, interview_prompt: str):

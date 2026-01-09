@@ -198,6 +198,10 @@ class SocialAgent(ChatAgent):
             **IMPORTANT**: The JSON in <ACTION> must be valid JSON format. Do NOT add any comments (// or /* */) inside the JSON. All explanations should be in the <THOUGHT> section, not in the JSON itself.
             """
         )
+        
+        # Store prompt information for logging
+        self._last_user_message_content = user_msg_content
+        self._last_env_prompt = env_prompt
 
         user_msg = BaseMessage.make_user_message(
             role_name="User",
@@ -318,6 +322,10 @@ class SocialAgent(ChatAgent):
             **IMPORTANT**: The JSON in <ACTION> must be valid JSON format. Do NOT add any comments (// or /* */) inside the JSON. All explanations should be in the <THOUGHT> section, not in the JSON itself.
             """
         )
+        
+        # Store prompt information for logging
+        self._last_user_message_content = user_msg_content
+        self._last_env_prompt = env_prompt
 
         user_msg = BaseMessage.make_user_message(
             role_name="User",

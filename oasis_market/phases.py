@@ -107,7 +107,7 @@ class SellerListingPhase(MarketPhase):
         
         if seller_actions:
             await self.env.step(seller_actions)
-            self.action_logger.save_action_records(self.env, round_num, 'seller_listing')
+            self.action_logger.save_action_records(self.env, round_num, 'seller_listing', self.agent_graph)
         
         print("All seller actions are complete.")
 
@@ -158,7 +158,7 @@ class BuyerPurchasePhase(MarketPhase):
             )
             
             results = await self.env.step(buyer_actions)
-            self.action_logger.save_action_records(self.env, round_num, 'buyer_purchase')
+            self.action_logger.save_action_records(self.env, round_num, 'buyer_purchase', self.agent_graph)
             
             # Collect results
             if isinstance(results, list):
@@ -206,25 +206,31 @@ class BuyerRatingPhase(MarketPhase):
                     # Fallback: if no transactions list, treat the whole result as a single transaction
                     transactions = [purchase_result] if purchase_result.get("transaction_id") else []
                 
+                # Handle multiple transactions from purchase_products
+                transactions = purchase_result.get("transactions", [])
+                if not transactions:
+                    # Fallback: if no transactions list, treat the whole result as a single transaction
+                    transactions = [purchase_result] if purchase_result.get("transaction_id") else []
+                
+                # Only proceed if buyer has actual transactions
+                # Skip buyers who didn't purchase anything
+                if not transactions or not any(t.get("transaction_id") for t in transactions):
+                    continue
+                
                 # Store all transactions information in agent
                 # Store the first transaction as last_purchase_info for backward compatibility
-                if transactions:
-                    # Get seller reputation for each transaction
-                    for transaction in transactions:
-                        seller_id = transaction.get("seller_id")
-                        if seller_id:
-                            seller_reputation = self.db_manager.get_user_reputation(seller_id)
-                            transaction["seller_reputation"] = seller_reputation
-                    
-                    # Store the first transaction as last_purchase_info (for backward compatibility with env)
-                    AgentManager.store_purchase_info(agent, transactions[0])
-                    
-                    # Store all transactions in a new attribute for rating phase
-                    agent.all_purchase_transactions = transactions
-                else:
-                    # Fallback: store the purchase_result itself if it's a single transaction
-                    AgentManager.store_purchase_info(agent, purchase_result)
-                    agent.all_purchase_transactions = [purchase_result] if purchase_result.get("transaction_id") else []
+                # Get seller reputation for each transaction
+                for transaction in transactions:
+                    seller_id = transaction.get("seller_id")
+                    if seller_id:
+                        seller_reputation = self.db_manager.get_user_reputation(seller_id)
+                        transaction["seller_reputation"] = seller_reputation
+                
+                # Store the first transaction as last_purchase_info (for backward compatibility with env)
+                AgentManager.store_purchase_info(agent, transactions[0])
+                
+                # Store all transactions in a new attribute for rating phase
+                agent.all_purchase_transactions = transactions
                 
                 # Tools available for buyers in rating phase
                 rating_tools = ['rate_transactions']
@@ -254,7 +260,7 @@ class BuyerRatingPhase(MarketPhase):
         
         if post_purchase_actions:
             await self.env.step(post_purchase_actions)
-            self.action_logger.save_action_records(self.env, round_num, 'buyer_rating')
+            self.action_logger.save_action_records(self.env, round_num, 'buyer_rating', self.agent_graph)
         
         print("All post-purchase actions are complete.")
 
@@ -319,7 +325,7 @@ class CommunicationPhase(MarketPhase):
         
         if communication_actions:
             await self.env.step(communication_actions)
-            self.action_logger.save_action_records(self.env, round_num, f'{role}_communication')
+            self.action_logger.save_action_records(self.env, round_num, f'{role}_communication', self.agent_graph)
         
         print(f"All {role} communication actions are complete.")
 
