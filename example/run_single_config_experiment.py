@@ -11,6 +11,7 @@ import argparse
 from datetime import datetime
 import json
 from dotenv import load_dotenv
+from typing import Optional
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -19,6 +20,21 @@ from oasis_market.simulation import run_single_simulation
 from config import SimulationConfig
 
 load_dotenv(override=True)
+
+
+def load_config_from_yaml(yaml_path: Optional[str] = None):
+    """
+    Load configuration from YAML file if provided
+    
+    Args:
+        yaml_path: Path to YAML configuration file (optional)
+    """
+    if yaml_path:
+        print(f"Loading configuration from: {yaml_path}")
+        SimulationConfig.load_from_yaml(yaml_path)
+        print("Configuration loaded successfully.")
+    else:
+        print("Using default configuration from config.py")
 
 
 async def run_experiment(experiment_id: str, market_type: str, 
@@ -183,7 +199,18 @@ Examples:
         help=f'Number of runs (default: {SimulationConfig.RUNS} from config)'
     )
     
+    parser.add_argument(
+        '--config',
+        dest='config_file',
+        type=str,
+        default=None,
+        help='Path to YAML configuration file (optional, overrides default config.py values)'
+    )
+    
     args = parser.parse_args()
+    
+    # Load configuration from YAML if provided
+    load_config_from_yaml(args.config_file)
     
     # Run batch experiment
     asyncio.run(run_batch_experiment(

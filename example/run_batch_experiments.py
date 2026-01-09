@@ -15,8 +15,24 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from oasis_market.simulation import run_single_simulation
 from config import SimulationConfig
 from dotenv import load_dotenv
+from typing import Optional
 
 load_dotenv(override=True)
+
+
+def load_config_from_yaml(yaml_path: Optional[str] = None):
+    """
+    Load configuration from YAML file if provided
+    
+    Args:
+        yaml_path: Path to YAML configuration file (optional)
+    """
+    if yaml_path:
+        print(f"Loading configuration from: {yaml_path}")
+        SimulationConfig.load_from_yaml(yaml_path)
+        print("Configuration loaded successfully.")
+    else:
+        print("Using default configuration from config.py")
 
 
 async def run_experiment(experiment_name: str, market_type: str, 
@@ -137,19 +153,38 @@ async def main():
     Main entry point for batch experiments
     
     Usage:
-        python run_batch_experiments.py [num_runs]
+        python run_batch_experiments.py [num_runs] [--config config.yaml]
         
     Args:
         num_runs: Number of runs per configuration (default: from config)
+        --config: Path to YAML configuration file (optional)
     """
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='Run batch experiments with different configurations')
+    parser.add_argument(
+        'num_runs',
+        nargs='?',
+        type=int,
+        default=None,
+        help='Number of runs per configuration (default: from config)'
+    )
+    parser.add_argument(
+        '--config',
+        dest='config_file',
+        type=str,
+        default=None,
+        help='Path to YAML configuration file (optional, overrides default config.py values)'
+    )
+    
+    args = parser.parse_args()
+    
+    # Load configuration from YAML if provided
+    load_config_from_yaml(args.config_file)
     
     # Override number of runs if specified
-    if len(sys.argv) > 1:
-        try:
-            SimulationConfig.RUNS = int(sys.argv[1])
-        except ValueError:
-            print(f"Error: Invalid number of runs '{sys.argv[1]}'")
-            sys.exit(1)
+    if args.num_runs is not None:
+        SimulationConfig.RUNS = args.num_runs
     
     await run_batch_experiments()
 

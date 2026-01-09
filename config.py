@@ -1,11 +1,13 @@
 """
 Market Simulation Configuration
 Configuration file: contains all simulation parameters and settings
+Supports loading from YAML configuration files
 """
 
 import os
 from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, Optional
+import yaml
 
 
 class SimulationConfig:
@@ -132,3 +134,63 @@ class SimulationConfig:
 
         with open(paths["config_file"], "w", encoding="utf-8") as f:
             json.dump(config_data, f, indent=2, ensure_ascii=False)
+
+    @classmethod
+    def load_from_yaml(cls, yaml_path: str) -> 'SimulationConfig':
+        """
+        Load configuration from a YAML file and return a new config instance
+        
+        Args:
+            yaml_path: Path to YAML configuration file
+            
+        Returns:
+            SimulationConfig instance with loaded values
+        """
+        if not os.path.exists(yaml_path):
+            raise FileNotFoundError(f"Configuration file not found: {yaml_path}")
+        
+        with open(yaml_path, 'r', encoding='utf-8') as f:
+            config_dict = yaml.safe_load(f)
+        
+        # Create a new instance (or modify class attributes)
+        # Since we're using class attributes, we'll modify them directly
+        # but return a reference to the class for consistency
+        
+        # Load experiment configuration
+        if 'experiment' in config_dict:
+            exp_config = config_dict['experiment']
+            cls.RUNS = exp_config.get('runs', cls.RUNS)
+            cls.NUM_SELLERS = exp_config.get('num_sellers', cls.NUM_SELLERS)
+            cls.NUM_BUYERS = exp_config.get('num_buyers', cls.NUM_BUYERS)
+            cls.SIMULATION_ROUNDS = exp_config.get('simulation_rounds', cls.SIMULATION_ROUNDS)
+        
+        # Load market parameters
+        if 'market_params' in config_dict:
+            market_params = config_dict['market_params']
+            # Update existing dict to preserve structure
+            cls.MARKET_PARAMS.update(market_params)
+        
+        # Load market rule parameters
+        if 'market_rules' in config_dict:
+            rules = config_dict['market_rules']
+            cls.REPUTATION_LAG = rules.get('reputation_lag', cls.REPUTATION_LAG)
+            cls.REENTRY_ALLOWED_ROUND = rules.get('reentry_allowed_round', cls.REENTRY_ALLOWED_ROUND)
+            cls.INITIAL_WINDOW_ROUNDS = rules.get('initial_window_rounds', cls.INITIAL_WINDOW_ROUNDS)
+            cls.EXIT_ROUND = rules.get('exit_round', cls.EXIT_ROUND)
+            cls.MARKET_TYPE = rules.get('market_type', cls.MARKET_TYPE)
+            cls.COMMUNICATION_TYPE = rules.get('communication_type', cls.COMMUNICATION_TYPE)
+            cls.COMMUNICATION_CHANNEL_TYPE = rules.get('communication_channel_type', cls.COMMUNICATION_CHANNEL_TYPE)
+        
+        # Load model configuration
+        if 'model' in config_dict:
+            model_config = config_dict['model']
+            cls.MODEL_PLATFORM = model_config.get('platform', cls.MODEL_PLATFORM)
+            cls.MODEL_TYPE = model_config.get('type', cls.MODEL_TYPE)
+        
+        # Load path configuration
+        if 'paths' in config_dict:
+            paths = config_dict['paths']
+            cls.BASE_DATA_PATH = paths.get('base_data_path', cls.BASE_DATA_PATH)
+            cls.BASE_ANALYSIS_PATH = paths.get('base_analysis_path', cls.BASE_ANALYSIS_PATH)
+        
+        return cls
