@@ -49,16 +49,26 @@ sns.set_palette("husl")
 # Color scheme: R=red tones, RW=blue tones
 COLORS = {
     'reputation_only': '#d62728',  # Red
-    'reputation_warrant': '#2ca02c',  # Green (for contrast)
+    'reputation_warrant': '#1f77b4',  # Blue (darker blue for better contrast)
     'honest': '#2ca02c',  # Green
+    'honest_rw': '#9467bd',  # Purple for Reputation+Warrant honest (better contrast)
     'dishonest': '#d62728',  # Red
+    'dishonest_rw': '#ff7f0e',  # Orange for Reputation+Warrant dishonest (better contrast)
     'hq': '#4C78A8',  # Blue
+    'hq_rw': '#E45756',  # Red/Pink for Reputation+Warrant HQ (better contrast)
     'lq': '#F58518',  # Orange
+    'lq_rw': '#54A24B',  # Green for Reputation+Warrant LQ (better contrast)
 }
 
 
 class RQ2Visualizer:
     """RQ2 Market Mechanism Comparison Visualizer"""
+    
+    def _extract_prefix_from_exp_id(self, exp_id: str) -> str:
+        """Extract prefix from experiment ID (e.g., '1230/r_wo' -> '1230')"""
+        if '/' in exp_id:
+            return exp_id.split('/')[0]
+        return ""
     
     def __init__(self, r_experiment_id: str, rw_experiment_id: str, output_dir: Optional[str] = None):
         """
@@ -67,13 +77,23 @@ class RQ2Visualizer:
         Args:
             r_experiment_id: Reputation-Only experiment ID
             rw_experiment_id: Reputation+Warrant experiment ID
-            output_dir: Output directory (default: visualization/figs/rq2_<timestamp>)
+            output_dir: Output directory (default: visualization/figs/{prefix}/rq2_comparison)
         """
         self.r_exp_id = r_experiment_id
         self.rw_exp_id = rw_experiment_id
         
         if output_dir is None:
-            output_dir = f"visualization/figs/rq2_comparison"
+            # Extract prefix from experiment IDs
+            r_prefix = self._extract_prefix_from_exp_id(r_experiment_id)
+            rw_prefix = self._extract_prefix_from_exp_id(rw_experiment_id)
+            # Use common prefix if both have prefixes, otherwise use the one that has it
+            prefix = None
+            if r_prefix == rw_prefix:
+                prefix = r_prefix
+            if prefix:
+                output_dir = f"visualization/figs/{prefix}/rq2_comparison"
+            else:
+                output_dir = f"visualization/figs/rq2_comparison"
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
@@ -170,6 +190,77 @@ class RQ2Visualizer:
         
         return pd.DataFrame(all_rounds_data)
     
+    def _load_round_profit_by_type(self, exp_id: str) -> pd.DataFrame:
+        """Load round-by-round data with honest/dishonest profit breakdown"""
+        exp_dir = Path(f"experiments/{exp_id}")
+        all_rounds_data = []
+        
+        for db_file in sorted(exp_dir.glob("run_*.db")):
+            run_id = int(db_file.stem.split('_')[1])
+            try:
+                conn = sqlite3.connect(db_file)
+                
+                # Load transactions with product quality information
+                transactions = pd.read_sql_query(
+                    "SELECT t.round_number, t.seller_profit, p.advertised_quality, p.true_quality "
+                    "FROM transactions t JOIN product p ON t.product_id = p.product_id",
+                    conn
+                )
+                
+                conn.close()
+                
+                if not transactions.empty:
+                    # Ensure quality values are strings and strip whitespace
+                    transactions['advertised_quality'] = transactions['advertised_quality'].astype(str).str.strip()
+                    transactions['true_quality'] = transactions['true_quality'].astype(str).str.strip()
+                    
+                    # Filter valid quality values
+                    valid_quality_mask = (
+                        (transactions['advertised_quality'].isin(['HQ', 'LQ'])) &
+                        (transactions['true_quality'].isin(['HQ', 'LQ']))
+                    )
+                    
+                    # Identify dishonest transactions: advertised HQ but delivered LQ
+                    dishonest_mask = (
+                        valid_quality_mask &
+                        (transactions['advertised_quality'] == 'HQ') & 
+                        (transactions['true_quality'] == 'LQ')
+                    )
+                    
+                    honest_mask = valid_quality_mask & ~dishonest_mask
+                    
+                    # Aggregate by round
+                    all_round_numbers = sorted(transactions['round_number'].dropna().unique())
+                    for round_num in all_round_numbers:
+                        round_num = int(round_num)
+                        round_trans = transactions[transactions['round_number'] == round_num]
+                        
+                        # Apply masks to the round-specific transactions
+                        round_valid_mask = (
+                            (round_trans['advertised_quality'].isin(['HQ', 'LQ'])) &
+                            (round_trans['true_quality'].isin(['HQ', 'LQ']))
+                        )
+                        round_dishonest_mask = (
+                            round_valid_mask &
+                            (round_trans['advertised_quality'] == 'HQ') & 
+                            (round_trans['true_quality'] == 'LQ')
+                        )
+                        round_honest_mask = round_valid_mask & ~round_dishonest_mask
+                        
+                        round_dishonest = round_trans[round_dishonest_mask]
+                        round_honest = round_trans[round_honest_mask]
+                        
+                        all_rounds_data.append({
+                            'run_id': run_id,
+                            'round': round_num,
+                            'honest_profit': round_honest['seller_profit'].fillna(0).sum(),
+                            'dishonest_profit': round_dishonest['seller_profit'].fillna(0).sum(),
+                        })
+            except Exception as e:
+                print(f"Warning: Could not load profit data from {db_file}: {e}")
+        
+        return pd.DataFrame(all_rounds_data)
+    
     def plot_price_evolution(self):
         """1. Price Evolution Over Rounds"""
         r_rounds = self._load_round_data_from_db(self.r_exp_id)
@@ -208,23 +299,23 @@ class RQ2Visualizer:
         ax.errorbar(rounds, r_hq_mean, 
                    yerr=r_hq_std,
                    fmt='o-', label='Reputation-Only (HQ)', 
-                   color=COLORS['reputation_only'], linewidth=2, markersize=6, capsize=3)
+                   color=COLORS['reputation_only'], linewidth=2, markersize=6, capsize=3, alpha=0.6)
         ax.errorbar(rounds, rw_hq_mean,
                    yerr=rw_hq_std,
-                   fmt='s--', label='Reputation+Warrant (HQ)',
-                   color=COLORS['reputation_warrant'], linewidth=2, markersize=6, capsize=3)
+                   fmt='s-', label='Reputation+Warrant (HQ)',
+                   color=COLORS['hq_rw'], linewidth=2, markersize=6, capsize=3, alpha=0.6)
         
         # Plot LQ prices
         ax.errorbar(rounds, r_lq_mean,
                    yerr=r_lq_std,
                    fmt='o-', label='Reputation-Only (LQ)',
-                   color=COLORS['reputation_only'], linewidth=1.5, markersize=5, 
-                   capsize=2, alpha=0.6, linestyle=':')
+                   color=COLORS['lq'], linewidth=1.5, markersize=5, 
+                   capsize=2, alpha=0.6)
         ax.errorbar(rounds, rw_lq_mean,
                    yerr=rw_lq_std,
-                   fmt='s--', label='Reputation+Warrant (LQ)',
-                   color=COLORS['reputation_warrant'], linewidth=1.5, markersize=5,
-                   capsize=2, alpha=0.6, linestyle=':')
+                   fmt='s-', label='Reputation+Warrant (LQ)',
+                   color=COLORS['lq_rw'], linewidth=1.5, markersize=5,
+                   capsize=2, alpha=0.6)
         
         ax.set_xlabel('Round', fontweight='bold')
         ax.set_ylabel('Average Price ($)', fontweight='bold')
@@ -242,28 +333,30 @@ class RQ2Visualizer:
         """2. Seller Profit Over Rounds"""
         r_rounds = self._load_round_data_from_db(self.r_exp_id)
         rw_rounds = self._load_round_data_from_db(self.rw_exp_id)
+        r_profit_by_type = self._load_round_profit_by_type(self.r_exp_id)
+        rw_profit_by_type = self._load_round_profit_by_type(self.rw_exp_id)
         
-        fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+        fig, axes = plt.subplots(2, 2, figsize=(14, 10))
         
-        # Left: Line plot
+        # Top Left: Total profit line plot
         r_agg = r_rounds.groupby('round')['seller_profit'].agg(['mean', 'std']).reset_index()
         rw_agg = rw_rounds.groupby('round')['seller_profit'].agg(['mean', 'std']).reset_index()
         
         rounds = sorted(r_agg['round'].unique())
-        axes[0].errorbar(rounds, r_agg['mean'], yerr=r_agg['std'],
+        axes[0, 0].errorbar(rounds, r_agg['mean'], yerr=r_agg['std'],
                        fmt='o-', label='Reputation-Only', color=COLORS['reputation_only'],
-                       linewidth=2, markersize=7, capsize=4)
-        axes[0].errorbar(rounds, rw_agg['mean'], yerr=rw_agg['std'],
-                        fmt='s--', label='Reputation+Warrant', color=COLORS['reputation_warrant'],
-                        linewidth=2, markersize=7, capsize=4)
-        axes[0].set_xlabel('Round', fontweight='bold')
-        axes[0].set_ylabel('Average Seller Profit ($)', fontweight='bold')
-        axes[0].set_title('Seller Profit Progression', fontweight='bold')
-        axes[0].legend(frameon=True, fancybox=True, shadow=True)
-        axes[0].grid(True, alpha=0.3, linestyle='--')
-        axes[0].set_xticks(rounds)
+                       linewidth=2, markersize=7, capsize=4, alpha=0.6)
+        axes[0, 0].errorbar(rounds, rw_agg['mean'], yerr=rw_agg['std'],
+                        fmt='s-', label='Reputation+Warrant', color=COLORS['reputation_warrant'],
+                        linewidth=2, markersize=7, capsize=4, alpha=0.6)
+        axes[0, 0].set_xlabel('Round', fontweight='bold')
+        axes[0, 0].set_ylabel('Average Seller Profit ($)', fontweight='bold')
+        axes[0, 0].set_title('Total Seller Profit Progression', fontweight='bold')
+        axes[0, 0].legend(frameon=True, fancybox=True, shadow=True)
+        axes[0, 0].grid(True, alpha=0.3, linestyle='--')
+        axes[0, 0].set_xticks(rounds)
         
-        # Right: KDE distribution comparison
+        # Top Right: KDE distribution comparison
         r_all_profits = r_rounds['seller_profit'].dropna().values
         rw_all_profits = rw_rounds['seller_profit'].dropna().values
         
@@ -276,26 +369,68 @@ class RQ2Visualizer:
             x_max = max(r_all_profits.max(), rw_all_profits.max())
             x_range = np.linspace(x_min, x_max, 200)
             
-            axes[1].plot(x_range, r_kde(x_range), label='Reputation-Only', 
-                        color=COLORS['reputation_only'], linewidth=2)
-            axes[1].fill_between(x_range, r_kde(x_range), alpha=0.3, 
+            axes[0, 1].plot(x_range, r_kde(x_range), label='Reputation-Only', 
+                        color=COLORS['reputation_only'], linewidth=2, alpha=0.6)
+            axes[0, 1].fill_between(x_range, r_kde(x_range), alpha=0.3, 
                                color=COLORS['reputation_only'])
-            axes[1].plot(x_range, rw_kde(x_range), label='Reputation+Warrant',
-                        color=COLORS['reputation_warrant'], linewidth=2, linestyle='--')
-            axes[1].fill_between(x_range, rw_kde(x_range), alpha=0.3,
+            axes[0, 1].plot(x_range, rw_kde(x_range), label='Reputation+Warrant',
+                        color=COLORS['reputation_warrant'], linewidth=2, alpha=0.6)
+            axes[0, 1].fill_between(x_range, rw_kde(x_range), alpha=0.3,
                                color=COLORS['reputation_warrant'])
             
             # Add mean lines
-            axes[1].axvline(np.mean(r_all_profits), color=COLORS['reputation_only'],
+            axes[0, 1].axvline(np.mean(r_all_profits), color=COLORS['reputation_only'],
                            linestyle=':', linewidth=1.5, alpha=0.7)
-            axes[1].axvline(np.mean(rw_all_profits), color=COLORS['reputation_warrant'],
+            axes[0, 1].axvline(np.mean(rw_all_profits), color=COLORS['reputation_warrant'],
                            linestyle=':', linewidth=1.5, alpha=0.7)
         
-        axes[1].set_xlabel('Seller Profit ($)', fontweight='bold')
-        axes[1].set_ylabel('Density', fontweight='bold')
-        axes[1].set_title('Profit Distribution Comparison', fontweight='bold')
-        axes[1].legend(frameon=True, fancybox=True, shadow=True)
-        axes[1].grid(True, alpha=0.3, linestyle='--', axis='y')
+        axes[0, 1].set_xlabel('Seller Profit ($)', fontweight='bold')
+        axes[0, 1].set_ylabel('Density', fontweight='bold')
+        axes[0, 1].set_title('Profit Distribution Comparison', fontweight='bold')
+        axes[0, 1].legend(frameon=True, fancybox=True, shadow=True)
+        axes[0, 1].grid(True, alpha=0.3, linestyle='--', axis='y')
+        
+        # Bottom Left: Honest profit progression
+        if not r_profit_by_type.empty and not rw_profit_by_type.empty:
+            r_honest_agg = r_profit_by_type.groupby('round')['honest_profit'].agg(['mean', 'std']).reset_index()
+            rw_honest_agg = rw_profit_by_type.groupby('round')['honest_profit'].agg(['mean', 'std']).reset_index()
+            
+            honest_rounds = sorted(set(r_honest_agg['round'].unique()) | set(rw_honest_agg['round'].unique()))
+            axes[1, 0].errorbar(honest_rounds, r_honest_agg['mean'], yerr=r_honest_agg['std'],
+                           fmt='o-', label='Reputation-Only (Honest)', color=COLORS['honest'],
+                           linewidth=2, markersize=6, capsize=3, alpha=0.6)
+            axes[1, 0].errorbar(honest_rounds, rw_honest_agg['mean'], yerr=rw_honest_agg['std'],
+                            fmt='s-', label='Reputation+Warrant (Honest)', color=COLORS['honest_rw'],
+                            linewidth=2, markersize=6, capsize=3, alpha=0.6)
+        
+        axes[1, 0].set_xlabel('Round', fontweight='bold')
+        axes[1, 0].set_ylabel('Average Honest Profit ($)', fontweight='bold')
+        axes[1, 0].set_title('Honest Profit Progression', fontweight='bold')
+        axes[1, 0].legend(frameon=True, fancybox=True, shadow=True)
+        axes[1, 0].grid(True, alpha=0.3, linestyle='--')
+        if not r_profit_by_type.empty:
+            axes[1, 0].set_xticks(honest_rounds)
+        
+        # Bottom Right: Dishonest profit progression
+        if not r_profit_by_type.empty and not rw_profit_by_type.empty:
+            r_dishonest_agg = r_profit_by_type.groupby('round')['dishonest_profit'].agg(['mean', 'std']).reset_index()
+            rw_dishonest_agg = rw_profit_by_type.groupby('round')['dishonest_profit'].agg(['mean', 'std']).reset_index()
+            
+            dishonest_rounds = sorted(set(r_dishonest_agg['round'].unique()) | set(rw_dishonest_agg['round'].unique()))
+            axes[1, 1].errorbar(dishonest_rounds, r_dishonest_agg['mean'], yerr=r_dishonest_agg['std'],
+                           fmt='o-', label='Reputation-Only (Dishonest)', color=COLORS['dishonest'],
+                           linewidth=2, markersize=6, capsize=3, alpha=0.6)
+            axes[1, 1].errorbar(dishonest_rounds, rw_dishonest_agg['mean'], yerr=rw_dishonest_agg['std'],
+                            fmt='s-', label='Reputation+Warrant (Dishonest)', color=COLORS['dishonest_rw'],
+                            linewidth=2, markersize=6, capsize=3, alpha=0.6)
+        
+        axes[1, 1].set_xlabel('Round', fontweight='bold')
+        axes[1, 1].set_ylabel('Average Dishonest Profit ($)', fontweight='bold')
+        axes[1, 1].set_title('Dishonest Profit Progression', fontweight='bold')
+        axes[1, 1].legend(frameon=True, fancybox=True, shadow=True)
+        axes[1, 1].grid(True, alpha=0.3, linestyle='--')
+        if not r_profit_by_type.empty:
+            axes[1, 1].set_xticks(dishonest_rounds)
         
         plt.tight_layout()
         plt.savefig(self.output_dir / '2_seller_profit.png', dpi=300, bbox_inches='tight')
@@ -316,10 +451,10 @@ class RQ2Visualizer:
         rounds = sorted(r_agg['round'].unique())
         axes[0].errorbar(rounds, r_agg['mean'], yerr=r_agg['std'],
                         fmt='o-', label='Reputation-Only', color=COLORS['reputation_only'],
-                        linewidth=2, markersize=7, capsize=4)
+                        linewidth=2, markersize=7, capsize=4, alpha=0.6)
         axes[0].errorbar(rounds, rw_agg['mean'], yerr=rw_agg['std'],
-                        fmt='s--', label='Reputation+Warrant', color=COLORS['reputation_warrant'],
-                        linewidth=2, markersize=7, capsize=4)
+                        fmt='s-', label='Reputation+Warrant', color=COLORS['reputation_warrant'],
+                        linewidth=2, markersize=7, capsize=4, alpha=0.6)
         axes[0].set_xlabel('Round', fontweight='bold')
         axes[0].set_ylabel('Average Buyer Utility ($)', fontweight='bold')
         axes[0].set_title('Buyer Utility Progression', fontweight='bold')
@@ -341,11 +476,11 @@ class RQ2Visualizer:
             x_range = np.linspace(x_min, x_max, 200)
             
             axes[1].plot(x_range, r_kde(x_range), label='Reputation-Only',
-                        color=COLORS['reputation_only'], linewidth=2)
+                        color=COLORS['reputation_only'], linewidth=2, alpha=0.6)
             axes[1].fill_between(x_range, r_kde(x_range), alpha=0.3,
                                color=COLORS['reputation_only'])
             axes[1].plot(x_range, rw_kde(x_range), label='Reputation+Warrant',
-                        color=COLORS['reputation_warrant'], linewidth=2, linestyle='--')
+                        color=COLORS['reputation_warrant'], linewidth=2, alpha=0.6)
             axes[1].fill_between(x_range, rw_kde(x_range), alpha=0.3,
                                color=COLORS['reputation_warrant'])
             
@@ -412,10 +547,10 @@ class RQ2Visualizer:
             rounds = sorted(r_agg['round'].unique())
             axes[0].errorbar(rounds, r_agg['mean'], yerr=r_agg['std'],
                            fmt='o-', label='Reputation-Only', color=COLORS['reputation_only'],
-                           linewidth=2, markersize=7, capsize=4)
+                           linewidth=2, markersize=7, capsize=4, alpha=0.6)
             axes[0].errorbar(rounds, rw_agg['mean'], yerr=rw_agg['std'],
-                            fmt='s--', label='Reputation+Warrant', color=COLORS['reputation_warrant'],
-                            linewidth=2, markersize=7, capsize=4)
+                            fmt='s-', label='Reputation+Warrant', color=COLORS['reputation_warrant'],
+                            linewidth=2, markersize=7, capsize=4, alpha=0.6)
             axes[0].set_xlabel('Round', fontweight='bold')
             axes[0].set_ylabel('Average Reputation Score', fontweight='bold')
             axes[0].set_title('Average Reputation Progression', fontweight='bold')
@@ -442,6 +577,234 @@ class RQ2Visualizer:
         plt.savefig(self.output_dir / '4_reputation.png', dpi=300, bbox_inches='tight')
         plt.close()
         print("✓ Generated: 4_reputation.png")
+    
+    def _load_product_quality_data(self, exp_id: str) -> pd.DataFrame:
+        """Load product quality data by round"""
+        exp_dir = Path(f"experiments/{exp_id}")
+        all_rounds_data = []
+        
+        for db_file in sorted(exp_dir.glob("run_*.db")):
+            run_id = int(db_file.stem.split('_')[1])
+            try:
+                conn = sqlite3.connect(db_file)
+                
+                # Load all products with quality information
+                products = pd.read_sql_query(
+                    "SELECT round_number, advertised_quality, true_quality FROM product",
+                    conn
+                )
+                
+                conn.close()
+                
+                if not products.empty:
+                    # Ensure quality values are strings and strip whitespace
+                    products['advertised_quality'] = products['advertised_quality'].astype(str).str.strip()
+                    products['true_quality'] = products['true_quality'].astype(str).str.strip()
+                    
+                    # Filter valid quality values
+                    valid_quality_mask = (
+                        (products['advertised_quality'].isin(['HQ', 'LQ'])) &
+                        (products['true_quality'].isin(['HQ', 'LQ']))
+                    )
+                    products = products[valid_quality_mask]
+                    
+                    # Aggregate by round
+                    all_round_numbers = sorted(products['round_number'].dropna().unique())
+                    for round_num in all_round_numbers:
+                        round_num = int(round_num)
+                        round_prod = products[products['round_number'] == round_num]
+                        
+                        # Count by true quality
+                        hq_count = len(round_prod[round_prod['true_quality'] == 'HQ'])
+                        lq_count = len(round_prod[round_prod['true_quality'] == 'LQ'])
+                        
+                        # Count by honesty/dishonesty
+                        dishonest_mask = (
+                            (round_prod['advertised_quality'] == 'HQ') & 
+                            (round_prod['true_quality'] == 'LQ')
+                        )
+                        honest_mask = ~dishonest_mask
+                        
+                        hq_honest = len(round_prod[honest_mask & (round_prod['true_quality'] == 'HQ')])
+                        hq_dishonest = len(round_prod[dishonest_mask & (round_prod['true_quality'] == 'HQ')])
+                        lq_honest = len(round_prod[honest_mask & (round_prod['true_quality'] == 'LQ')])
+                        lq_dishonest = len(round_prod[dishonest_mask & (round_prod['true_quality'] == 'LQ')])
+                        
+                        all_rounds_data.append({
+                            'run_id': run_id,
+                            'round': round_num,
+                            'hq_count': hq_count,
+                            'lq_count': lq_count,
+                            'hq_honest': hq_honest,
+                            'hq_dishonest': hq_dishonest,
+                            'lq_honest': lq_honest,
+                            'lq_dishonest': lq_dishonest,
+                        })
+            except Exception as e:
+                print(f"Warning: Could not load product quality data from {db_file}: {e}")
+        
+        return pd.DataFrame(all_rounds_data)
+    
+    def plot_product_quality_evolution(self):
+        """5. Product Quality Evolution Over Rounds"""
+        r_quality = self._load_product_quality_data(self.r_exp_id)
+        rw_quality = self._load_product_quality_data(self.rw_exp_id)
+        
+        fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+        
+        # Top Left: HQ vs LQ production count
+        if not r_quality.empty and not rw_quality.empty:
+            r_hq_agg = r_quality.groupby('round')['hq_count'].agg(['mean', 'std']).reset_index()
+            r_lq_agg = r_quality.groupby('round')['lq_count'].agg(['mean', 'std']).reset_index()
+            rw_hq_agg = rw_quality.groupby('round')['hq_count'].agg(['mean', 'std']).reset_index()
+            rw_lq_agg = rw_quality.groupby('round')['lq_count'].agg(['mean', 'std']).reset_index()
+            
+            rounds = sorted(set(r_hq_agg['round'].unique()) | set(rw_hq_agg['round'].unique()))
+            
+            # Plot HQ products
+            axes[0, 0].errorbar(rounds, r_hq_agg['mean'], yerr=r_hq_agg['std'],
+                           fmt='o-', label='Reputation-Only (HQ)', color=COLORS['hq'],
+                           linewidth=2, markersize=6, capsize=3, alpha=0.6)
+            axes[0, 0].errorbar(rounds, rw_hq_agg['mean'], yerr=rw_hq_agg['std'],
+                            fmt='s-', label='Reputation+Warrant (HQ)', color=COLORS['hq_rw'],
+                            linewidth=2, markersize=6, capsize=3, alpha=0.6)
+            
+            # Plot LQ products
+            axes[0, 0].errorbar(rounds, r_lq_agg['mean'], yerr=r_lq_agg['std'],
+                           fmt='o-', label='Reputation-Only (LQ)', color=COLORS['lq'],
+                           linewidth=2, markersize=6, capsize=3, alpha=0.6)
+            axes[0, 0].errorbar(rounds, rw_lq_agg['mean'], yerr=rw_lq_agg['std'],
+                            fmt='s-', label='Reputation+Warrant (LQ)', color=COLORS['lq_rw'],
+                            linewidth=2, markersize=6, capsize=3, alpha=0.6)
+        
+        axes[0, 0].set_xlabel('Round', fontweight='bold')
+        axes[0, 0].set_ylabel('Number of Products', fontweight='bold')
+        axes[0, 0].set_title('Product Quality Production (HQ vs LQ)', fontweight='bold')
+        axes[0, 0].legend(frameon=True, fancybox=True, shadow=True, loc='best')
+        axes[0, 0].grid(True, alpha=0.3, linestyle='--')
+        if not r_quality.empty:
+            axes[0, 0].set_xticks(rounds)
+        
+        # Top Right: HQ vs LQ distribution statistics
+        if not r_quality.empty and not rw_quality.empty:
+            # Collect all HQ and LQ counts across all rounds
+            r_all_hq = r_quality['hq_count'].dropna().values
+            r_all_lq = r_quality['lq_count'].dropna().values
+            rw_all_hq = rw_quality['hq_count'].dropna().values
+            rw_all_lq = rw_quality['lq_count'].dropna().values
+            
+            if len(r_all_hq) > 0 and len(rw_all_hq) > 0:
+                # Create KDE plots for HQ
+                r_hq_kde = stats.gaussian_kde(r_all_hq)
+                rw_hq_kde = stats.gaussian_kde(rw_all_hq)
+                
+                hq_min = min(r_all_hq.min(), rw_all_hq.min())
+                hq_max = max(r_all_hq.max(), rw_all_hq.max())
+                hq_range = np.linspace(hq_min, hq_max, 200)
+                
+                axes[0, 1].plot(hq_range, r_hq_kde(hq_range), label='Reputation-Only (HQ)',
+                               color=COLORS['hq'], linewidth=2, alpha=0.6)
+                axes[0, 1].fill_between(hq_range, r_hq_kde(hq_range), alpha=0.3, color=COLORS['hq'])
+                axes[0, 1].plot(hq_range, rw_hq_kde(hq_range), label='Reputation+Warrant (HQ)',
+                               color=COLORS['hq_rw'], linewidth=2, alpha=0.6)
+                axes[0, 1].fill_between(hq_range, rw_hq_kde(hq_range), alpha=0.3, color=COLORS['hq_rw'])
+            
+            if len(r_all_lq) > 0 and len(rw_all_lq) > 0:
+                # Create KDE plots for LQ
+                r_lq_kde = stats.gaussian_kde(r_all_lq)
+                rw_lq_kde = stats.gaussian_kde(rw_all_lq)
+                
+                lq_min = min(r_all_lq.min(), rw_all_lq.min())
+                lq_max = max(r_all_lq.max(), rw_all_lq.max())
+                lq_range = np.linspace(lq_min, lq_max, 200)
+                
+                axes[0, 1].plot(lq_range, r_lq_kde(lq_range), label='Reputation-Only (LQ)',
+                               color=COLORS['lq'], linewidth=2, alpha=0.6)
+                axes[0, 1].fill_between(lq_range, r_lq_kde(lq_range), alpha=0.3, color=COLORS['lq'])
+                axes[0, 1].plot(lq_range, rw_lq_kde(lq_range), label='Reputation+Warrant (LQ)',
+                               color=COLORS['lq_rw'], linewidth=2, alpha=0.6)
+                axes[0, 1].fill_between(lq_range, rw_lq_kde(lq_range), alpha=0.3, color=COLORS['lq_rw'])
+        
+        axes[0, 1].set_xlabel('Number of Products', fontweight='bold')
+        axes[0, 1].set_ylabel('Density', fontweight='bold')
+        axes[0, 1].set_title('HQ vs LQ Distribution', fontweight='bold')
+        axes[0, 1].legend(frameon=True, fancybox=True, shadow=True, loc='best')
+        axes[0, 1].grid(True, alpha=0.3, linestyle='--', axis='y')
+        
+        # Bottom Left: Product Quality by Honest
+        if not r_quality.empty and not rw_quality.empty:
+            r_hq_honest_agg = r_quality.groupby('round')['hq_honest'].agg(['mean', 'std']).reset_index()
+            r_lq_honest_agg = r_quality.groupby('round')['lq_honest'].agg(['mean', 'std']).reset_index()
+            rw_hq_honest_agg = rw_quality.groupby('round')['hq_honest'].agg(['mean', 'std']).reset_index()
+            rw_lq_honest_agg = rw_quality.groupby('round')['lq_honest'].agg(['mean', 'std']).reset_index()
+            
+            honest_rounds = sorted(set(r_hq_honest_agg['round'].unique()) | set(rw_hq_honest_agg['round'].unique()))
+            
+            # Plot Reputation-Only (Honest)
+            # Use HQ/LQ colors to distinguish quality, keep Reputation-Only style
+            axes[1, 0].errorbar(honest_rounds, r_hq_honest_agg['mean'], yerr=r_hq_honest_agg['std'],
+                               fmt='o-', label='R: HQ(Honest)', color=COLORS['hq'], 
+                               linewidth=2, markersize=5, capsize=2, alpha=0.6)
+            axes[1, 0].errorbar(honest_rounds, r_lq_honest_agg['mean'], yerr=r_lq_honest_agg['std'],
+                               fmt='s-', label='R: LQ(Honest)', color=COLORS['lq'],
+                               linewidth=2, markersize=5, capsize=2, alpha=0.6)
+            
+            # Plot Reputation+Warrant (Honest)
+            # Use hq_rw/lq_rw colors to distinguish quality and mechanism
+            axes[1, 0].errorbar(honest_rounds, rw_hq_honest_agg['mean'], yerr=rw_hq_honest_agg['std'],
+                               fmt='^-', label='RW: HQ(Honest)', color=COLORS['hq_rw'],
+                               linewidth=2, markersize=5, capsize=2, alpha=0.6)
+            axes[1, 0].errorbar(honest_rounds, rw_lq_honest_agg['mean'], yerr=rw_lq_honest_agg['std'],
+                               fmt='v-', label='RW: LQ(Honest)', color=COLORS['lq_rw'],
+                               linewidth=2, markersize=5, capsize=2, alpha=0.6)
+        
+        axes[1, 0].set_xlabel('Round', fontweight='bold')
+        axes[1, 0].set_ylabel('Number of Products', fontweight='bold')
+        axes[1, 0].set_title('Product Quality by Honest', fontweight='bold')
+        axes[1, 0].legend(frameon=True, fancybox=True, shadow=True, loc='best')
+        axes[1, 0].grid(True, alpha=0.3, linestyle='--')
+        if not r_quality.empty:
+            axes[1, 0].set_xticks(honest_rounds)
+        
+        # Bottom Right: Product Quality by Dishonest
+        if not r_quality.empty and not rw_quality.empty:
+            r_hq_dishonest_agg = r_quality.groupby('round')['hq_dishonest'].agg(['mean', 'std']).reset_index()
+            r_lq_dishonest_agg = r_quality.groupby('round')['lq_dishonest'].agg(['mean', 'std']).reset_index()
+            rw_hq_dishonest_agg = rw_quality.groupby('round')['hq_dishonest'].agg(['mean', 'std']).reset_index()
+            rw_lq_dishonest_agg = rw_quality.groupby('round')['lq_dishonest'].agg(['mean', 'std']).reset_index()
+            
+            dishonest_rounds = sorted(set(r_hq_dishonest_agg['round'].unique()) | set(rw_hq_dishonest_agg['round'].unique()))
+            
+            # Plot Reputation-Only (Dishonest)
+            # Use HQ/LQ colors to distinguish quality, keep Reputation-Only style
+            axes[1, 1].errorbar(dishonest_rounds, r_hq_dishonest_agg['mean'], yerr=r_hq_dishonest_agg['std'],
+                               fmt='o-', label='R: HQ(Dishonest)', color=COLORS['hq'],
+                               linewidth=2, markersize=5, capsize=2, alpha=0.6)
+            axes[1, 1].errorbar(dishonest_rounds, r_lq_dishonest_agg['mean'], yerr=r_lq_dishonest_agg['std'],
+                               fmt='s-', label='R: LQ(Dishonest)', color=COLORS['lq'],
+                               linewidth=2, markersize=5, capsize=2, alpha=0.6)
+            
+            # Plot Reputation+Warrant (Dishonest)
+            # Use hq_rw/lq_rw colors to distinguish quality and mechanism
+            axes[1, 1].errorbar(dishonest_rounds, rw_hq_dishonest_agg['mean'], yerr=rw_hq_dishonest_agg['std'],
+                               fmt='^-', label='RW: HQ(Dishonest)', color=COLORS['hq_rw'],
+                               linewidth=2, markersize=5, capsize=2, alpha=0.6)
+            axes[1, 1].errorbar(dishonest_rounds, rw_lq_dishonest_agg['mean'], yerr=rw_lq_dishonest_agg['std'],
+                               fmt='v-', label='RW: LQ(Dishonest)', color=COLORS['lq_rw'],
+                               linewidth=2, markersize=5, capsize=2, alpha=0.6)
+        
+        axes[1, 1].set_xlabel('Round', fontweight='bold')
+        axes[1, 1].set_ylabel('Number of Products', fontweight='bold')
+        axes[1, 1].set_title('Product Quality by Dishonest', fontweight='bold')
+        axes[1, 1].legend(frameon=True, fancybox=True, shadow=True, loc='best')
+        axes[1, 1].grid(True, alpha=0.3, linestyle='--')
+        if not r_quality.empty:
+            axes[1, 1].set_xticks(dishonest_rounds)
+        
+        plt.tight_layout()
+        plt.savefig(self.output_dir / '5_product_quality_evolution.png', dpi=300, bbox_inches='tight')
+        plt.close()
+        print("✓ Generated: 5_product_quality_evolution.png")
     
     def _prepare_cross_run_data(self, exp_id: str, exp_dir: Path) -> Dict:
         """Prepare cross-run comparison data for one experiment"""
@@ -650,7 +1013,7 @@ class RQ2Visualizer:
                                xytext=(5, 5), textcoords='offset points', fontsize=8)
     
     def plot_total_market_metrics(self):
-        """5. Total Market Metrics & Honest vs Dishonest Analysis (Combined)"""
+        """6. Total Market Metrics & Honest vs Dishonest Analysis (Combined)"""
         r_exp_dir = Path(f"experiments/{self.r_exp_id}")
         rw_exp_dir = Path(f"experiments/{self.rw_exp_id}")
         
@@ -689,9 +1052,9 @@ class RQ2Visualizer:
         )
         
         plt.tight_layout()
-        plt.savefig(self.output_dir / '5_total_market_metrics.png', dpi=300, bbox_inches='tight')
+        plt.savefig(self.output_dir / '6_total_market_metrics.png', dpi=300, bbox_inches='tight')
         plt.close()
-        print("✓ Generated: 5_total_market_metrics.png")
+        print("✓ Generated: 6_total_market_metrics.png")
     
     
     def generate_all(self):
@@ -704,6 +1067,7 @@ class RQ2Visualizer:
         self.plot_seller_profit()
         self.plot_buyer_utility()
         self.plot_reputation()
+        self.plot_product_quality_evolution()
         self.plot_total_market_metrics()
         
         print()

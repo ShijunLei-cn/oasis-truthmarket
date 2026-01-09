@@ -4,6 +4,8 @@
 
 set -e
 
+# PRE_FIX="${:-}"
+
 # Default experiment IDs (update these based on your actual experiment IDs)
 R_EXP_ID="${R_EXP_ID:-r_wo}"
 RW_EXP_ID="${RW_EXP_ID:-rw_wo}"
@@ -21,20 +23,24 @@ echo "Reputation-Only Experiment: $R_EXP_ID"
 echo "Reputation+Warrant Experiment: $RW_EXP_ID"
 echo ""
 
-# Check if analysis data exists
-if [ ! -f "analysis/${R_EXP_ID}/aggregated/aggregated_statistics.json" ]; then
-    echo "Error: Analysis data not found for $R_EXP_ID"
-    echo "Please run multi-run analysis first:"
-    echo "  python analysis/multi_run_analysis.py --experiment_id $R_EXP_ID"
-    exit 1
-fi
+# # Check if analysis data exists
+# if [ ! -f "analysis/${R_EXP_ID}/aggregated/aggregated_statistics.json" ]; then
+#     echo "Error: Analysis data not found for $R_EXP_ID"
+#     echo "Please run multi-run analysis first:"
+#     echo "  python analysis/multi_run_analysis.py --experiment_id $R_EXP_ID"
+#     exit 1
+# fi
 
-if [ ! -f "analysis/${RW_EXP_ID}/aggregated/aggregated_statistics.json" ]; then
-    echo "Error: Analysis data not found for $RW_EXP_ID"
-    echo "Please run multi-run analysis first:"
-    echo "  python analysis/multi_run_analysis.py --experiment_id $RW_EXP_ID"
-    exit 1
-fi
+# if [ ! -f "analysis/${RW_EXP_ID}/aggregated/aggregated_statistics.json" ]; then
+#     echo "Error: Analysis data not found for $RW_EXP_ID"
+#     echo "Please run multi-run analysis first:"
+#     echo "  python analysis/multi_run_analysis.py --experiment_id $RW_EXP_ID"
+#     exit 1
+# fi
+
+
+python analysis/multi_run_analysis.py --experiment_id $R_EXP_ID
+python analysis/multi_run_analysis.py --experiment_id $RW_EXP_ID
 
 # Generate visualizations
 echo "Generating visualizations..."

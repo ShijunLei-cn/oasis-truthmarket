@@ -41,7 +41,7 @@ class Seller_prompt:
             "    - `advertised_quality` (str): What you tell buyers ('HQ' or 'LQ')\n"
             "    - `product_quality` (str): What you actually produce ('HQ' or 'LQ')\n"
             "    - `quantity` (int, optional): Number of products with this specification (default: 1)\n"
-            "  - **IMPORTANT**: You can list MULTIPLE DIFFERENT TYPES of products in a single call. This allows you to:\n"
+            "  - **IMPORTANT**: You can list MULTIPLE DIFFERENT TYPES of products in a single round. This allows you to:\n"
             "    * Diversify your product portfolio (e.g., mix of HQ and LQ products)\n"
             "    * Target different buyer segments simultaneously\n"
             "    * Balance risk and profit by offering various quality combinations\n"
@@ -714,16 +714,19 @@ Remember: Producing LQ and selling as HQ earns 4 points but damages reputation. 
         """
 # MARKET ENVIRONMENT OBSERVATION
 
-## Current Market Status
-- Current Round: {current_round}/{simulation_rounds}
-- Your Cumulative Utility: {cumulative_utility}
+## Your Status
+- Round: {current_round}/{simulation_rounds}
+- Cumulative Utility: {cumulative_utility:.2f}
 
-## Available Products for Purchase
+## Available Products
 {available_products}
 
-
-Based on the available products and seller reputations, decide which product to purchase.
-Remember: You never get cheated buying LQ. You can get cheated buying HQ. Use reputation and warranty signals wisely!
+## Purchase Decision
+Based on the available products, seller reputations, and warranty status, decide which products to purchase.
+Remember: 
+- LQ products are always as advertised (no risk of fraud)
+- HQ products may be fraudulent (check seller reputation and warranty)
+- Warranted products can be challenged if you receive LQ when HQ was advertised
 """
     )
 

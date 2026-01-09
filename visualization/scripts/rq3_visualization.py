@@ -89,18 +89,41 @@ LINESTYLES = {
 class RQ3Visualizer:
     """RQ3 Communication Channel Impact Visualizer"""
     
+    def _extract_prefix_from_exp_id(self, exp_id: str) -> str:
+        """Extract prefix from experiment ID (e.g., '1230/r_wo' -> '1230')"""
+        if '/' in exp_id:
+            return exp_id.split('/')[0]
+        return ""
+    
     def __init__(self, experiment_ids: Dict[str, str], output_dir: Optional[str] = None):
         """
         Initialize visualizer
         
         Args:
             experiment_ids: Dict with keys 'R_F', 'R_R', 'RW_F', 'RW_R' mapping to experiment IDs
-            output_dir: Output directory (default: visualization/figs/rq3_comparison)
+            output_dir: Output directory (default: visualization/figs/{prefix}/rq3_comparison)
         """
         self.exp_ids = experiment_ids
         
         if output_dir is None:
-            output_dir = f"visualization/figs/rq3_comparison"
+            # Extract prefix from experiment IDs
+            prefixes = [self._extract_prefix_from_exp_id(exp_id) for exp_id in experiment_ids.values()]
+            # Use prefix only if all non-empty prefixes are the same
+            non_empty_prefixes = [p for p in prefixes if p]
+            if non_empty_prefixes:
+                # Check if all prefixes are the same
+                first_prefix = non_empty_prefixes[0]
+                if all(p == first_prefix for p in non_empty_prefixes):
+                    prefix = first_prefix
+                else:
+                    prefix = None
+            else:
+                prefix = None
+            
+            if prefix:
+                output_dir = f"visualization/figs/{prefix}/rq3_comparison"
+            else:
+                output_dir = f"visualization/figs/rq3_comparison"
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         

@@ -87,12 +87,15 @@ class SocialEnvironment(Environment):
             )
             products = cursor.fetchall()
             if products:
-                listings = "Here is the list of products currently on sale:\n"
+                listings = f"Available Products ({len(products)} total):\n"
                 for p in products:
-                    warrant_info = " (Warranted)" if p[4] else ""
+                    product_id, seller_id, adv_quality, price, has_warrant, reputation = p
+                    warrant_str = "Warranted" if has_warrant else "No Warrant"
                     listings += (
-                        f"- Product ID: {p[0]}, Seller ID: {p[1]}, Seller Reputation: {p[5]}, "
-                        f"Advertised Quality: {p[2]}, Price: ${p[3]:.2f}{warrant_info}\n"
+                        f"  Product {product_id}: {adv_quality} quality, "
+                        f"Price ${price:.2f}, "
+                        f"Seller {seller_id} (Reputation: {reputation:.1f}), "
+                        f"{warrant_str}\n"
                     )
         except sqlite3.Error as e:
             print(f"Database query error (get_product_listings_for_env): {e}")
@@ -246,9 +249,8 @@ class SocialEnvironment(Environment):
             )
             
         elif market_phase == "purchase" and role == "buyer":
-            # Buyer in purchase phase: observe currently purchasable products and seller information
+            # Buyer in purchase phase: observe currently purchasable products
             available_products = self.get_product_listings_for_env()
-            seller_reputation_info = self._get_seller_reputation_info()
             
             return MarketEnv_prompt.BUYER_PURCHASE_ENV.format(
                 current_round=current_round,

@@ -88,15 +88,46 @@ def plot_manipulation_heatmap(df: pd.DataFrame, output_path: Path):
     plt.close()
     print(f"✓ Generated heatmap: {output_path}")
 
+def extract_prefix_from_path(path_str: str) -> str:
+    """Extract prefix from path (e.g., 'experiments/1230/r_wo' -> '1230', '1230/r_wo' -> '1230')"""
+    path = Path(path_str)
+    parts = path.parts
+    
+    # First, try to find pattern like 'experiments/1230/xxx' or '1230/xxx'
+    for i, part in enumerate(parts):
+        # Check if this part contains a slash (like '1230/r_wo')
+        if '/' in part:
+            prefix = part.split('/')[0]
+            if prefix:
+                return prefix
+        # Check if this part is a numeric prefix and next part exists (like '1230' followed by 'r_wo')
+        if part and part[0].isdigit() and i + 1 < len(parts):
+            return part
+    
+    # Fallback: look for any numeric prefix
+    for part in parts:
+        if part and part[0].isdigit():
+            return part
+    return ""
+
 def main():
     parser = argparse.ArgumentParser(description="Visualize RQ1 Cognitive Probe Results")
     parser.add_argument("--input-dir", type=str, required=True, help="Directory containing run_*_cognitive_probes.json")
-    parser.add_argument("--output-dir", type=str, default="visualization/figs/rq1_analysis", help="Directory to save figures")
+    parser.add_argument("--output-dir", type=str, default=None, help="Directory to save figures (default: visualization/figs/{prefix}/rq1_analysis)")
     
     args = parser.parse_args()
     
     input_path = Path(args.input_dir)
-    output_dir = Path(args.output_dir)
+    
+    # Determine output directory
+    if args.output_dir is None:
+        prefix = extract_prefix_from_path(args.input_dir)
+        if prefix:
+            output_dir = Path(f"visualization/figs/{prefix}/rq1_analysis")
+        else:
+            output_dir = Path("visualization/figs/rq1_analysis")
+    else:
+        output_dir = Path(args.output_dir)
     
     print(f"Analyzing probe results in {input_path}...")
     df = load_probe_results(args.input_dir)
