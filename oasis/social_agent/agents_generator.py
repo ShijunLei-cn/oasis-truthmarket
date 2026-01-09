@@ -735,6 +735,14 @@ async def generate_agent_from_LLM(agents_num:int,
             reentry_round=reentry_round
         ) if isinstance(actions_template, str) else actions_template
         
+        # Prepare dynamic content based on market_type
+        if market_type == 'reputation_only':
+            market_type_note = ""
+            warranty_consideration = ""
+        else:
+            market_type_note = " and warranty signals"
+            warranty_consideration = "\n3. Whether the product has a warranty (seller has something at risk)"
+        
         profile = {
             # Add static key-value pairs required by System_prompt template
             "user_profile": agent_info["user_char"],
@@ -746,6 +754,8 @@ async def generate_agent_from_LLM(agents_num:int,
             "simulation_rounds": simulation_rounds,
             "exit_round": exit_round,
             "reentry_round": reentry_round,
+            "market_type_note": market_type_note,
+            "warranty_consideration": warranty_consideration,
         }
 
         

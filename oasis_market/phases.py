@@ -47,13 +47,14 @@ class MarketPhase:
 class SellerListingPhase(MarketPhase):
     """Handles seller product listing phase"""
     
-    async def execute(self, round_num: int, sellers_history: Dict) -> None:
+    async def execute(self, round_num: int, sellers_history: Dict, market_type: str = "reputation_and_warrant") -> None:
         """
         Execute seller listing phase
         
         Args:
             round_num: Current round number
             sellers_history: Dictionary of seller histories
+            market_type: Market type ('reputation_only' or 'reputation_and_warrant')
         """
         from .agents import AgentManager
         from .logging import SimulationLogger
@@ -65,11 +66,14 @@ class SellerListingPhase(MarketPhase):
         
         for agent_id, agent in self.agent_graph.get_agents():
             if agent.user_info.profile.get("role") == 'seller':
+                # Get market_type from agent profile if not provided
+                agent_market_type = agent.user_info.profile.get("market_type", market_type)
+                
                 # Prepare seller state
                 state, visible_history_string = AgentManager.prepare_seller_state(
                     agent, agent_id, round_num,
                     sellers_history.get(agent_id, []),
-                    self.db_manager, self.config
+                    self.db_manager, self.config, market_type=agent_market_type
                 )
                 
                 # Update environment state

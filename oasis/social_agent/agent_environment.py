@@ -58,7 +58,7 @@ class SocialEnvironment(Environment):
         "Reputation Score: $reputation_score\n"
         "Cumulative Utility: $cumulative_utility\n\n"
         "Current available products:\n$products")
-    
+
     def __init__(self, action: SocialAction, db_path: str = "", config: SimulationConfig = None):
         self.action = action
         self.db_path = db_path if db_path else get_db_path()
@@ -67,8 +67,13 @@ class SocialEnvironment(Environment):
         self.config = config if config else SimulationConfig()
         self.communication_channel_type = "Fake"  # Fake or Real
 
-    def get_product_listings_for_env(self) -> str:
-        """Query all products on sale from database and format as string."""
+    def get_product_listings_for_env(self, market_type: str = None) -> str:
+        """Query all products on sale from database and format as string.
+        
+        Args:
+            market_type: Market type ('reputation_only' or 'reputation_and_warrant').
+                        If None, warranty info will be shown by default.
+        """
         if not os.path.exists(self.db_path):
             return "No products are currently on sale."
             
@@ -90,13 +95,21 @@ class SocialEnvironment(Environment):
                 listings = f"Available Products ({len(products)} total):\n"
                 for p in products:
                     product_id, seller_id, adv_quality, price, has_warrant, reputation = p
-                    warrant_str = "Warranted" if has_warrant else "No Warrant"
-                    listings += (
-                        f"  Product {product_id}: {adv_quality} quality, "
-                        f"Price ${price:.2f}, "
-                        f"Seller {seller_id} (Reputation: {reputation:.1f}), "
-                        f"{warrant_str}\n"
-                    )
+                    # Only show warranty info if market_type is not 'reputation_only'
+                    if market_type == 'reputation_only':
+                        listings += (
+                            f"  Product {product_id}: {adv_quality} quality, "
+                            f"Price ${price:.2f}, "
+                            f"Seller {seller_id} (Reputation: {reputation:.1f})\n"
+                        )
+                    else:
+                        warrant_str = "Warranted" if has_warrant else "No Warrant"
+                        listings += (
+                            f"  Product {product_id}: {adv_quality} quality, "
+                            f"Price ${price:.2f}, "
+                            f"Seller {seller_id} (Reputation: {reputation:.1f}), "
+                            f"{warrant_str}\n"
+                        )
         except sqlite3.Error as e:
             print(f"Database query error (get_product_listings_for_env): {e}")
         finally:
@@ -251,9 +264,13 @@ class SocialEnvironment(Environment):
             
         elif market_phase == "purchase" and role == "buyer":
             # Buyer in purchase phase: observe currently purchasable products
-            available_products = self.get_product_listings_for_env()
+            # Get market_type from agent profile
+            market_type = agent.user_info.profile.get("market_type", "reputation_and_warrant")
+            available_products = self.get_product_listings_for_env(market_type=market_type)
             
-            return MarketEnv_prompt.BUYER_PURCHASE_ENV.format(
+            # Use dynamic prompt based on market_type
+            purchase_env = MarketEnv_prompt.get_buyer_purchase_env(market_type)
+            return purchase_env.format(
                 current_round=current_round,
                 simulation_rounds=self.config.SIMULATION_ROUNDS,
                 cumulative_utility=agent.cumulative_utility,
@@ -302,7 +319,12 @@ class SocialEnvironment(Environment):
             # Use the first transaction for backward compatibility with BUYER_RATING_ENV format
             purchase_info = valid_transactions[0]
             
-            return MarketEnv_prompt.BUYER_RATING_ENV.format(
+            # Get market_type from agent profile
+            market_type = agent.user_info.profile.get("market_type", "reputation_and_warrant")
+            
+            # Use dynamic prompt based on market_type
+            rating_env = MarketEnv_prompt.get_buyer_rating_env(market_type)
+            rating_prompt = rating_env.format(
                 current_round=current_round,
                 simulation_rounds=self.config.SIMULATION_ROUNDS,
                 transaction_id=purchase_info.get('transaction_id', 'N/A'),
@@ -314,7 +336,8 @@ class SocialEnvironment(Environment):
                 buyer_utility=purchase_info.get('buyer_utility', 0),
                 seller_id=purchase_info.get('seller_id', 'N/A'),
                 seller_reputation=purchase_info.get('seller_reputation', 0)
-            ) + f"\n\n## All Your Purchases in This Round:\n{transactions_text}"
+            )
+            return rating_prompt + f"\n\n## All Your Purchases in This Round:\n{transactions_text}"
             
         else:
             # Other cases return basic environment information

@@ -2415,7 +2415,7 @@ class Platform:
             }
         except Exception as e:
             return {"success": False, "error": str(e)}
-            
+
     async def exit_market(self, agent_id: int, message: Any):
         """Handle seller exiting market backend logic (conceptual intent)."""
         seller_id = agent_id

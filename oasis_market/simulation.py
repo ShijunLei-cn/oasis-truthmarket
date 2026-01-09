@@ -202,7 +202,7 @@ class MarketSimulation:
             await communication.execute(round_num, 'buyer')
         
         # Seller listing phase
-        await seller_listing.execute(round_num, self.sellers_history)
+        await seller_listing.execute(round_num, self.sellers_history, market_type)
         
         # Buyer purchase phase
         purchase_results = await buyer_purchase.execute(round_num)

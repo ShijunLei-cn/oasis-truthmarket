@@ -55,7 +55,7 @@ class ActionType(Enum):
     PURCHASE_PRODUCTS = "purchase_products"        # Buyer purchasing multiple products
     CHALLENGE_WARRANT = "challenge_warrant"  # Buyer challenging warranty 
     CHALLENGE_WARRANTS = "challenge_warrants"  # Buyer challenging multiple warrants
-    RATE_TRANSACTION = "rate_transaction"    # Buyer rating transaction
+    RATE_TRANSACTION = "rate_transaction"    # Buyer rating transaction 
     RATE_TRANSACTIONS = "rate_transactions"    # Buyer rating multiple transactions 
 
     @classmethod

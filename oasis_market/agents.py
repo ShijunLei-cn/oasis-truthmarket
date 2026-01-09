@@ -34,7 +34,7 @@ class AgentManager:
     @staticmethod
     def prepare_seller_state(agent, agent_id: int, round_num: int, 
                            history_log: List[Dict], db_manager, 
-                           config) -> Tuple[Dict, str]:
+                           config, market_type: str = "reputation_and_warrant") -> Tuple[Dict, str]:
         """
         Prepare seller agent state for a round
         
@@ -45,6 +45,7 @@ class AgentManager:
             history_log: Historical performance log
             db_manager: Database manager instance
             config: Simulation configuration
+            market_type: Market type ('reputation_only' or 'reputation_and_warrant')
             
         Returns:
             Tuple of (state_dict, history_string)
@@ -52,8 +53,12 @@ class AgentManager:
         # Get agent state from database
         state = db_manager.get_agent_state(agent_id, 'seller', round_num=round_num)
         
+        # Get market_type from agent profile if not provided
+        if market_type == "reputation_and_warrant" and hasattr(agent, 'user_info'):
+            market_type = agent.user_info.profile.get("market_type", "reputation_and_warrant")
+        
         # Format history for display
-        visible_history_string = format_seller_history(history_log)
+        visible_history_string = format_seller_history(history_log, market_type=market_type)
         
         # Update agent attributes
         agent.reputation_score = state['reputation_score']
