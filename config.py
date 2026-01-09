@@ -36,6 +36,8 @@ class SimulationConfig:
         # Budget configuration (refreshed at the start of each round)
         "seller_budget": 18.0,  # Initial budget for sellers per round
         "buyer_budget": 60.0,  # Initial budget for buyers per round
+        # Initial reputation configuration
+        "initial_seller_reputation": 0.0,  # Initial reputation score for all sellers at the start of simulation
     }
 
     # Pre version Params

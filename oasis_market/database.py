@@ -267,7 +267,7 @@ class MarketDatabase:
         conn.close()
         return listings
     
-    def initialize_market_roles(self, agent_graph, num_sellers: int, num_buyers: int):
+    def initialize_market_roles(self, agent_graph, num_sellers: int, num_buyers: int, initial_seller_reputation: float = 0.0):
         """
         Initialize market roles for all agents in the database
         
@@ -275,6 +275,7 @@ class MarketDatabase:
             agent_graph: Graph containing all agents
             num_sellers: Number of seller agents
             num_buyers: Number of buyer agents
+            initial_seller_reputation: Initial reputation score for all sellers (default: 0.0)
         """
         print("Initializing market roles in the database...")
         conn = sqlite3.connect(self.database_path)
@@ -296,9 +297,9 @@ class MarketDatabase:
             agent_id = i + 1
             cursor.execute(
                 "UPDATE user SET role = ?, reputation_score = ?, profit_utility_score = ? WHERE agent_id = ?",
-                ('seller', 0, 0.0, agent_id)
+                ('seller', initial_seller_reputation, 0.0, agent_id)
             )
-            print(f"Set agent {agent_id} as seller")
+            print(f"Set agent {agent_id} as seller with initial reputation: {initial_seller_reputation}")
         
         # Set buyer roles (next NUM_BUYERS agents)
         for i in range(num_buyers):

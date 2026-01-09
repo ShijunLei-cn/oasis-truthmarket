@@ -116,8 +116,10 @@ class MarketSimulation:
         await env.reset()
         
         print(f"Environment initialized. Database at '{self.database_path}'.")
+        # Get initial seller reputation from config
+        initial_reputation = self.config.MARKET_PARAMS.get('initial_seller_reputation', 0.0)
         self.db_manager.initialize_market_roles(
-            agent_graph, self.config.NUM_SELLERS, self.config.NUM_BUYERS
+            agent_graph, self.config.NUM_SELLERS, self.config.NUM_BUYERS, initial_seller_reputation=initial_reputation
         )
         
         return agent_graph, env
