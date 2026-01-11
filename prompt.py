@@ -50,8 +50,6 @@ class Seller_prompt:
                 f"  - Example 2 (single type): list_products([{{{{\"advertised_quality\": \"HQ\", \"product_quality\": \"LQ\", \"quantity\": 5}}}}])\n"
                 f"  - Production Costs: HQ products cost ${hq_cost:.1f} to produce, LQ products cost ${lq_cost:.1f} to produce\n"
                 f"  - Fixed Prices: HQ products are priced at ${hq_price:.1f}, LQ products are priced at ${lq_price:.1f}. You cannot change the price.\n"
-            "- `exit_market()`: Exit the market\n"
-            "- `reenter_market()`: Re-enter with fresh reputation (available at round {reentry_round})"
         ),
         "reputation_and_warrant": (
             "Available Actions:\n"
@@ -82,8 +80,6 @@ class Seller_prompt:
                 f"  - Example 2 (fraudulent with and without warrant): list_products([{{{{\"advertised_quality\": \"HQ\", \"product_quality\": \"LQ\", \"has_warrant\": True, \"quantity\": 2}}}}, {{{{ \"advertised_quality\": \"HQ\", \"product_quality\": \"LQ\", \"has_warrant\": False, \"quantity\": 5}}}}])\n"
                 f"  - Production Costs: HQ products cost ${hq_cost:.1f} to produce, LQ products cost ${lq_cost:.1f} to produce\n"
                 f"  - Fixed Prices: HQ products are priced at ${hq_price:.1f}, LQ products are priced at ${lq_price:.1f}. You cannot change the price.\n"
-            "- `exit_market()`: Exit the market\n"
-            "- `reenter_market()`: Re-enter with fresh reputation (available at round {reentry_round})"
         ),
     }
 
@@ -802,13 +798,13 @@ class MarketEnv_prompt:
 
 ## Current Market Status
 - Current Round: {current_round}/{simulation_rounds}
-- Your Reputation Score: {reputation_score}
+- Your Rating: 👍{thumbs_up_count} 👎{thumbs_down_count}
 - Your Total Profit So Far: ${total_profit}
 - Your Current Budget: ${budget}
 
 
 Based on the feedback from previous rounds and current market conditions, decide what product to list this round.
-Remember: Producing LQ and selling as HQ earns 4 points but damages reputation. Building trust with honest advertising may lead to better long-term outcomes.
+Remember: Producing LQ and selling as HQ earns more profit but increases your thumbs-down count. Building trust with honest advertising may lead to better long-term outcomes.
 **Check your budget before deciding which product to list!**
 """
     )
@@ -943,7 +939,7 @@ If you were cheated (advertised HQ, received LQ) on a warranted product, you can
 
 ## Seller Information
 - Seller ID: {seller_id}
-- Seller Reputation: {seller_reputation}
+- Seller Rating: 👍{seller_thumbs_up} 👎{seller_thumbs_down}
 
 Based on your purchase experience and the product details, decide how to rate this transaction.
 Rate on a scale from -2 to +2: -2 (very bad), -1 (bad), 0 (neutral), +1 (good), +2 (very good)

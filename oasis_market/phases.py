@@ -82,7 +82,8 @@ class SellerListingPhase(MarketPhase):
                 # Prepare round prompt with budget information
                 budget = state.get('budget', 10.0)
                 total_profit = state.get('total_profit', 0)
-                reputation_score = state.get('reputation_score', 0)
+                thumbs_up = state.get('thumbs_up_count', 0)
+                thumbs_down = state.get('thumbs_down_count', 0)
                 
                 # Add budget information to the prompt
                 seller_round_prompt = SELLER_ROUND_PROMPT.format(
@@ -91,17 +92,6 @@ class SellerListingPhase(MarketPhase):
                 
                 # Tools available for sellers
                 listing_tools = ['list_products']
-                
-                # Conditionally add exit/re-entry tools (skip if config is None)
-                exit_round = self.config.EXIT_ROUND if self.config.EXIT_ROUND is not None else None
-                reentry_round = self.config.REENTRY_ALLOWED_ROUND if self.config.REENTRY_ALLOWED_ROUND is not None else None
-                
-                if exit_round is not None and round_num == exit_round:
-                    listing_tools.append('exit_market')
-                    seller_round_prompt += "\n\nYou are now allowed to exit the market.\n"
-                if reentry_round is not None and round_num == reentry_round:
-                    listing_tools.append('reenter_market')
-                    seller_round_prompt += "\n\nYou are now allowed to re-enter the market.\n"
                 
                 seller_actions[agent] = LLMAction(
                     extra_action=listing_tools,
@@ -223,12 +213,13 @@ class BuyerRatingPhase(MarketPhase):
                 
                 # Store all transactions information in agent
                 # Store the first transaction as last_purchase_info for backward compatibility
-                # Get seller reputation for each transaction
+                # Get seller thumbs-up/thumbs-down counts for each transaction
                 for transaction in transactions:
                     seller_id = transaction.get("seller_id")
                     if seller_id:
-                        seller_reputation = self.db_manager.get_user_reputation(seller_id)
-                        transaction["seller_reputation"] = seller_reputation
+                        thumbs_up, thumbs_down = self.db_manager.get_user_reputation(seller_id)
+                        transaction["seller_thumbs_up"] = thumbs_up
+                        transaction["seller_thumbs_down"] = thumbs_down
                 
                 # Store the first transaction as last_purchase_info (for backward compatibility with env)
                 AgentManager.store_purchase_info(agent, transactions[0])

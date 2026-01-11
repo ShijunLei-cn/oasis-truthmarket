@@ -7,14 +7,14 @@ set -e
 # PRE_FIX="${:-}"
 
 # Default experiment IDs (update these based on your actual experiment IDs)
-R_EXP_ID="${R_EXP_ID:-r_wo}"
-RW_EXP_ID="${RW_EXP_ID:-rw_wo}"
+# R_EXP_ID="${R_EXP_ID:-r_wo}"
+# RW_EXP_ID="${RW_EXP_ID:-rw_wo}"
 
-# Check if experiment IDs are provided as arguments
-if [ $# -ge 2 ]; then
-    R_EXP_ID="$1"
-    RW_EXP_ID="$2"
-fi
+# # Check if experiment IDs are provided as arguments
+# if [ $# -ge 2 ]; then
+#     R_EXP_ID="$1"
+#     RW_EXP_ID="$2"
+# fi
 
 echo "=========================================="
 echo "RQ2 Market Mechanism Visualization"
@@ -39,17 +39,28 @@ echo ""
 # fi
 
 
+R_EXP_ID="rq2_0/r_wo"
+RW_EXP_ID="rq2_0/rw_wo"
+
 python analysis/multi_run_analysis.py --experiment_id $R_EXP_ID
 python analysis/multi_run_analysis.py --experiment_id $RW_EXP_ID
 
-# Generate visualizations
-echo "Generating visualizations..."
-python visualization/scripts/rq2_visualization.py \
-    --r-exp "$R_EXP_ID" \
-    --rw-exp "$RW_EXP_ID"
+python visualization/scripts/rq2_visualization.py --r-exp $R_EXP_ID --rw-exp $RW_EXP_ID
 
-echo ""
-echo "=========================================="
-echo "Visualization complete!"
-echo "=========================================="
 
+R_EXP_ID="rq2_1/r_wo"
+RW_EXP_ID="rq2_1/rw_wo"
+
+python analysis/multi_run_analysis.py --experiment_id $R_EXP_ID
+python analysis/multi_run_analysis.py --experiment_id $RW_EXP_ID
+
+python visualization/scripts/rq2_visualization.py --r-exp $R_EXP_ID --rw-exp $RW_EXP_ID
+
+
+R_EXP_ID="rq2_2/r_wo"
+RW_EXP_ID="rq2_2/rw_wo"
+
+python analysis/multi_run_analysis.py --experiment_id $R_EXP_ID
+python analysis/multi_run_analysis.py --experiment_id $RW_EXP_ID
+
+python visualization/scripts/rq2_visualization.py --r-exp $R_EXP_ID --rw-exp $RW_EXP_ID

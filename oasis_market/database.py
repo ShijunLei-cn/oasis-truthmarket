@@ -66,7 +66,7 @@ class MarketDatabase:
         if not os.path.exists(self.database_path) or not self._table_exists('user'):
             # Return initial states if database doesn't exist or tables not initialized
             if role == 'seller':
-                return {'reputation_score': 0, 'total_profit': 0, 'budget': 5.0}
+                return {'thumbs_up_count': 0, 'thumbs_down_count': 0, 'total_profit': 0, 'budget': 5.0}
             else:
                 return {'cumulative_utility': 0, 'total_utility': 0}
         
@@ -77,13 +77,14 @@ class MarketDatabase:
         if role == 'seller':
             # Get seller basic information including budget
             cursor.execute(
-                "SELECT reputation_score, profit_utility_score, budget FROM user WHERE agent_id = ?",
+                "SELECT thumbs_up_count, thumbs_down_count, profit_utility_score, budget FROM user WHERE agent_id = ?",
                 (agent_id,)
             )
             result = cursor.fetchone()
-            state['reputation_score'] = result[0] if result else 0
-            state['total_profit'] = result[1] if result else 0
-            state['budget'] = result[2] if result and len(result) > 2 and result[2] is not None else 10.0
+            state['thumbs_up_count'] = result[0] if result else 0
+            state['thumbs_down_count'] = result[1] if result else 0
+            state['total_profit'] = result[2] if result else 0
+            state['budget'] = result[3] if result and len(result) > 3 and result[3] is not None else 10.0
             
             # Get sales information for this round
             if round_num > 0:
@@ -246,7 +247,8 @@ class MarketDatabase:
         cursor.execute(
             """
             SELECT p.product_id, u.agent_id, p.advertised_quality, p.price, p.has_warrant, 
-                   COALESCE(u.reputation_score, 0) AS reputation_score
+                   COALESCE(u.thumbs_up_count, 0) AS thumbs_up_count,
+                   COALESCE(u.thumbs_down_count, 0) AS thumbs_down_count
             FROM product p
             LEFT JOIN user u ON u.user_id = p.user_id
             WHERE p.status = 'on_sale'
@@ -260,7 +262,7 @@ class MarketDatabase:
                 warrant_info = " (Warranted)" if p[4] else ""
                 listings += (
                     f"- Product ID: {p[0]}, Seller ID: {p[1]}, "
-                    f"Seller Reputation: {p[5]}, "
+                    f"Seller Rating: 👍{p[5]} 👎{p[6]}, "
                     f"Advertised Quality: {p[2]}, Price: ${p[3]:.2f}{warrant_info}\n"
                 )
         
@@ -275,7 +277,7 @@ class MarketDatabase:
             agent_graph: Graph containing all agents
             num_sellers: Number of seller agents
             num_buyers: Number of buyer agents
-            initial_seller_reputation: Initial reputation score for all sellers (default: 0.0)
+            initial_seller_reputation: Initial reputation score for all sellers (deprecated, use thumbs-up/thumbs-down instead)
         """
         print("Initializing market roles in the database...")
         conn = sqlite3.connect(self.database_path)
@@ -296,10 +298,10 @@ class MarketDatabase:
         for i in range(num_sellers):
             agent_id = i + 1
             cursor.execute(
-                "UPDATE user SET role = ?, reputation_score = ?, profit_utility_score = ? WHERE agent_id = ?",
-                ('seller', initial_seller_reputation, 0.0, agent_id)
+                "UPDATE user SET role = ?, thumbs_up_count = ?, thumbs_down_count = ?, profit_utility_score = ? WHERE agent_id = ?",
+                ('seller', 0, 0, 0.0, agent_id)
             )
-            print(f"Set agent {agent_id} as seller with initial reputation: {initial_seller_reputation}")
+            print(f"Set agent {agent_id} as seller with initial thumbs-up: 0, thumbs-down: 0")
         
         # Set buyer roles (next NUM_BUYERS agents)
         for i in range(num_buyers):
@@ -321,34 +323,37 @@ class MarketDatabase:
         print(f"Market roles initialized successfully: {seller_count} sellers, {buyer_count} buyers")
         conn.close()
     
-    def get_user_reputation(self, agent_id: int) -> float:
+    def get_user_reputation(self, agent_id: int) -> tuple:
         """
-        Get the reputation score of a user
+        Get the thumbs-up and thumbs-down counts of a user
         
         Args:
             agent_id: Agent identifier
             
         Returns:
-            Reputation score (float)
+            Tuple of (thumbs_up_count, thumbs_down_count)
         """
         if not os.path.exists(self.database_path) or not self._table_exists('user'):
-            return 0.0
+            return (0, 0)
         
         conn = sqlite3.connect(self.database_path)
         cursor = conn.cursor()
         
         cursor.execute(
-            "SELECT reputation_score FROM user WHERE agent_id = ?",
+            "SELECT thumbs_up_count, thumbs_down_count FROM user WHERE agent_id = ?",
             (agent_id,)
         )
         result = cursor.fetchone()
         conn.close()
         
-        return float(result[0]) if result and result[0] is not None else 0.0
+        if result:
+            return (int(result[0]) if result[0] is not None else 0, 
+                    int(result[1]) if result[1] is not None else 0)
+        return (0, 0)
     
-    def compute_next_round_reputation(self, agent_id: int, round_num: int, reputation_lag: int) -> int:
+    def compute_next_round_reputation(self, agent_id: int, round_num: int, reputation_lag: int) -> tuple:
         """
-        Calculate reputation that will be shown in the next round
+        Calculate thumbs-up and thumbs-down counts that will be shown in the next round
         
         Args:
             agent_id: Seller agent ID
@@ -356,10 +361,10 @@ class MarketDatabase:
             reputation_lag: Reputation display lag in rounds
             
         Returns:
-            Reputation score for next round
+            Tuple of (thumbs_up_count, thumbs_down_count) for next round
         """
         if not os.path.exists(self.database_path) or not self._table_exists('transactions'):
-            return 0
+            return (0, 0)
         
         next_round_cutoff = max(0, round_num + 1 - reputation_lag)
         
@@ -367,14 +372,24 @@ class MarketDatabase:
             cursor = conn.cursor()
             cursor.execute(
                 """
-                SELECT COUNT(t.rating) as cnt, COALESCE(SUM(t.rating), 0)
+                SELECT t.rating
                 FROM transactions t
                 WHERE t.rating IS NOT NULL AND t.round_number <= ? AND t.seller_id = ?
                 """,
                 (next_round_cutoff, agent_id)
             )
-            result = cursor.fetchone()
-            return result[1] if result else 0
+            ratings = [row[0] for row in cursor.fetchall()]
+            
+            # Calculate thumbs up and down counts
+            thumbs_up = 0
+            thumbs_down = 0
+            for rating in ratings:
+                if rating > 0:
+                    thumbs_up += rating  # +1 → +1, +2 → +2
+                else:
+                    thumbs_down += abs(rating)  # -1 → +1, -2 → +2
+            
+            return (thumbs_up, thumbs_down)
     
     def cleanup(self):
         """Clean up database file if it exists"""
@@ -396,7 +411,8 @@ if __name__ == "__main__":
     
     # Test getting initial agent state
     seller_state = db.get_agent_state(1, 'seller')
-    assert seller_state['reputation_score'] == 0
+    assert seller_state['thumbs_up_count'] == 0
+    assert seller_state['thumbs_down_count'] == 0
     assert seller_state['total_profit'] == 0
     print(f"✓ Initial seller state: {seller_state}")
     

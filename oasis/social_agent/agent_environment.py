@@ -84,7 +84,8 @@ class SocialEnvironment(Environment):
             cursor.execute(
                 """
                 SELECT p.product_id, p.user_id, p.advertised_quality, p.price, p.has_warrant,
-                    COALESCE(u.reputation_score, 0) AS reputation_score
+                    COALESCE(u.thumbs_up_count, 0) AS thumbs_up_count,
+                    COALESCE(u.thumbs_down_count, 0) AS thumbs_down_count
                 FROM product p
                 LEFT JOIN user u ON u.user_id = p.user_id
                 WHERE p.status = 'on_sale'
@@ -94,20 +95,20 @@ class SocialEnvironment(Environment):
             if products:
                 listings = f"Available Products ({len(products)} total):\n"
                 for p in products:
-                    product_id, seller_id, adv_quality, price, has_warrant, reputation = p
+                    product_id, seller_id, adv_quality, price, has_warrant, thumbs_up, thumbs_down = p
                     # Only show warranty info if market_type is not 'reputation_only'
                     if market_type == 'reputation_only':
                         listings += (
                             f"  Product {product_id}: {adv_quality} quality, "
                             f"Price ${price:.2f}, "
-                            f"Seller {seller_id} (Reputation: {reputation:.1f})\n"
+                            f"Seller {seller_id} (👍{thumbs_up} 👎{thumbs_down})\n"
                         )
                     else:
                         warrant_str = "Warranted" if has_warrant else "No Warrant"
                         listings += (
                             f"  Product {product_id}: {adv_quality} quality, "
                             f"Price ${price:.2f}, "
-                            f"Seller {seller_id} (Reputation: {reputation:.1f}), "
+                            f"Seller {seller_id} (👍{thumbs_up} 👎{thumbs_down}), "
                             f"{warrant_str}\n"
                         )
         except sqlite3.Error as e:
@@ -253,11 +254,16 @@ class SocialEnvironment(Environment):
                 else:
                     budget = SimulationConfig.MARKET_PARAMS.get('seller_budget', 60.0)
             
+            # Get thumbs-up and thumbs-down counts from agent
+            thumbs_up_count = getattr(agent, 'thumbs_up_count', 0)
+            thumbs_down_count = getattr(agent, 'thumbs_down_count', 0)
+            
             return MarketEnv_prompt.SELLER_LISTING_ENV.format(
                 previous_feedback=previous_feedback,
                 current_round=current_round,
                 simulation_rounds=self.config.SIMULATION_ROUNDS,
-                reputation_score=agent.reputation_score,
+                thumbs_up_count=thumbs_up_count,
+                thumbs_down_count=thumbs_down_count,
                 total_profit=total_profit,
                 budget=budget,
             )
@@ -335,7 +341,8 @@ class SocialEnvironment(Environment):
                 purchase_price=purchase_info.get('purchase_price', 0),
                 buyer_utility=purchase_info.get('buyer_utility', 0),
                 seller_id=purchase_info.get('seller_id', 'N/A'),
-                seller_reputation=purchase_info.get('seller_reputation', 0)
+                seller_thumbs_up=purchase_info.get('seller_thumbs_up', 0),
+                seller_thumbs_down=purchase_info.get('seller_thumbs_down', 0)
             )
             return rating_prompt + f"\n\n## All Your Purchases in This Round:\n{transactions_text}"
             

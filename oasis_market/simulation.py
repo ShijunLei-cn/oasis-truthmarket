@@ -24,6 +24,9 @@ from prompt import (
     BUYER_GENERATION_SYS_PROMPT, BUYER_GENERATION_USER_PROMPT
 )
 
+from utils import print_simulation_summary
+
+
 class MarketSimulation:
     """Main market simulation orchestrator"""
     
@@ -145,12 +148,15 @@ class MarketSimulation:
                     round_profit = (round_summary.get('price', 0) - round_summary.get('cost', 0)) * round_summary.get('sold_numbers', 0)
                 total_profit = new_state.get('total_profit', 0)
                 
-                # Calculate next round reputation
+                # Calculate next round thumbs-up/thumbs-down counts
                 # Use default value if REPUTATION_LAG is None
                 reputation_lag = self.config.REPUTATION_LAG if self.config.REPUTATION_LAG is not None else 1
-                next_reputation = self.db_manager.compute_next_round_reputation(
+                next_thumbs_up, next_thumbs_down = self.db_manager.compute_next_round_reputation(
                     agent_id, round_num, reputation_lag
                 )
+                
+                # For backward compatibility, store reputation as net score (thumbs_up - thumbs_down)
+                next_reputation = next_thumbs_up - next_thumbs_down
                 
                 # Update history
                 if agent_id not in self.sellers_history:
@@ -176,11 +182,6 @@ class MarketSimulation:
         # Synchronize platform round counter
         self.env.platform.sandbox_clock.round_step = round_num
         SimulationLogger.print_round_header(round_num, self.config.SIMULATION_ROUNDS)
-        
-        # Log market flags (use defaults if None)
-        exit_round = self.config.EXIT_ROUND if self.config.EXIT_ROUND is not None else 0
-        reentry_round = self.config.REENTRY_ALLOWED_ROUND if self.config.REENTRY_ALLOWED_ROUND is not None else 0
-        SimulationLogger.log_market_flags(round_num, exit_round, reentry_round)
         
         # Initialize phases
         seller_listing = SellerListingPhase(
@@ -272,16 +273,15 @@ class MarketSimulation:
         for round_num in range(1, self.config.SIMULATION_ROUNDS + 1):
             await self.run_round(round_num, market_type, communication_type)
         
-        # Run vulnerability detection
-        from oasis.environment.processing.valunerability import run_detection
-        run_detection(self.config.SIMULATION_ROUNDS, self.database_path)
-        print("Manipulation analysis completed.")
+        # # Run vulnerability detection
+        # from oasis.environment.processing.valunerability import run_detection
+        # run_detection(self.config.SIMULATION_ROUNDS, self.database_path)
+        # print("Manipulation analysis completed.")
         
         # Close environment
         await self.env.close()
         
         # Print summary
-        from utils import print_simulation_summary
         print_simulation_summary(self.database_path)
         print("\nSimulation finished")
     
