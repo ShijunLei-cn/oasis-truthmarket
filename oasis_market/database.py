@@ -309,7 +309,7 @@ class MarketDatabase:
                 "UPDATE user SET role = ?, brand_name = ?, thumbs_up_count = ?, thumbs_down_count = ?, profit_utility_score = ? WHERE agent_id = ?",
                 ('seller', brand_name, 0, 0, 0.0, agent_id)
             )
-            print(f"Set agent {agent_id} as seller with brand: {brand_name}, initial thumbs-up: 0, thumbs-down: 0")
+            print(f"DEBUG: Set agent {agent_id} as seller with brand: {brand_name}, initial thumbs-up: 0, thumbs-down: 0")
         
         # Set buyer roles (next NUM_BUYERS agents)
         for i in range(num_buyers):
@@ -318,18 +318,14 @@ class MarketDatabase:
                 "UPDATE user SET role = ?, profit_utility_score = ? WHERE agent_id = ?",
                 ('buyer', 0.0, agent_id)
             )
-            print(f"Set agent {agent_id} as buyer")
+            print(f"DEBUG: Set agent {agent_id} as buyer")
         
         conn.commit()
         
         # Verify setup results
-        cursor.execute("SELECT COUNT(*) FROM user WHERE role = 'seller'")
-        seller_count = cursor.fetchone()[0]
-        cursor.execute("SELECT COUNT(*) FROM user WHERE role = 'buyer'")
-        buyer_count = cursor.fetchone()[0]
-        
-        print(f"Market roles initialized successfully: {seller_count} sellers, {buyer_count} buyers")
-        conn.close()
+        cursor.execute("SELECT agent_id, role, brand_name, thumbs_up_count, thumbs_down_count FROM user WHERE role = 'seller'")
+        sellers = cursor.fetchall()
+        print(f"DEBUG: Sellers after initialization: {sellers}")
     
     def get_user_reputation(self, agent_id: int) -> tuple:
         """
@@ -348,15 +344,17 @@ class MarketDatabase:
         cursor = conn.cursor()
         
         cursor.execute(
-            "SELECT thumbs_up_count, thumbs_down_count FROM user WHERE agent_id = ?",
+            "SELECT thumbs_up_count, thumbs_down_count, brand_name FROM user WHERE agent_id = ?",
             (agent_id,)
         )
         result = cursor.fetchone()
         conn.close()
         
         if result:
+            print(f"DEBUG get_user_reputation: agent_id={agent_id}, thumbs_up={result[0]}, thumbs_down={result[1]}, brand_name={result[2]}")
             return (int(result[0]) if result[0] is not None else 0, 
                     int(result[1]) if result[1] is not None else 0)
+        print(f"DEBUG get_user_reputation: agent_id={agent_id}, no result found")
         return (0, 0)
     
     def compute_next_round_reputation(self, agent_id: int, round_num: int, reputation_lag: int) -> tuple:

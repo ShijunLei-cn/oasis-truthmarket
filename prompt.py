@@ -122,7 +122,7 @@ Profit = (Fixed Price) - (Production cost)
 
 **Important:** Prices are FIXED by the market. You cannot set custom prices. Your profit depends only on your production cost and the fixed price for the advertised quality.
 
-Note: Producing LQ and selling as HQ can earn higher profit (${hq_price - lq_cost:.1f} vs ${lq_default_profit_lq:.1f}) BUT damages your reputation!
+Note: Producing LQ and selling as HQ can earn higher profit (${hq_price - lq_cost:.1f} vs ${lq_default_profit_lq:.1f}), but buyers may rate you negatively, reducing your future sales potential
 """
         ).strip(),
         "reputation_and_warrant": (
@@ -188,7 +188,6 @@ You are a Seller Agent in a multi-round online marketplace simulation ('{{market
 - **Your budget increases when you make a sale** (you receive the selling price)
 - Buyers only see your **advertised quality** and **price** before a purchase
 - Buyers find out the **true product quality** only after their purchase
-- **Producing LQ and selling it as HQ** can earn high profit if you set a high price, BUT damages your reputation
 
 ## Reputation & Market Dynamics
 {{market_rules}}
@@ -209,10 +208,8 @@ You must decide and execute EXACTLY ONE action for this round based on your pers
 
 **Instructions:**
 1. **Assess your situation**: Analyze your current rating and past performance from the summary
-2. **Consider your strategy**: Should you build trust or maximize short-term profit?
-3. **Product portfolio strategy**: When using `list_products()`, consider listing multiple different product types (e.g., mix of HQ and LQ products with different advertised/actual quality combinations) in a single call. This allows you to diversify your offerings, target different buyer segments, balance risk and profit, and maximize budget utilization.
-4. **Formulate a plan**: Based on your PERSONALITY, decide your plan for this round
-5. **Execute the action**: You MUST call one of the available functions
+2. **Formulate a plan**: Based on your PERSONALITY, decide your plan for this round
+3. **Execute the action**: You MUST call one of the available functions
 
 Provide your step-by-step reasoning first, then execute your chosen function call.
 Please actively take actions and participate in the market. Do not repeatedly refuse to execute any action.
@@ -319,7 +316,7 @@ While you wait, here's a reminder of the game mechanics:
 ## Production
 • High quality products cost more to produce than low quality products
 • High quality product sales earn more profit than low quality product sales
-• **Producing low quality and selling it as high quality earns the most profit BUT hurts your rating**
+• Different quality and advertising strategies lead to different outcomes
 
 ## Advertising & Reputation
 • Buyers only see the **advertised quality** (not the true quality) before they confirm a purchase
@@ -341,7 +338,7 @@ While you wait, here's a reminder of the game mechanics:
 ## Production
 • High quality products cost more to produce than low quality products
 • High quality product sales earn more profit than low quality product sales
-• **Producing low quality and selling it as high quality earns the most profit BUT hurts your rating**
+• Different quality and advertising strategies lead to different outcomes
 
 ## Advertising & Reputation
 • Buyers only see the **advertised quality** (not the true quality) before they confirm a purchase
@@ -372,7 +369,7 @@ While you wait, here's a reminder of the game mechanics:
 ## Production
 • High quality products cost more to produce than low quality products
 • High quality product sales earn more profit than low quality product sales
-• **Producing low quality and selling it as high quality earns the most profit BUT hurts your rating**
+• Different quality and advertising strategies lead to different outcomes
 
 ## Advertising & Reputation
 • Buyers only see the **advertised quality** (not the true quality) before they confirm a purchase
@@ -794,7 +791,6 @@ class MarketEnv_prompt:
 
 
 Based on the feedback from previous rounds and current market conditions, decide what product to list this round.
-Remember: Producing LQ and selling as HQ earns more profit but increases your thumbs-down count. Building trust with honest advertising may lead to better long-term outcomes.
 **Check your budget before deciding which product to list!**
 """
     )
@@ -816,10 +812,6 @@ Remember: Producing LQ and selling as HQ earns more profit but increases your th
 
 ## Purchase Decision
 Based on the available products and seller ratings, decide which products to purchase.
-Remember: 
-- LQ products are always as advertised (no risk of fraud)
-- HQ products may be fraudulent (check seller rating)
-- Use seller ratings to guide your purchasing decisions
 """
             )
         else:
@@ -836,10 +828,6 @@ Remember:
 
 ## Purchase Decision
 Based on the available products, seller ratings, and warranty status, decide which products to purchase.
-Remember: 
-- LQ products are always as advertised (no risk of fraud)
-- HQ products may be fraudulent (check seller rating and warranty)
-- Warranted products can be challenged if you receive LQ when HQ was advertised
 """
             )
         
@@ -857,10 +845,6 @@ Remember:
 
 ## Purchase Decision
 Based on the available products, seller ratings, and warranty status, decide which products to purchase.
-Remember: 
-- LQ products are always as advertised (no risk of fraud)
-- HQ products may be fraudulent (check seller rating and warranty)
-- Warranted products can be challenged if you receive LQ when HQ was advertised
 """
     )
 
