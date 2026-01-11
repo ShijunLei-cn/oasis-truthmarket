@@ -220,6 +220,12 @@ class BuyerRatingPhase(MarketPhase):
                         thumbs_up, thumbs_down = self.db_manager.get_user_reputation(seller_id)
                         transaction["seller_thumbs_up"] = thumbs_up
                         transaction["seller_thumbs_down"] = thumbs_down
+                    else:
+                        transaction["seller_thumbs_up"] = 0
+                        transaction["seller_thumbs_down"] = 0
+                
+                # Store all transactions in a new attribute for rating phase (must be done before env.step)
+                agent.all_purchase_transactions = transactions
                 
                 # Store the first transaction as last_purchase_info (for backward compatibility with env)
                 AgentManager.store_purchase_info(agent, transactions[0])

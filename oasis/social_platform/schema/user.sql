@@ -10,6 +10,8 @@ CREATE TABLE user (
     num_followers INTEGER DEFAULT 0,
     -- Extensions based on Design Proposal
     role VARCHAR(10),
+    -- Brand name for sellers (Greek letters)
+    brand_name TEXT,
     -- Thumbs up/down counting system for reputation
     thumbs_up_count INTEGER DEFAULT 0,
     thumbs_down_count INTEGER DEFAULT 0,

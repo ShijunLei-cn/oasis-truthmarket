@@ -84,6 +84,7 @@ class SocialEnvironment(Environment):
             cursor.execute(
                 """
                 SELECT p.product_id, p.user_id, p.advertised_quality, p.price, p.has_warrant,
+                    COALESCE(u.brand_name, 'Unknown') AS brand_name,
                     COALESCE(u.thumbs_up_count, 0) AS thumbs_up_count,
                     COALESCE(u.thumbs_down_count, 0) AS thumbs_down_count
                 FROM product p
@@ -95,20 +96,20 @@ class SocialEnvironment(Environment):
             if products:
                 listings = f"Available Products ({len(products)} total):\n"
                 for p in products:
-                    product_id, seller_id, adv_quality, price, has_warrant, thumbs_up, thumbs_down = p
+                    product_id, seller_id, adv_quality, price, has_warrant, brand_name, thumbs_up, thumbs_down = p
                     # Only show warranty info if market_type is not 'reputation_only'
                     if market_type == 'reputation_only':
                         listings += (
                             f"  Product {product_id}: {adv_quality} quality, "
                             f"Price ${price:.2f}, "
-                            f"Seller {seller_id} (👍{thumbs_up} 👎{thumbs_down})\n"
+                            f"Brand {brand_name} (👍{thumbs_up} 👎{thumbs_down})\n"
                         )
                     else:
                         warrant_str = "Warranted" if has_warrant else "No Warrant"
                         listings += (
                             f"  Product {product_id}: {adv_quality} quality, "
                             f"Price ${price:.2f}, "
-                            f"Seller {seller_id} (👍{thumbs_up} 👎{thumbs_down}), "
+                            f"Brand {brand_name} (👍{thumbs_up} 👎{thumbs_down}), "
                             f"{warrant_str}\n"
                         )
         except sqlite3.Error as e:
@@ -311,10 +312,38 @@ class SocialEnvironment(Environment):
                     f"You did not purchase any products in this round, so there are no transactions to rate or challenge."
                 )
             
-            # Format transactions information for display
+            # Get market_type from agent profile
+            market_type = agent.user_info.profile.get("market_type", "reputation_and_warrant")
+            
+            # Collect all unique seller_ids from transactions
+            unique_seller_ids = list(set(t.get('seller_id') for t in valid_transactions if t.get('seller_id')))
+            
+            # Fetch brand_name and reputation for all sellers in one query
+            seller_info = {}
+            if unique_seller_ids:
+                try:
+                    conn = sqlite3.connect(self.db_path)
+                    cursor = conn.cursor()
+                    placeholders = ','.join('?' * len(unique_seller_ids))
+                    cursor.execute(f"SELECT user_id, brand_name, thumbs_up_count, thumbs_down_count FROM user WHERE user_id IN ({placeholders})", unique_seller_ids)
+                    for row in cursor.fetchall():
+                        seller_info[row[0]] = {
+                            'brand_name': row[1] if row[1] else 'Unknown',
+                            'thumbs_up': row[2] if row[2] else 0,
+                            'thumbs_down': row[3] if row[3] else 0
+                        }
+                    conn.close()
+                    print(f"DEBUG: Fetched seller_info for {len(seller_info)} sellers: {seller_info}")
+                except Exception as e:
+                    print(f"Error fetching seller info: {e}")
+            else:
+                print(f"DEBUG: No valid seller_ids found in transactions. Unique seller_ids: {unique_seller_ids}")
+            
+            # Format transactions information for display with brand_name
             transactions_text = "\n".join([
                 f"  - Transaction ID: {t.get('transaction_id', 'N/A')}, "
                 f"Product ID: {t.get('product_id', 'N/A')}, "
+                f"Brand: {seller_info.get(t.get('seller_id'), {}).get('brand_name', 'Unknown')}, "
                 f"Advertised: {t.get('advertised_quality', 'N/A')}, "
                 f"True Quality: {t.get('true_quality', 'N/A')}, "
                 f"Price: ${t.get('purchase_price', 0):.2f}, "
@@ -322,29 +351,12 @@ class SocialEnvironment(Environment):
                 for t in valid_transactions
             ])
             
-            # Use the first transaction for backward compatibility with BUYER_RATING_ENV format
-            purchase_info = valid_transactions[0]
-            
-            # Get market_type from agent profile
-            market_type = agent.user_info.profile.get("market_type", "reputation_and_warrant")
-            
             # Use dynamic prompt based on market_type
             rating_env = MarketEnv_prompt.get_buyer_rating_env(market_type)
             rating_prompt = rating_env.format(
-                current_round=current_round,
-                simulation_rounds=self.config.SIMULATION_ROUNDS,
-                transaction_id=purchase_info.get('transaction_id', 'N/A'),
-                product_id=purchase_info.get('product_id', 'N/A'),
-                advertised_quality=purchase_info.get('advertised_quality', 'N/A'),
-                true_quality=purchase_info.get('true_quality', 'N/A'),
-                has_warrant=purchase_info.get('has_warrant', False),
-                purchase_price=purchase_info.get('purchase_price', 0),
-                buyer_utility=purchase_info.get('buyer_utility', 0),
-                seller_id=purchase_info.get('seller_id', 'N/A'),
-                seller_thumbs_up=purchase_info.get('seller_thumbs_up', 0),
-                seller_thumbs_down=purchase_info.get('seller_thumbs_down', 0)
+                transactions_text=transactions_text
             )
-            return rating_prompt + f"\n\n## All Your Purchases in This Round:\n{transactions_text}"
+            return rating_prompt
             
         else:
             # Other cases return basic environment information

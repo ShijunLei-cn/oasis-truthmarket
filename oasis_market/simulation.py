@@ -350,7 +350,7 @@ class MarketSimulation:
 
 # Convenience function for backward compatibility
 async def run_single_simulation(database_path: str, market_type: Optional[str] = None,
-                               communication_type: str = 'none', communication_channel_type: str = "Fake"):
+    communication_type: str = 'none', communication_channel_type: str = "Fake"):
     """
     Run a single market simulation (backward compatibility wrapper)
     

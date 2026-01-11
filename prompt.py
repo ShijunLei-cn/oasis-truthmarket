@@ -198,11 +198,6 @@ You are a Seller Agent in a multi-round online marketplace simulation ('{{market
 
 ## Market Structure
 - **{{simulation_rounds}} rounds total**, each round you must decide what to produce and advertise
-- You can **exit and re-enter the market** to reset your reputation:
-  - Exit available after round {{exit_round}}
-  - Re-entry available at round {{reentry_round}}
-  - Re-entering resets your reputation to zero (fresh start)
-- Strategic exits can help you escape a damaged reputation
 
 # PRICING & PROFIT CALCULATION
 {{payoff_matrix}}
@@ -213,8 +208,8 @@ You are a Seller Agent in a multi-round online marketplace simulation ('{{market
 You must decide and execute EXACTLY ONE action for this round based on your personality, current situation, and the game rules.
 
 **Instructions:**
-1. **Assess your situation**: Analyze your current reputation and past performance from the summary
-2. **Consider your strategy**: Should you build trust or maximize short-term profit? Should you exit and rebrand?
+1. **Assess your situation**: Analyze your current rating and past performance from the summary
+2. **Consider your strategy**: Should you build trust or maximize short-term profit?
 3. **Product portfolio strategy**: When using `list_products()`, consider listing multiple different product types (e.g., mix of HQ and LQ products with different advertised/actual quality combinations) in a single call. This allows you to diversify your offerings, target different buyer segments, balance risk and profit, and maximize budget utilization.
 4. **Formulate a plan**: Based on your PERSONALITY, decide your plan for this round
 5. **Execute the action**: You MUST call one of the available functions
@@ -225,7 +220,7 @@ If you do not take any action in this round, it means you have missed a valuable
 
 """
     )
-    
+        
     # Keep MASTER_PROMPT as class property for backward compatibility
     MASTER_PROMPT = ClassProperty(lambda cls: cls.get_master_prompt())
 
@@ -284,15 +279,15 @@ Make each seller distinct by varying:
 ## Reputation System Only
 1. **Reputation**: Buyers can rate each transaction on a scale from -2 to +2:
    - +2 = very good, +1 = good, 0 = neutral, -1 = bad, -2 = very bad
-   - Your Reputation Score is the average of all ratings you receive
-   - A higher reputation may attract more buyers
-        """,
+   - Your Rating is tracked as 👍 thumbs-up and 👎 thumbs-down counts
+   - A higher rating may attract more buyers
+         """,
             "reputation_and_warrant": f"""
 ## Reputation & Truth Warrant System
 
 1. **Reputation System**: Buyers can rate each transaction on a scale from -2 to +2:
    - +2 = very good, +1 = good, 0 = neutral, -1 = bad, -2 = very bad
-   - Your Reputation Score is the average of all ratings you receive
+   - Your Rating is tracked as 👍 thumbs-up and 👎 thumbs-down counts
 
 2. **Truth Warrant System**:
    - You can offer a "Truth Warrant" for your products by setting `has_warrant=True`
@@ -305,7 +300,7 @@ Make each seller distinct by varying:
        - **Catching misleading LQ claim**: Lose ${lq_warrant_escrow:.1f} points
      - This penalty overrides any sales income from that transaction
    - Your warrant is only at risk if you are challenged for false advertising
-        """,
+         """,
     }
 
     # Keep MARKET_RULES as class property for backward compatibility
@@ -324,16 +319,16 @@ While you wait, here's a reminder of the game mechanics:
 ## Production
 • High quality products cost more to produce than low quality products
 • High quality product sales earn more profit than low quality product sales
-• **Producing low quality and selling it as high quality earns the most profit BUT hurts your reputation**
+• **Producing low quality and selling it as high quality earns the most profit BUT hurts your rating**
 
 ## Advertising & Reputation
 • Buyers only see the **advertised quality** (not the true quality) before they confirm a purchase
 • You may advertise a different product quality than the true product quality
 • Buyers find out the true product quality only after their purchase
-• Your reputation gets automatically updated based on buyer ratings (-2 to +2 scale)
+• Your rating gets automatically updated based on buyer ratings (-2 to +2 scale)
 
 ## Game Structure
-{simulation_rounds} rounds total. You can exit (after round {exit_round}) and re-enter (at round {reentry_round}) the market to reset reputation.
+{simulation_rounds} rounds total.
 """
             )
         else:
@@ -346,13 +341,13 @@ While you wait, here's a reminder of the game mechanics:
 ## Production
 • High quality products cost more to produce than low quality products
 • High quality product sales earn more profit than low quality product sales
-• **Producing low quality and selling it as high quality earns the most profit BUT hurts your reputation**
+• **Producing low quality and selling it as high quality earns the most profit BUT hurts your rating**
 
 ## Advertising & Reputation
 • Buyers only see the **advertised quality** (not the true quality) before they confirm a purchase
 • You may advertise a different product quality than the true product quality
 • Buyers find out the true product quality only after their purchase
-• Your reputation gets automatically updated based on buyer ratings (-2 to +2 scale)
+• Your rating gets automatically updated based on buyer ratings (-2 to +2 scale)
 
 ## Warranties & Challenges
 • You may offer a Truth Warrant for your product (has_warrant=True)
@@ -363,10 +358,10 @@ While you wait, here's a reminder of the game mechanics:
 • Your warrant is only at risk if challenged
 
 ## Game Structure
-{simulation_rounds} rounds total. You can exit (after round {exit_round}) and re-enter (at round {reentry_round}) the market to reset reputation.
+{simulation_rounds} rounds total.
 """
             )
-    
+        
     # Keep for backward compatibility (will use reputation_and_warrant version)
     WAITING_PROMPT = TextPrompt(
         """
@@ -377,13 +372,13 @@ While you wait, here's a reminder of the game mechanics:
 ## Production
 • High quality products cost more to produce than low quality products
 • High quality product sales earn more profit than low quality product sales
-• **Producing low quality and selling it as high quality earns the most profit BUT hurts your reputation**
+• **Producing low quality and selling it as high quality earns the most profit BUT hurts your rating**
 
 ## Advertising & Reputation
 • Buyers only see the **advertised quality** (not the true quality) before they confirm a purchase
 • You may advertise a different product quality than the true product quality
 • Buyers find out the true product quality only after their purchase
-• Your reputation gets automatically updated based on buyer ratings (-2 to +2 scale)
+• Your rating gets automatically updated based on buyer ratings (-2 to +2 scale)
 
 ## Warranties & Challenges
 • You may offer a Truth Warrant for your product (has_warrant=True)
@@ -394,7 +389,7 @@ While you wait, here's a reminder of the game mechanics:
 • Your warrant is only at risk if challenged
 
 ## Game Structure
-{simulation_rounds} rounds total. You can exit (after round {exit_round}) and re-enter (at round {reentry_round}) the market to reset reputation.
+{simulation_rounds} rounds total.
 """
     )
 
@@ -571,15 +566,13 @@ You are a Buyer Agent in a multi-round online marketplace simulation ('{{market_
 - **Your Utility Formula:** Utility = (Product Quality Utility) - (Purchase Price)
 - **The price is set by sellers** - they can set any price they want (default: HQ ${hq_price:.1f}, LQ ${lq_price:.1f})
 - **You only see advertised quality and price before purchasing** - you discover true quality after purchase
-- Sellers can exit and re-enter to reset their reputation
 
 ## Reputation & Warranties
 {{market_rules}}
 
 ## Market Structure
 - **{{simulation_rounds}} rounds total**, each round you should make one strategic purchase
-- Sellers may exit and re-enter, resetting their reputation
-- Use seller reputation{{market_type_note}} to make informed decisions
+- Use seller ratings to make informed decisions
 
 # PRICING & UTILITY CALCULATION
 {{payoff_matrix}}
@@ -591,11 +584,11 @@ Based on all the information above, decide which product you should purchase to 
 
 **Consider:**
 1. Product advertised quality and price
-2. Seller reputation (can they be trusted?){{warranty_consideration}}
+2. Seller rating (can they be trusted?){{warranty_consideration}}
 3. Your potential returns
 """
     )
-    
+        
     # Keep MASTER_PROMPT as class property for backward compatibility
     MASTER_PROMPT = ClassProperty(lambda cls: cls.get_master_prompt())
 
@@ -644,17 +637,17 @@ Make each buyer distinct by varying:
 ## Reputation System Only
 1. You can rate each transaction on a scale from -2 to +2:
    - +2 = very good, +1 = good, 0 = neutral, -1 = bad, -2 = very bad
-2. Your ratings affect the seller's reputation score (average of all ratings)
-3. Use reputation scores to guide your purchasing decisions
+2. Your ratings affect the seller's rating (👍 thumbs-up and 👎 thumbs-down counts)
+3. Use seller ratings to guide your purchasing decisions
 4. There is NO warranty/challenge system in this market
 5. You cannot challenge purchases after buying
-        """,
+         """,
             "reputation_and_warrant": f"""
 ## Reputation & Truth Warrant System
 
 1. **Reputation System**: You can rate each transaction on a scale from -2 to +2:
    - +2 = very good, +1 = good, 0 = neutral, -1 = bad, -2 = very bad
-   - Your ratings affect seller reputation scores (average of all ratings)
+   - Your ratings affect seller ratings (👍 thumbs-up and 👎 thumbs-down counts)
 
 2. **Truth Warrants & Challenges**:
    - If a product has a **"Truth Warrant"** (has_warrant=True), the seller has staked their claim
@@ -665,7 +658,7 @@ Make each buyer distinct by varying:
      - **Winning challenge against LQ claim**: Earn ${lq_warrant_escrow:.1f} points
    - **If the warrant was honest**: You lose your ${challenge_cost:.1f} challenge fee
    - Only challenge warranted products where you received lower quality than advertised!
-        """,
+         """,
     }
 
     # Keep MARKET_RULES as class property for backward compatibility
@@ -685,15 +678,14 @@ While you wait, here's a reminder of the game mechanics:
 • Buy products based on advertised claims of high or low quality from different sellers
 • **Advertisements may be misleading** - trust is important!
 • High quality products give you more points than low quality but cost more
-• Sellers can exit and re-enter to reset their reputation
 
 ## Rating System
 • After purchase, rate transactions on a -2 to +2 scale:
   - +2 (very good), +1 (good), 0 (neutral), -1 (bad), -2 (very bad)
-• Your ratings help build or damage seller reputations
+• Your ratings help build or damage seller ratings
 
 ## Game Structure
-{simulation_rounds} rounds total. Make strategic decisions based on product quality, price, and seller reputation.
+{simulation_rounds} rounds total. Make strategic decisions based on product quality, price, and seller rating.
 """
             )
         else:
@@ -707,7 +699,6 @@ While you wait, here's a reminder of the game mechanics:
 • Buy products based on advertised claims of high or low quality from different sellers
 • **Advertisements may be misleading** - trust is important!
 • High quality products give you more points than low quality but cost more
-• Sellers can exit and re-enter to reset their reputation
 
 ## Warranted Products
 • If a product has a **"Truth Warrant"** (has_warrant=True), the seller has staked their claim
@@ -721,13 +712,13 @@ While you wait, here's a reminder of the game mechanics:
 ## Rating System
 • After purchase, rate transactions on a -2 to +2 scale:
   - +2 (very good), +1 (good), 0 (neutral), -1 (bad), -2 (very bad)
-• Your ratings help build or damage seller reputations
+• Your ratings help build or damage seller ratings
 
 ## Game Structure
-{simulation_rounds} rounds total. Make strategic decisions based on product quality, price, seller reputation, and whether products are warranted.
+{simulation_rounds} rounds total. Make strategic decisions based on product quality, price, seller rating, and whether products are warranted.
 """
             )
-    
+        
     # Keep for backward compatibility (will use reputation_and_warrant version)
     WAITING_PROMPT = TextPrompt(
         """
@@ -739,7 +730,6 @@ While you wait, here's a reminder of the game mechanics:
 • Buy products based on advertised claims of high or low quality from different sellers
 • **Advertisements may be misleading** - trust is important!
 • High quality products give you more points than low quality but cost more
-• Sellers can exit and re-enter to reset their reputation
 
 ## Warranted Products
 • If a product has a **"Truth Warrant"** (has_warrant=True), the seller has staked their claim
@@ -753,10 +743,10 @@ While you wait, here's a reminder of the game mechanics:
 ## Rating System
 • After purchase, rate transactions on a -2 to +2 scale:
   - +2 (very good), +1 (good), 0 (neutral), -1 (bad), -2 (very bad)
-• Your ratings help build or damage seller reputations
+• Your ratings help build or damage seller ratings
 
 ## Game Structure
-{simulation_rounds} rounds total. Make strategic decisions based on product quality, price, seller reputation, and whether products are warranted.
+{simulation_rounds} rounds total. Make strategic decisions based on product quality, price, seller rating, and whether products are warranted.
 """
     )
 
@@ -825,11 +815,11 @@ Remember: Producing LQ and selling as HQ earns more profit but increases your th
 {available_products}
 
 ## Purchase Decision
-Based on the available products and seller reputations, decide which products to purchase.
+Based on the available products and seller ratings, decide which products to purchase.
 Remember: 
 - LQ products are always as advertised (no risk of fraud)
-- HQ products may be fraudulent (check seller reputation)
-- Use seller reputation scores to guide your purchasing decisions
+- HQ products may be fraudulent (check seller rating)
+- Use seller ratings to guide your purchasing decisions
 """
             )
         else:
@@ -845,14 +835,14 @@ Remember:
 {available_products}
 
 ## Purchase Decision
-Based on the available products, seller reputations, and warranty status, decide which products to purchase.
+Based on the available products, seller ratings, and warranty status, decide which products to purchase.
 Remember: 
 - LQ products are always as advertised (no risk of fraud)
-- HQ products may be fraudulent (check seller reputation and warranty)
+- HQ products may be fraudulent (check seller rating and warranty)
 - Warranted products can be challenged if you receive LQ when HQ was advertised
 """
             )
-    
+        
     # Keep for backward compatibility (will use reputation_and_warrant version)
     BUYER_PURCHASE_ENV = TextPrompt(
         """
@@ -866,10 +856,10 @@ Remember:
 {available_products}
 
 ## Purchase Decision
-Based on the available products, seller reputations, and warranty status, decide which products to purchase.
+Based on the available products, seller ratings, and warranty status, decide which products to purchase.
 Remember: 
 - LQ products are always as advertised (no risk of fraud)
-- HQ products may be fraudulent (check seller reputation and warranty)
+- HQ products may be fraudulent (check seller rating and warranty)
 - Warranted products can be challenged if you receive LQ when HQ was advertised
 """
     )
@@ -882,20 +872,16 @@ Remember:
                 """
 # MARKET ENVIRONMENT OBSERVATION
 
-## Your Recent Purchase Details
-- Transaction ID: {transaction_id}
-- Product ID: {product_id}
-- Advertised Quality: {advertised_quality}
-- True Quality Received: {true_quality}
-- Purchase Price: ${purchase_price}
-- Your Utility from This Purchase: {buyer_utility}
+## All Your Purchases in This Round:
+{transactions_text}
 
-## Seller Information
-- Seller ID: {seller_id}
-- Seller Reputation: {seller_reputation}
-
-Based on your purchase experience and the product details, decide how to rate this transaction.
+Based on your purchase experiences and the product details, decide how to rate each transaction.
 Rate on a scale from -2 to +2: -2 (very bad), -1 (bad), 0 (neutral), +1 (good), +2 (very good)
+
+**Instructions:**
+- You can rate multiple transactions at once using `rate_transactions()`
+- Consider each product's quality relative to its advertised quality
+- Be honest in your ratings to help other buyers make informed decisions
 """
             )
         else:
@@ -903,26 +889,20 @@ Rate on a scale from -2 to +2: -2 (very bad), -1 (bad), 0 (neutral), +1 (good), 
                 """
 # MARKET ENVIRONMENT OBSERVATION
 
-## Your Recent Purchase Details
-- Transaction ID: {transaction_id}
-- Product ID: {product_id}
-- Advertised Quality: {advertised_quality}
-- True Quality Received: {true_quality}
-- Was Warranted: {has_warrant}
-- Purchase Price: ${purchase_price}
-- Your Utility from This Purchase: {buyer_utility}
+## All Your Purchases in This Round:
+{transactions_text}
 
-## Seller Information
-- Seller ID: {seller_id}
-- Seller Reputation: {seller_reputation}
-
-Based on your purchase experience and the product details, decide how to rate this transaction.
+Based on your purchase experiences and the product details, decide how to rate each transaction or challenge any warranted products.
 Rate on a scale from -2 to +2: -2 (very bad), -1 (bad), 0 (neutral), +1 (good), +2 (very good)
 
-If you were cheated (advertised HQ, received LQ) on a warranted product, you can challenge for $1 to earn reward points (e.g., $8 for HQ claims)!
+**Instructions:**
+- You can rate multiple transactions at once using `rate_transactions()`
+- You can challenge warranted products where you received lower quality than advertised using `challenge_warrants()`
+- Challenging costs $1 but rewards you if the seller was fraudulent (e.g., $8 for HQ claims)
+- Be honest in your ratings to help other buyers make informed decisions
 """
-    )
-
+            )
+    
     # Keep for backward compatibility (will use reputation_and_warrant version)
     BUYER_RATING_ENV = TextPrompt(
         """
@@ -938,8 +918,8 @@ If you were cheated (advertised HQ, received LQ) on a warranted product, you can
 - Your Utility from This Purchase: {buyer_utility}
 
 ## Seller Information
-- Seller ID: {seller_id}
-- Seller Rating: 👍{seller_thumbs_up} 👎{seller_thumbs_down}
+- Brand: {seller_brand}
+- Rating: 👍{seller_thumbs_up} 👎{seller_thumbs_down}
 
 Based on your purchase experience and the product details, decide how to rate this transaction.
 Rate on a scale from -2 to +2: -2 (very bad), -1 (bad), 0 (neutral), +1 (good), +2 (very good)
@@ -1020,20 +1000,20 @@ def format_seller_history(history_log: list, market_type: str = "reputation_and_
                     history_string += f"  * {count} products: advertised as {adv_q}, true quality {true_q}, {warrant_str} (sold: {sold})\n"
                 else:
                     history_string += f"  * {count} products: advertised as {adv_q}, true quality {true_q} (sold: {sold})\n"
-            history_string += f"  Total sold: {sold_numbers} products. Round Profit: {profit:.2f}. New Reputation: {reputation:.1f}. Total Profit: {total_profit:.2f}\n"
+            history_string += f"  Total sold: {sold_numbers} products. Round Profit: {profit:.2f}. New Rating: {reputation:.1f}. Total Profit: {total_profit:.2f}\n"
         else:
             # Single product type or backward compatibility
             if show_warrant:
                 warrant_str = "with warrant" if warrant else "without warrant"
                 if total_listed > 1:
-                    history_string += f"- Round {round_num}: Listed {total_listed} products (True_quality {true_quality}, advertised_quality {advertised_quality}, {warrant_str}). Sold: {sold_numbers} products. Round Profit: {profit:.2f}. New Reputation: {reputation:.1f}. Total Profit: {total_profit:.2f}\n"
+                    history_string += f"- Round {round_num}: Listed {total_listed} products (True_quality {true_quality}, advertised_quality {advertised_quality}, {warrant_str}). Sold: {sold_numbers} products. Round Profit: {profit:.2f}. New Rating: {reputation:.1f}. Total Profit: {total_profit:.2f}\n"
                 else:
-                    history_string += f"- Round {round_num}: Listed a True_quality {true_quality} and advertised_quality {advertised_quality} product ({warrant_str}). Sold: {is_sold} and got {sold_numbers} products. Round Profit: {profit:.2f}. New Reputation: {reputation:.1f}. Total Profit: {total_profit:.2f}\n"
+                    history_string += f"- Round {round_num}: Listed a True_quality {true_quality} and advertised_quality {advertised_quality} product ({warrant_str}). Sold: {is_sold} and got {sold_numbers} products. Round Profit: {profit:.2f}. New Rating: {reputation:.1f}. Total Profit: {total_profit:.2f}\n"
             else:
                 if total_listed > 1:
-                    history_string += f"- Round {round_num}: Listed {total_listed} products (True_quality {true_quality}, advertised_quality {advertised_quality}). Sold: {sold_numbers} products. Round Profit: {profit:.2f}. New Reputation: {reputation:.1f}. Total Profit: {total_profit:.2f}\n"
+                    history_string += f"- Round {round_num}: Listed {total_listed} products (True_quality {true_quality}, advertised_quality {advertised_quality}). Sold: {sold_numbers} products. Round Profit: {profit:.2f}. New Rating: {reputation:.1f}. Total Profit: {total_profit:.2f}\n"
                 else:
-                    history_string += f"- Round {round_num}: Listed a True_quality {true_quality} and advertised_quality {advertised_quality} product. Sold: {is_sold} and got {sold_numbers} products. Round Profit: {profit:.2f}. New Reputation: {reputation:.1f}. Total Profit: {total_profit:.2f}\n"
+                    history_string += f"- Round {round_num}: Listed a True_quality {true_quality} and advertised_quality {advertised_quality} product. Sold: {is_sold} and got {sold_numbers} products. Round Profit: {profit:.2f}. New Rating: {reputation:.1f}. Total Profit: {total_profit:.2f}\n"
 
     return history_string
 

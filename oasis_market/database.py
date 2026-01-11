@@ -294,14 +294,22 @@ class MarketDatabase:
         print(f"Found {len(agents_info)} agents to initialize")
         print(f"Actual agent IDs in graph: {sorted(actual_agent_ids)}")
         
+        # Greek letters for seller brands
+        greek_letters = [
+            'Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon', 'Zeta', 'Eta', 'Theta',
+            'Iota', 'Kappa', 'Lambda', 'Mu', 'Nu', 'Xi', 'Omicron', 'Pi',
+            'Rho', 'Sigma', 'Tau', 'Upsilon', 'Phi', 'Chi', 'Psi', 'Omega'
+        ]
+        
         # Set seller roles (first NUM_SELLERS agents)
         for i in range(num_sellers):
             agent_id = i + 1
+            brand_name = greek_letters[i % len(greek_letters)]
             cursor.execute(
-                "UPDATE user SET role = ?, thumbs_up_count = ?, thumbs_down_count = ?, profit_utility_score = ? WHERE agent_id = ?",
-                ('seller', 0, 0, 0.0, agent_id)
+                "UPDATE user SET role = ?, brand_name = ?, thumbs_up_count = ?, thumbs_down_count = ?, profit_utility_score = ? WHERE agent_id = ?",
+                ('seller', brand_name, 0, 0, 0.0, agent_id)
             )
-            print(f"Set agent {agent_id} as seller with initial thumbs-up: 0, thumbs-down: 0")
+            print(f"Set agent {agent_id} as seller with brand: {brand_name}, initial thumbs-up: 0, thumbs-down: 0")
         
         # Set buyer roles (next NUM_BUYERS agents)
         for i in range(num_buyers):
