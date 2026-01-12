@@ -876,14 +876,13 @@ Rate on a scale from -2 to +2: -2 (very bad), -1 (bad), 0 (neutral), +1 (good), 
 ## All Your Purchases in This Round:
 {transactions_text}
 
-Based on your purchase experiences and the product details, decide how to rate each transaction or challenge any warranted products.
+Based on your purchase experiences and the product details, decide how to rate each transaction.
 Rate on a scale from -2 to +2: -2 (very bad), -1 (bad), 0 (neutral), +1 (good), +2 (very good)
 
 **Instructions:**
 - You can rate multiple transactions at once using `rate_transactions()`
-- You can challenge warranted products where you received lower quality than advertised using `challenge_warrants()`
-- Challenging costs $1 but rewards you if the seller was fraudulent (e.g., $8 for HQ claims)
 - Be honest in your ratings to help other buyers make informed decisions
+- Note: You will have a separate opportunity to challenge warranted products in the next phase
 """
             )
     

@@ -39,8 +39,8 @@ echo ""
 # fi
 
 
-R_EXP_ID="rq2_0/r_wo"
-RW_EXP_ID="rq2_0/rw_wo"
+R_EXP_ID="multiple_0109_2326/r_wo"
+RW_EXP_ID="multiple_0109_2326/rw_wo"
 
 python analysis/multi_run_analysis.py --experiment_id $R_EXP_ID
 python analysis/multi_run_analysis.py --experiment_id $RW_EXP_ID
@@ -48,19 +48,19 @@ python analysis/multi_run_analysis.py --experiment_id $RW_EXP_ID
 python visualization/scripts/rq2_visualization.py --r-exp $R_EXP_ID --rw-exp $RW_EXP_ID
 
 
-R_EXP_ID="rq2_1/r_wo"
-RW_EXP_ID="rq2_1/rw_wo"
+# R_EXP_ID="rq2_1/r_wo"
+# RW_EXP_ID="rq2_1/rw_wo"
 
-python analysis/multi_run_analysis.py --experiment_id $R_EXP_ID
-python analysis/multi_run_analysis.py --experiment_id $RW_EXP_ID
+# python analysis/multi_run_analysis.py --experiment_id $R_EXP_ID
+# python analysis/multi_run_analysis.py --experiment_id $RW_EXP_ID
 
-python visualization/scripts/rq2_visualization.py --r-exp $R_EXP_ID --rw-exp $RW_EXP_ID
+# python visualization/scripts/rq2_visualization.py --r-exp $R_EXP_ID --rw-exp $RW_EXP_ID
 
 
-R_EXP_ID="rq2_2/r_wo"
-RW_EXP_ID="rq2_2/rw_wo"
+# R_EXP_ID="rq2_2/r_wo"
+# RW_EXP_ID="rq2_2/rw_wo"
 
-python analysis/multi_run_analysis.py --experiment_id $R_EXP_ID
-python analysis/multi_run_analysis.py --experiment_id $RW_EXP_ID
+# python analysis/multi_run_analysis.py --experiment_id $R_EXP_ID
+# python analysis/multi_run_analysis.py --experiment_id $RW_EXP_ID
 
-python visualization/scripts/rq2_visualization.py --r-exp $R_EXP_ID --rw-exp $RW_EXP_ID
+# python visualization/scripts/rq2_visualization.py --r-exp $R_EXP_ID --rw-exp $RW_EXP_ID

@@ -150,11 +150,15 @@ class RQ2Visualizer:
                 
                 # Load reputation history
                 reputation = pd.read_sql_query(
-                    "SELECT round, seller_id, public_reputation_score FROM reputation_history",
+                    "SELECT round, seller_id, public_thumbs_up, public_thumbs_down FROM reputation_history",
                     conn
                 )
                 
                 conn.close()
+                
+                # Calculate reputation score from thumbs_up and thumbs_down
+                if not reputation.empty:
+                    reputation['public_reputation_score'] = reputation['public_thumbs_up'] - reputation['public_thumbs_down']
                 
                 # Get actual round numbers from data (dynamic, not hardcoded)
                 all_round_numbers = set()
@@ -266,34 +270,89 @@ class RQ2Visualizer:
         r_rounds = self._load_round_data_from_db(self.r_exp_id)
         rw_rounds = self._load_round_data_from_db(self.rw_exp_id)
         
+        # Check if data is empty
+        if r_rounds.empty or 'round' not in r_rounds.columns:
+            print("Warning: No data available for reputation-only experiment")
+            r_rounds = pd.DataFrame(columns=['round', 'avg_price_hq', 'avg_price_lq'])
+        if rw_rounds.empty or 'round' not in rw_rounds.columns:
+            print("Warning: No data available for reputation+warrant experiment")
+            rw_rounds = pd.DataFrame(columns=['round', 'avg_price_hq', 'avg_price_lq'])
+        
         fig, ax = plt.subplots(figsize=(8, 5))
         
         # Aggregate across runs
-        r_agg = r_rounds.groupby('round').agg({
-            'avg_price_hq': ['mean', 'std'],
-            'avg_price_lq': ['mean', 'std']
-        }).reset_index()
+        if not r_rounds.empty and 'round' in r_rounds.columns:
+            r_agg = r_rounds.groupby('round').agg({
+                'avg_price_hq': ['mean', 'std'],
+                'avg_price_lq': ['mean', 'std']
+            }).reset_index()
+        else:
+            r_agg = pd.DataFrame(columns=['round', ('avg_price_hq', 'mean'), ('avg_price_hq', 'std'), ('avg_price_lq', 'mean'), ('avg_price_lq', 'std')])
         
-        rw_agg = rw_rounds.groupby('round').agg({
-            'avg_price_hq': ['mean', 'std'],
-            'avg_price_lq': ['mean', 'std']
-        }).reset_index()
+        if not rw_rounds.empty and 'round' in rw_rounds.columns:
+            rw_agg = rw_rounds.groupby('round').agg({
+                'avg_price_hq': ['mean', 'std'],
+                'avg_price_lq': ['mean', 'std']
+            }).reset_index()
+        else:
+            rw_agg = pd.DataFrame(columns=['round', ('avg_price_hq', 'mean'), ('avg_price_hq', 'std'), ('avg_price_lq', 'mean'), ('avg_price_lq', 'std')])
         
-        rounds = sorted(r_agg['round'].unique())
+        # Get rounds from both experiments
+        all_rounds = set()
+        if not r_agg.empty and 'round' in r_agg.columns:
+            all_rounds.update(r_agg['round'].unique())
+        if not rw_agg.empty and 'round' in rw_agg.columns:
+            all_rounds.update(rw_agg['round'].unique())
+        rounds = sorted(all_rounds) if all_rounds else []
+        
+        if not rounds:
+            print("Warning: No rounds data available for price evolution plot")
+            ax.text(0.5, 0.5, 'No data available', ha='center', va='center', transform=ax.transAxes)
+            ax.set_xlabel('Round', fontweight='bold')
+            ax.set_ylabel('Average Price ($)', fontweight='bold')
+            ax.set_title('Price Evolution Over Rounds', fontweight='bold', pad=15)
+            plt.tight_layout()
+            plt.savefig(self.output_dir / '1_price_evolution.png', dpi=300, bbox_inches='tight')
+            plt.close()
+            print("✓ Generated: 1_price_evolution.png (empty)")
+            return
         
         # Fill NaN values with market parameter defaults
         default_hq_price = self.market_params.get('hq_price', 5.0)
         default_lq_price = self.market_params.get('lq_price', 3.0)
         
-        r_hq_mean = r_agg[('avg_price_hq', 'mean')].fillna(default_hq_price)
-        r_hq_std = r_agg[('avg_price_hq', 'std')].fillna(0)
-        r_lq_mean = r_agg[('avg_price_lq', 'mean')].fillna(default_lq_price)
-        r_lq_std = r_agg[('avg_price_lq', 'std')].fillna(0)
+        # Safely access aggregated data
+        if not r_agg.empty and ('avg_price_hq', 'mean') in r_agg.columns:
+            r_hq_mean = r_agg[('avg_price_hq', 'mean')].fillna(default_hq_price)
+            r_hq_std = r_agg[('avg_price_hq', 'std')].fillna(0)
+            r_lq_mean = r_agg[('avg_price_lq', 'mean')].fillna(default_lq_price)
+            r_lq_std = r_agg[('avg_price_lq', 'std')].fillna(0)
+        else:
+            r_hq_mean = pd.Series([default_hq_price] * len(rounds), index=rounds)
+            r_hq_std = pd.Series([0] * len(rounds), index=rounds)
+            r_lq_mean = pd.Series([default_lq_price] * len(rounds), index=rounds)
+            r_lq_std = pd.Series([0] * len(rounds), index=rounds)
         
-        rw_hq_mean = rw_agg[('avg_price_hq', 'mean')].fillna(default_hq_price)
-        rw_hq_std = rw_agg[('avg_price_hq', 'std')].fillna(0)
-        rw_lq_mean = rw_agg[('avg_price_lq', 'mean')].fillna(default_lq_price)
-        rw_lq_std = rw_agg[('avg_price_lq', 'std')].fillna(0)
+        if not rw_agg.empty and ('avg_price_hq', 'mean') in rw_agg.columns:
+            rw_hq_mean = rw_agg[('avg_price_hq', 'mean')].fillna(default_hq_price)
+            rw_hq_std = rw_agg[('avg_price_hq', 'std')].fillna(0)
+            rw_lq_mean = rw_agg[('avg_price_lq', 'mean')].fillna(default_lq_price)
+            rw_lq_std = rw_agg[('avg_price_lq', 'std')].fillna(0)
+        else:
+            rw_hq_mean = pd.Series([default_hq_price] * len(rounds), index=rounds)
+            rw_hq_std = pd.Series([0] * len(rounds), index=rounds)
+            rw_lq_mean = pd.Series([default_lq_price] * len(rounds), index=rounds)
+            rw_lq_std = pd.Series([0] * len(rounds), index=rounds)
+        
+        # Align data with rounds
+        r_hq_mean = r_hq_mean.reindex(rounds, fill_value=default_hq_price)
+        r_hq_std = r_hq_std.reindex(rounds, fill_value=0)
+        r_lq_mean = r_lq_mean.reindex(rounds, fill_value=default_lq_price)
+        r_lq_std = r_lq_std.reindex(rounds, fill_value=0)
+        rw_hq_mean = rw_hq_mean.reindex(rounds, fill_value=default_hq_price)
+        rw_hq_std = rw_hq_std.reindex(rounds, fill_value=0)
+        rw_lq_mean = rw_lq_mean.reindex(rounds, fill_value=default_lq_price)
+        rw_lq_std = rw_lq_std.reindex(rounds, fill_value=0)
         
         # Plot HQ prices
         ax.errorbar(rounds, r_hq_mean, 
@@ -361,22 +420,35 @@ class RQ2Visualizer:
         rw_all_profits = rw_rounds['seller_profit'].dropna().values
         
         if len(r_all_profits) > 0 and len(rw_all_profits) > 0:
-            # Create KDE plots
-            r_kde = stats.gaussian_kde(r_all_profits)
-            rw_kde = stats.gaussian_kde(rw_all_profits)
+            # Check if data is suitable for KDE (has variance and enough points)
+            r_has_variance = len(r_all_profits) > 1 and np.std(r_all_profits) > 1e-10
+            rw_has_variance = len(rw_all_profits) > 1 and np.std(rw_all_profits) > 1e-10
             
-            x_min = min(r_all_profits.min(), rw_all_profits.min())
-            x_max = max(r_all_profits.max(), rw_all_profits.max())
-            x_range = np.linspace(x_min, x_max, 200)
-            
-            axes[0, 1].plot(x_range, r_kde(x_range), label='Reputation-Only', 
-                        color=COLORS['reputation_only'], linewidth=2, alpha=0.6)
-            axes[0, 1].fill_between(x_range, r_kde(x_range), alpha=0.3, 
-                               color=COLORS['reputation_only'])
-            axes[0, 1].plot(x_range, rw_kde(x_range), label='Reputation+Warrant',
-                        color=COLORS['reputation_warrant'], linewidth=2, alpha=0.6)
-            axes[0, 1].fill_between(x_range, rw_kde(x_range), alpha=0.3,
-                               color=COLORS['reputation_warrant'])
+            if r_has_variance and rw_has_variance:
+                # Create KDE plots
+                r_kde = stats.gaussian_kde(r_all_profits)
+                rw_kde = stats.gaussian_kde(rw_all_profits)
+                
+                x_min = min(r_all_profits.min(), rw_all_profits.min())
+                x_max = max(r_all_profits.max(), rw_all_profits.max())
+                x_range = np.linspace(x_min, x_max, 200)
+                
+                axes[0, 1].plot(x_range, r_kde(x_range), label='Reputation-Only', 
+                            color=COLORS['reputation_only'], linewidth=2, alpha=0.6)
+                axes[0, 1].fill_between(x_range, r_kde(x_range), alpha=0.3, 
+                                   color=COLORS['reputation_only'])
+                axes[0, 1].plot(x_range, rw_kde(x_range), label='Reputation+Warrant',
+                            color=COLORS['reputation_warrant'], linewidth=2, alpha=0.6)
+                axes[0, 1].fill_between(x_range, rw_kde(x_range), alpha=0.3,
+                                   color=COLORS['reputation_warrant'])
+            else:
+                # Use histogram instead when variance is too low
+                axes[0, 1].hist(r_all_profits, bins=20, alpha=0.5, 
+                            label='Reputation-Only', color=COLORS['reputation_only'], 
+                            density=True, edgecolor='black', linewidth=0.5)
+                axes[0, 1].hist(rw_all_profits, bins=20, alpha=0.5,
+                            label='Reputation+Warrant', color=COLORS['reputation_warrant'],
+                            density=True, edgecolor='black', linewidth=0.5)
             
             # Add mean lines
             axes[0, 1].axvline(np.mean(r_all_profits), color=COLORS['reputation_only'],
@@ -467,22 +539,35 @@ class RQ2Visualizer:
         rw_all_utils = rw_rounds['buyer_utility'].dropna().values
         
         if len(r_all_utils) > 0 and len(rw_all_utils) > 0:
-            # Create KDE plots
-            r_kde = stats.gaussian_kde(r_all_utils)
-            rw_kde = stats.gaussian_kde(rw_all_utils)
+            # Check if data is suitable for KDE (has variance and enough points)
+            r_has_variance = len(r_all_utils) > 1 and np.std(r_all_utils) > 1e-10
+            rw_has_variance = len(rw_all_utils) > 1 and np.std(rw_all_utils) > 1e-10
             
-            x_min = min(r_all_utils.min(), rw_all_utils.min())
-            x_max = max(r_all_utils.max(), rw_all_utils.max())
-            x_range = np.linspace(x_min, x_max, 200)
-            
-            axes[1].plot(x_range, r_kde(x_range), label='Reputation-Only',
-                        color=COLORS['reputation_only'], linewidth=2, alpha=0.6)
-            axes[1].fill_between(x_range, r_kde(x_range), alpha=0.3,
-                               color=COLORS['reputation_only'])
-            axes[1].plot(x_range, rw_kde(x_range), label='Reputation+Warrant',
-                        color=COLORS['reputation_warrant'], linewidth=2, alpha=0.6)
-            axes[1].fill_between(x_range, rw_kde(x_range), alpha=0.3,
-                               color=COLORS['reputation_warrant'])
+            if r_has_variance and rw_has_variance:
+                # Create KDE plots
+                r_kde = stats.gaussian_kde(r_all_utils)
+                rw_kde = stats.gaussian_kde(rw_all_utils)
+                
+                x_min = min(r_all_utils.min(), rw_all_utils.min())
+                x_max = max(r_all_utils.max(), rw_all_utils.max())
+                x_range = np.linspace(x_min, x_max, 200)
+                
+                axes[1].plot(x_range, r_kde(x_range), label='Reputation-Only',
+                            color=COLORS['reputation_only'], linewidth=2, alpha=0.6)
+                axes[1].fill_between(x_range, r_kde(x_range), alpha=0.3,
+                                   color=COLORS['reputation_only'])
+                axes[1].plot(x_range, rw_kde(x_range), label='Reputation+Warrant',
+                            color=COLORS['reputation_warrant'], linewidth=2, alpha=0.6)
+                axes[1].fill_between(x_range, rw_kde(x_range), alpha=0.3,
+                                   color=COLORS['reputation_warrant'])
+            else:
+                # Use histogram instead when variance is too low
+                axes[1].hist(r_all_utils, bins=20, alpha=0.5,
+                            label='Reputation-Only', color=COLORS['reputation_only'],
+                            density=True, edgecolor='black', linewidth=0.5)
+                axes[1].hist(rw_all_utils, bins=20, alpha=0.5,
+                            label='Reputation+Warrant', color=COLORS['reputation_warrant'],
+                            density=True, edgecolor='black', linewidth=0.5)
             
             # Add mean lines
             axes[1].axvline(np.mean(r_all_utils), color=COLORS['reputation_only'],
@@ -516,24 +601,32 @@ class RQ2Visualizer:
             try:
                 conn = sqlite3.connect(db_file)
                 rep = pd.read_sql_query(
-                    "SELECT round, seller_id, public_reputation_score FROM reputation_history",
+                    "SELECT round, seller_id, public_thumbs_up, public_thumbs_down FROM reputation_history",
                     conn
                 )
+                # Calculate reputation score from thumbs_up and thumbs_down
+                if not rep.empty:
+                    rep['public_reputation_score'] = rep['public_thumbs_up'] - rep['public_thumbs_down']
                 r_reps.append(rep)
                 conn.close()
-            except:
+            except Exception as e:
+                print(f"Warning: Could not load reputation data from {db_file}: {e}")
                 pass
         
         for db_file in sorted(rw_exp_dir.glob("run_*.db")):
             try:
                 conn = sqlite3.connect(db_file)
                 rep = pd.read_sql_query(
-                    "SELECT round, seller_id, public_reputation_score FROM reputation_history",
+                    "SELECT round, seller_id, public_thumbs_up, public_thumbs_down FROM reputation_history",
                     conn
                 )
+                # Calculate reputation score from thumbs_up and thumbs_down
+                if not rep.empty:
+                    rep['public_reputation_score'] = rep['public_thumbs_up'] - rep['public_thumbs_down']
                 rw_reps.append(rep)
                 conn.close()
-            except:
+            except Exception as e:
+                print(f"Warning: Could not load reputation data from {db_file}: {e}")
                 pass
         
         if r_reps and rw_reps:
@@ -833,36 +926,62 @@ class RQ2Visualizer:
             rw_all_lq = rw_quality['lq_count'].dropna().values
             
             if len(r_all_hq) > 0 and len(rw_all_hq) > 0:
-                # Create KDE plots for HQ
-                r_hq_kde = stats.gaussian_kde(r_all_hq)
-                rw_hq_kde = stats.gaussian_kde(rw_all_hq)
+                # Check if data is suitable for KDE (has variance and enough points)
+                r_hq_has_variance = len(r_all_hq) > 1 and np.std(r_all_hq) > 1e-10
+                rw_hq_has_variance = len(rw_all_hq) > 1 and np.std(rw_all_hq) > 1e-10
                 
-                hq_min = min(r_all_hq.min(), rw_all_hq.min())
-                hq_max = max(r_all_hq.max(), rw_all_hq.max())
-                hq_range = np.linspace(hq_min, hq_max, 200)
-                
-                axes[0, 1].plot(hq_range, r_hq_kde(hq_range), label='Reputation-Only (HQ)',
-                               color=COLORS['hq'], linewidth=2, alpha=0.6)
-                axes[0, 1].fill_between(hq_range, r_hq_kde(hq_range), alpha=0.3, color=COLORS['hq'])
-                axes[0, 1].plot(hq_range, rw_hq_kde(hq_range), label='Reputation+Warrant (HQ)',
-                               color=COLORS['hq_rw'], linewidth=2, alpha=0.6)
-                axes[0, 1].fill_between(hq_range, rw_hq_kde(hq_range), alpha=0.3, color=COLORS['hq_rw'])
+                if r_hq_has_variance and rw_hq_has_variance:
+                    # Create KDE plots for HQ
+                    r_hq_kde = stats.gaussian_kde(r_all_hq)
+                    rw_hq_kde = stats.gaussian_kde(rw_all_hq)
+                    
+                    hq_min = min(r_all_hq.min(), rw_all_hq.min())
+                    hq_max = max(r_all_hq.max(), rw_all_hq.max())
+                    hq_range = np.linspace(hq_min, hq_max, 200)
+                    
+                    axes[0, 1].plot(hq_range, r_hq_kde(hq_range), label='Reputation-Only (HQ)',
+                                   color=COLORS['hq'], linewidth=2, alpha=0.6)
+                    axes[0, 1].fill_between(hq_range, r_hq_kde(hq_range), alpha=0.3, color=COLORS['hq'])
+                    axes[0, 1].plot(hq_range, rw_hq_kde(hq_range), label='Reputation+Warrant (HQ)',
+                                   color=COLORS['hq_rw'], linewidth=2, alpha=0.6)
+                    axes[0, 1].fill_between(hq_range, rw_hq_kde(hq_range), alpha=0.3, color=COLORS['hq_rw'])
+                else:
+                    # Use histogram instead when variance is too low
+                    axes[0, 1].hist(r_all_hq, bins=20, alpha=0.5,
+                                   label='Reputation-Only (HQ)', color=COLORS['hq'],
+                                   density=True, edgecolor='black', linewidth=0.5)
+                    axes[0, 1].hist(rw_all_hq, bins=20, alpha=0.5,
+                                   label='Reputation+Warrant (HQ)', color=COLORS['hq_rw'],
+                                   density=True, edgecolor='black', linewidth=0.5)
             
             if len(r_all_lq) > 0 and len(rw_all_lq) > 0:
-                # Create KDE plots for LQ
-                r_lq_kde = stats.gaussian_kde(r_all_lq)
-                rw_lq_kde = stats.gaussian_kde(rw_all_lq)
+                # Check if data is suitable for KDE (has variance and enough points)
+                r_lq_has_variance = len(r_all_lq) > 1 and np.std(r_all_lq) > 1e-10
+                rw_lq_has_variance = len(rw_all_lq) > 1 and np.std(rw_all_lq) > 1e-10
                 
-                lq_min = min(r_all_lq.min(), rw_all_lq.min())
-                lq_max = max(r_all_lq.max(), rw_all_lq.max())
-                lq_range = np.linspace(lq_min, lq_max, 200)
-                
-                axes[0, 1].plot(lq_range, r_lq_kde(lq_range), label='Reputation-Only (LQ)',
-                               color=COLORS['lq'], linewidth=2, alpha=0.6)
-                axes[0, 1].fill_between(lq_range, r_lq_kde(lq_range), alpha=0.3, color=COLORS['lq'])
-                axes[0, 1].plot(lq_range, rw_lq_kde(lq_range), label='Reputation+Warrant (LQ)',
-                               color=COLORS['lq_rw'], linewidth=2, alpha=0.6)
-                axes[0, 1].fill_between(lq_range, rw_lq_kde(lq_range), alpha=0.3, color=COLORS['lq_rw'])
+                if r_lq_has_variance and rw_lq_has_variance:
+                    # Create KDE plots for LQ
+                    r_lq_kde = stats.gaussian_kde(r_all_lq)
+                    rw_lq_kde = stats.gaussian_kde(rw_all_lq)
+                    
+                    lq_min = min(r_all_lq.min(), rw_all_lq.min())
+                    lq_max = max(r_all_lq.max(), rw_all_lq.max())
+                    lq_range = np.linspace(lq_min, lq_max, 200)
+                    
+                    axes[0, 1].plot(lq_range, r_lq_kde(lq_range), label='Reputation-Only (LQ)',
+                                   color=COLORS['lq'], linewidth=2, alpha=0.6)
+                    axes[0, 1].fill_between(lq_range, r_lq_kde(lq_range), alpha=0.3, color=COLORS['lq'])
+                    axes[0, 1].plot(lq_range, rw_lq_kde(lq_range), label='Reputation+Warrant (LQ)',
+                                   color=COLORS['lq_rw'], linewidth=2, alpha=0.6)
+                    axes[0, 1].fill_between(lq_range, rw_lq_kde(lq_range), alpha=0.3, color=COLORS['lq_rw'])
+                else:
+                    # Use histogram instead when variance is too low
+                    axes[0, 1].hist(r_all_lq, bins=20, alpha=0.5,
+                                   label='Reputation-Only (LQ)', color=COLORS['lq'],
+                                   density=True, edgecolor='black', linewidth=0.5)
+                    axes[0, 1].hist(rw_all_lq, bins=20, alpha=0.5,
+                                   label='Reputation+Warrant (LQ)', color=COLORS['lq_rw'],
+                                   density=True, edgecolor='black', linewidth=0.5)
         
         axes[0, 1].set_xlabel('Number of Products', fontweight='bold')
         axes[0, 1].set_ylabel('Density', fontweight='bold')

@@ -13,7 +13,7 @@ from .database import MarketDatabase
 from .agents import AgentManager
 from .logging import ActionLogger, SimulationLogger
 from .phases import (
-    SellerListingPhase, BuyerPurchasePhase, BuyerRatingPhase, CommunicationPhase
+    SellerListingPhase, BuyerPurchasePhase, BuyerRatingPhase, BuyerChallengePhase, CommunicationPhase
 )
 from camel.models import ModelFactory
 import oasis
@@ -193,6 +193,9 @@ class MarketSimulation:
         buyer_rating = BuyerRatingPhase(
             self.env, self.agent_graph, self.db_manager, self.action_logger, self.config
         )
+        buyer_challenge = BuyerChallengePhase(
+            self.env, self.agent_graph, self.db_manager, self.action_logger, self.config
+        )
         communication = CommunicationPhase(
             self.env, self.agent_graph, self.db_manager, self.action_logger, self.config
         )
@@ -211,8 +214,13 @@ class MarketSimulation:
         purchase_results = await buyer_purchase.execute(round_num)
         
         # Buyer rating phase
-        await buyer_rating.execute(round_num, purchase_results, market_type)
+        rating_results = await buyer_rating.execute(round_num, purchase_results, market_type)
         
+        # Buyer challenge phase (only for reputation_and_warrant market)
+        if market_type == 'reputation_and_warrant':
+            challenge_results = await buyer_challenge.execute(round_num, purchase_results, market_type)
+
+
         # Print round statistics
         from utils import print_round_statistics
         print_round_statistics(round_num, self.database_path)
@@ -296,7 +304,7 @@ class MarketSimulation:
         
         try:
             # Reset seller budgets to configured value
-            seller_budget = self.config.MARKET_PARAMS.get('seller_budget', 60.0)
+            seller_budget = self.config.MARKET_PARAMS.get('seller_budget', 18.0)
             cursor.execute("""
                 UPDATE user 
                 SET budget = ? 
@@ -304,7 +312,7 @@ class MarketSimulation:
             """, (seller_budget,))
             
             # Reset buyer budgets to configured value
-            buyer_budget = self.config.MARKET_PARAMS.get('buyer_budget', 18.0)
+            buyer_budget = self.config.MARKET_PARAMS.get('buyer_budget', 60.0)
             cursor.execute("""
                 UPDATE user 
                 SET budget = ? 

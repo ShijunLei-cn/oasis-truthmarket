@@ -105,7 +105,7 @@ def compute_and_update_reputation(conn: sqlite3.Connection, round_number: int, r
                 thumbs_up += rating  # +1 → +1, +2 → +2
             else:
                 thumbs_down += abs(rating)  # -1 → +1, -2 → +2
-                
+
         # Persist snapshot
         cursor.execute(
             """

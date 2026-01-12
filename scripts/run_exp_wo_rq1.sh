@@ -12,7 +12,7 @@ echo "=========================================="
 CONFIG_FILE="${CONFIG_FILE:-configs/rq1_experiment_0.yaml}"
 
 # Experiment configuration
-RUNS=10
+RUNS=5
 ROUNDS=10
 SELLERS=5
 BUYERS=5
@@ -56,7 +56,7 @@ echo "=========================================="
 
 # Example: Run without YAML config (uses default config.py)
 # python ./example/run_rq1_experiment.py \
-#     --runs 10 \
+#     --runs 5 \
 #     --rounds 10 \
 #     --sellers 5 \
 #     --buyers 5 \
@@ -66,7 +66,7 @@ echo "=========================================="
 
 # Example: Run with custom YAML config
 # CONFIG_FILE=configs/custom_rq1_config.yaml python ./example/run_rq1_experiment.py \
-#     --runs 10 \
+#     --runs 5 \
 #     --rounds 10 \
 #     --sellers 5 \
 #     --buyers 5 \

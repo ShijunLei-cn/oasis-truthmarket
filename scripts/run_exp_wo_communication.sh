@@ -14,13 +14,13 @@ CONFIG_FILE="${CONFIG_FILE:-configs/rq2_experiment_0.yaml}"
 echo ""
 echo "Running Reputation-Only Market experiments..."
 # echo "Using config: ${CONFIG_FILE:-default config.py}"
-python ./example/run_single_config_experiment.py \
-    --experiment-id rq2_0/r_wo \
-    --market-type reputation_only \
-    --communication none \
-    --communication-channel-type Fake \
-    --runs 10 \
-    --config "${CONFIG_FILE}"
+# python ./example/run_single_config_experiment.py \
+#     --experiment-id rq2_0/r_wo \
+#     --market-type reputation_only \
+#     --communication none \
+#     --communication-channel-type Fake \
+#     --runs 5 \
+#     --config "${CONFIG_FILE}"
 
 # Reputation and warrant market (no communication)
 echo ""
@@ -31,7 +31,7 @@ python ./example/run_single_config_experiment.py \
     --market-type reputation_and_warrant \
     --communication none \
     --communication-channel-type Fake \
-    --runs 10 \
+    --runs 5 \
     --config "${CONFIG_FILE}"
 
 echo ""
@@ -46,13 +46,13 @@ echo "=========================================="
 CONFIG_FILE=configs/rq2_experiment_1.yaml 
 
 # Example: Run without YAML config (uses default config.py)
-python ./example/run_single_config_experiment.py \
-    --experiment-id rq2_1/r_wo \
-    --market-type reputation_only \
-    --communication none \
-    --communication-channel-type Fake \
-    --runs 10 \
-    --config "${CONFIG_FILE}"
+# python ./example/run_single_config_experiment.py \
+#     --experiment-id rq2_1/r_wo \
+#     --market-type reputation_only \
+#     --communication none \
+#     --communication-channel-type Fake \
+#     --runs 5 \
+#     --config "${CONFIG_FILE}"
 
 
 python ./example/run_single_config_experiment.py \
@@ -60,20 +60,20 @@ python ./example/run_single_config_experiment.py \
     --market-type reputation_and_warrant \
     --communication none \
     --communication-channel-type Fake \
-    --runs 10 \
+    --runs 5 \
     --config "${CONFIG_FILE}"
 
 
 # Different Setting: Run with custom YAML config
 CONFIG_FILE=configs/rq2_experiment_2.yaml 
 
-python ./example/run_single_config_experiment.py \
-    --experiment-id rq2_2/r_wo \
-    --market-type reputation_only \
-    --communication none \
-    --communication-channel-type Fake \
-    --runs 10 \
-    --config "${CONFIG_FILE}"
+# python ./example/run_single_config_experiment.py \
+#     --experiment-id rq2_2/r_wo \
+#     --market-type reputation_only \
+#     --communication none \
+#     --communication-channel-type Fake \
+#     --runs 5 \
+#     --config "${CONFIG_FILE}"
 
 
 python ./example/run_single_config_experiment.py \
@@ -81,5 +81,5 @@ python ./example/run_single_config_experiment.py \
     --market-type reputation_and_warrant \
     --communication none \
     --communication-channel-type Fake \
-    --runs 10 \
+    --runs 5 \
     --config "${CONFIG_FILE}"

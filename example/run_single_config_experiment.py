@@ -160,6 +160,23 @@ Examples:
         """
     )
     
+    # Model configuration arguments (must be set first before loading config)
+    parser.add_argument(
+        '--model-platform',
+        dest='model_platform',
+        type=str,
+        default=None,
+        help='Model platform (e.g., openai, anthropic). Overrides config if provided.'
+    )
+    
+    parser.add_argument(
+        '--model-type',
+        dest='model_type',
+        type=str,
+        default=None,
+        help='Model type (e.g., gpt-4o-mini, claude-3-5-sonnet). Overrides config if provided.'
+    )
+    
     parser.add_argument(
         '--experiment-id',
         dest='experiment_id',
@@ -208,6 +225,15 @@ Examples:
     )
     
     args = parser.parse_args()
+    
+    # Set model platform and type BEFORE loading config (so they can override config values)
+    if args.model_platform:
+        SimulationConfig.MODEL_PLATFORM = args.model_platform
+        print(f"Using model platform from command line: {args.model_platform}")
+    
+    if args.model_type:
+        SimulationConfig.MODEL_TYPE = args.model_type
+        print(f"Using model type from command line: {args.model_type}")
     
     # Load configuration from YAML if provided
     load_config_from_yaml(args.config_file)

@@ -224,4 +224,5 @@ analysis/bkp
 analysis/exp**
 visualization/bkp
 visualization/*
+!visualization/table
 **/cache/

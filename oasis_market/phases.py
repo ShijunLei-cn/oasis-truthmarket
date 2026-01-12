@@ -165,7 +165,7 @@ class BuyerPurchasePhase(MarketPhase):
 
 
 class BuyerRatingPhase(MarketPhase):
-    """Handles buyer rating and challenge phase"""
+    """Handles buyer rating phase"""
     
     async def execute(self, round_num: int, purchase_results: List[Dict], market_type: str) -> None:
         """
@@ -179,13 +179,14 @@ class BuyerRatingPhase(MarketPhase):
         from .agents import AgentManager
         from .logging import SimulationLogger
         
-        SimulationLogger.print_phase_header(round_num, "Buyer Action Phase 2: Challenge & Rate")
+        SimulationLogger.print_phase_header(round_num, "Buyer Action Phase 2: Rate")
         
-        post_purchase_actions = {}
+        rating_purchase_actions = {}
         self.env.market_phase = "rating"
         
         successful_purchases = [res for res in purchase_results if res and res.get("success")]
-        
+        rating_results = None
+
         if successful_purchases:
             for purchase_result in successful_purchases:
                 agent_id = purchase_result.get("agent_id")
@@ -193,12 +194,6 @@ class BuyerRatingPhase(MarketPhase):
                     continue
                 
                 agent = self.agent_graph.get_agent(agent_id)
-                
-                # Handle multiple transactions from purchase_products
-                transactions = purchase_result.get("transactions", [])
-                if not transactions:
-                    # Fallback: if no transactions list, treat the whole result as a single transaction
-                    transactions = [purchase_result] if purchase_result.get("transaction_id") else []
                 
                 # Handle multiple transactions from purchase_products
                 transactions = purchase_result.get("transactions", [])
@@ -230,41 +225,117 @@ class BuyerRatingPhase(MarketPhase):
                 # Store the first transaction as last_purchase_info (for backward compatibility with env)
                 AgentManager.store_purchase_info(agent, transactions[0])
                 
-                # Store all transactions in a new attribute for rating phase
-                agent.all_purchase_transactions = transactions
-                
-                # Tools available for buyers in rating phase
+                # Tools available for buyers in rating phase (only rating, no challenge)
                 rating_tools = ['rate_transactions']
-                if market_type != 'reputation_only':
-                    rating_tools.append('challenge_warrants')
                 
                 # Prepare rating prompt
-                if market_type == 'reputation_only':
-                    buyer_rating_prompt = (
-                        "\n\nIn this phase, you are allowed to perform the rate_transactions action to rate transactions. "
-                        "Based on the market environment, product information, and your preferences, choose whether and which transactions to rate. "
-                        "You can rate multiple transactions at once. You cannot perform any other actions during this phase.\n"
-                    )
-                else:
-                    buyer_rating_prompt = (
-                        "\n\nIn this phase, you are allowed to perform the rate_transactions action to rate transactions. "
-                        "Or perform the challenge_warrants action to challenge the warrants of transactions. "
-                        "Based on the market environment, product information, and your preferences, choose whether and which transactions to rate or challenge. "
-                        "You can rate or challenge multiple transactions at once. You cannot perform any other actions during this phase.\n"
-                    )
+                buyer_rating_prompt = (
+                    "\n\nIn this phase, you are allowed to perform the rate_transactions action to rate transactions. "
+                    "Based on the market environment, product information, and your preferences, choose whether and which transactions to rate. "
+                    "You can rate multiple transactions at once. You cannot perform any other actions during this phase.\n"
+                )
                 
-                post_purchase_actions[agent] = LLMAction(
+                rating_purchase_actions[agent] = LLMAction(
                     extra_action=rating_tools,
                     extra_prompt=buyer_rating_prompt,
                     level="market"
                 )
         
-        if post_purchase_actions:
-            await self.env.step(post_purchase_actions)
+        if rating_purchase_actions:
+            rating_results = await self.env.step(rating_purchase_actions)
             self.action_logger.save_action_records(self.env, round_num, 'buyer_rating', self.agent_graph)
         
-        print("All post-purchase actions are complete.")
+        print("All rating actions are complete.")
 
+        return rating_results
+
+class BuyerChallengePhase(MarketPhase):
+    """Handles buyer challenge phase (only for reputation_and_warrant market)"""
+    
+    async def execute(self, round_num: int, purchase_results: List[Dict], market_type: str) -> None:
+        """
+        Execute buyer challenge phase
+        
+        Args:
+            round_num: Current round number
+            purchase_results: Results from purchase phase
+            market_type: Type of market ('reputation_only' or 'reputation_and_warrant')
+        """
+        from .agents import AgentManager
+        from .logging import SimulationLogger
+        
+        # Only execute challenge phase for reputation_and_warrant market
+        if market_type != 'reputation_and_warrant':
+            return
+        
+        SimulationLogger.print_phase_header(round_num, "Buyer Action Phase 3: Challenge Warrants")
+        
+        challenge_actions = {}
+        self.env.market_phase = "challenge"
+        
+        successful_purchases = [res for res in purchase_results if res and res.get("success")]
+        challenge_results = []
+
+        if successful_purchases:
+            for purchase_result in successful_purchases:
+                agent_id = purchase_result.get("agent_id")
+                if agent_id is None:
+                    continue
+                
+                agent = self.agent_graph.get_agent(agent_id)
+                
+                # Handle multiple transactions from purchase_products
+                transactions = purchase_result.get("transactions", [])
+                if not transactions:
+                    # Fallback: if no transactions list, treat the whole result as a single transaction
+                    transactions = [purchase_result] if purchase_result.get("transaction_id") else []
+                
+                # Only proceed if buyer has actual transactions
+                # Skip buyers who didn't purchase anything
+                if not transactions or not any(t.get("transaction_id") for t in transactions):
+                    continue
+                
+                # Ensure transactions are stored in agent (should already be set in rating phase)
+                if not hasattr(agent, 'all_purchase_transactions') or not agent.all_purchase_transactions:
+                    # Store all transactions information in agent
+                    for transaction in transactions:
+                        seller_id = transaction.get("seller_id")
+                        if seller_id:
+                            thumbs_up, thumbs_down = self.db_manager.get_user_reputation(seller_id)
+                            transaction["seller_thumbs_up"] = thumbs_up
+                            transaction["seller_thumbs_down"] = thumbs_down
+                        else:
+                            transaction["seller_thumbs_up"] = 0
+                            transaction["seller_thumbs_down"] = 0
+                    
+                    agent.all_purchase_transactions = transactions
+                    AgentManager.store_purchase_info(agent, transactions[0])
+                
+                # Tools available for buyers in challenge phase (only challenge)
+                challenge_tools = ['challenge_warrants']
+                
+                # Prepare challenge prompt
+                buyer_challenge_prompt = (
+                    "\n\nIn this phase, you are allowed to perform the challenge_warrants action to challenge the warrants of transactions. "
+                    "Based on the market environment, product information, and your preferences, choose whether and which warranted transactions to challenge. "
+                    "You can challenge multiple transactions at once. You cannot perform any other actions during this phase.\n"
+                )
+                
+                challenge_actions[agent] = LLMAction(
+                    extra_action=challenge_tools,
+                    extra_prompt=buyer_challenge_prompt,
+                    level="market"
+                )
+        
+        if challenge_actions:
+            challenge_results = await self.env.step(challenge_actions)
+            self.action_logger.save_action_records(self.env, round_num, 'buyer_challenge', self.agent_graph)
+        
+        for result in challenge_results:
+            if result.get("success"):
+                print("good")
+        print("All challenge actions are complete.")
+        return challenge_results
 
 class CommunicationPhase(MarketPhase):
     """Handles communication phases for sellers or buyers"""
@@ -303,17 +374,31 @@ class CommunicationPhase(MarketPhase):
                     state = AgentManager.prepare_buyer_state(agent, agent_id, round_num, self.db_manager)
                     self.env.current_round = round_num
                     
-                    # Get buyer's last transaction info if available
-                    last_purchase_info = getattr(agent, 'last_purchase_info', {})
-                    seller_id = last_purchase_info.get('seller_id', 'N/A')
-                    advertised_quality = last_purchase_info.get('advertised_quality', 'N/A')
-                    true_quality = last_purchase_info.get('true_quality', 'N/A')
+                    # Get buyer's transaction info if available (from previous rounds)
+                    # Note: Buyer communication happens BEFORE purchase phase, so this is from previous rounds
+                    all_transactions = getattr(agent, 'all_purchase_transactions', None)
+                    if all_transactions is None:
+                        # Fallback to last_purchase_info for backward compatibility
+                        last_purchase_info = getattr(agent, 'last_purchase_info', {})
+                        all_transactions = [last_purchase_info] if last_purchase_info.get('transaction_id') else []
                     
-                    communication_prompt = (
-                        "\n\nIn this phase, you are allowed to perform some social platform actions to communicate with other buyers. "
-                        "You cannot perform any other actions during this phase.\n"
-                        "You can share your purchase experience, product information, seller reputation, or any other information with other buyers to help them make purchase decisions.\n"
-                    )
+                    # Build communication prompt with transaction context if available
+                    if all_transactions and any(t.get('transaction_id') for t in all_transactions):
+                        # Buyer has previous purchase experience to share
+                        transaction_summary = f"You have {len(all_transactions)} previous transaction(s) from earlier rounds that you can share information about."
+                        communication_prompt = (
+                            f"\n\nIn this phase, you are allowed to perform some social platform actions to communicate with other buyers. "
+                            f"You cannot perform any other actions during this phase.\n"
+                            f"{transaction_summary}\n"
+                            f"You can share your purchase experience, product information, seller reputation, or any other information with other buyers to help them make purchase decisions.\n"
+                        )
+                    else:
+                        # First round or no previous purchases - buyer can still communicate but has no purchase history
+                        communication_prompt = (
+                            "\n\nIn this phase, you are allowed to perform some social platform actions to communicate with other buyers. "
+                            "You cannot perform any other actions during this phase.\n"
+                            "You can share your observations, expectations, or any other information with other buyers to help them make purchase decisions.\n"
+                        )
                 
                 # Common communication tools
                 communication_tools = ['create_post', 'quote_post', 'like_post', 'dislike_post']

@@ -348,6 +348,7 @@ class SocialEnvironment(Environment):
                 f"True Quality: {t.get('true_quality', 'N/A')}, "
                 f"Price: ${t.get('purchase_price', 0):.2f}, "
                 f"Utility: {t.get('buyer_utility', 0):.2f}"
+                + (f", Has Warrant: {t.get('has_warrant', False)}" if market_type != 'reputation_only' else "")
                 for t in valid_transactions
             ])
             
@@ -357,6 +358,87 @@ class SocialEnvironment(Environment):
                 transactions_text=transactions_text
             )
             return rating_prompt
+        
+        elif market_phase == "challenge" and role == "buyer":
+            # Buyer in challenge phase: observe specific product information after purchase (only for warranted products)
+            # Get all purchase transactions (for multiple purchases)
+            all_transactions = getattr(agent, 'all_purchase_transactions', None)
+            if all_transactions is None:
+                # Fallback to last_purchase_info for backward compatibility
+                purchase_info = getattr(agent, 'last_purchase_info', {})
+                all_transactions = [purchase_info] if purchase_info.get('transaction_id') else []
+            
+            # If no transactions, return a simple message
+            if not all_transactions or not any(t.get("transaction_id") for t in all_transactions):
+                return (
+                    f"# MARKET ENVIRONMENT OBSERVATION\n\n"
+                    f"## Your Status\n"
+                    f"- Round: {current_round}/{self.config.SIMULATION_ROUNDS}\n\n"
+                    f"You did not purchase any products in this round, so there are no transactions to challenge."
+                )
+            
+            # Filter out transactions without valid transaction_id and only include warranted products
+            valid_transactions = [
+                t for t in all_transactions 
+                if t.get('transaction_id') and t.get('has_warrant', False)
+            ]
+            if not valid_transactions:
+                return (
+                    f"# MARKET ENVIRONMENT OBSERVATION\n\n"
+                    f"## Your Status\n"
+                    f"- Round: {current_round}/{self.config.SIMULATION_ROUNDS}\n\n"
+                    f"You have no warranted products to challenge in this round."
+                )
+            
+            # Get market_type from agent profile
+            market_type = agent.user_info.profile.get("market_type", "reputation_and_warrant")
+            
+            # Collect all unique seller_ids from transactions
+            unique_seller_ids = list(set(t.get('seller_id') for t in valid_transactions if t.get('seller_id')))
+            
+            # Fetch brand_name and reputation for all sellers in one query
+            seller_info = {}
+            if unique_seller_ids:
+                try:
+                    conn = sqlite3.connect(self.db_path)
+                    cursor = conn.cursor()
+                    placeholders = ','.join('?' * len(unique_seller_ids))
+                    cursor.execute(f"SELECT user_id, brand_name, thumbs_up_count, thumbs_down_count FROM user WHERE user_id IN ({placeholders})", unique_seller_ids)
+                    for row in cursor.fetchall():
+                        seller_info[row[0]] = {
+                            'brand_name': row[1] if row[1] else 'Unknown',
+                            'thumbs_up': row[2] if row[2] else 0,
+                            'thumbs_down': row[3] if row[3] else 0
+                        }
+                    conn.close()
+                except Exception as e:
+                    print(f"Error fetching seller info: {e}")
+            
+            # Format transactions information for display with brand_name (only warranted products)
+            transactions_text = "\n".join([
+                f"  - Transaction ID: {t.get('transaction_id', 'N/A')}, "
+                f"Product ID: {t.get('product_id', 'N/A')}, "
+                f"Brand: {seller_info.get(t.get('seller_id'), {}).get('brand_name', 'Unknown')}, "
+                f"Advertised: {t.get('advertised_quality', 'N/A')}, "
+                f"True Quality: {t.get('true_quality', 'N/A')}, "
+                f"Price: ${t.get('purchase_price', 0):.2f}, "
+                f"Utility: {t.get('buyer_utility', 0):.2f}, "
+                f"Has Warrant: {t.get('has_warrant', False)}"
+                for t in valid_transactions
+            ])
+            
+            # Use challenge-specific prompt
+            challenge_prompt = (
+                f"# MARKET ENVIRONMENT OBSERVATION\n\n"
+                f"## Your Warranted Purchases in This Round:\n"
+                f"{transactions_text}\n\n"
+                f"Based on your purchase experiences and the product details, decide whether to challenge any warranted products.\n"
+                f"**Instructions:**\n"
+                f"- You can challenge warranted products where you received lower quality than advertised using `challenge_warrants()`\n"
+                f"- Challenging costs $1 but rewards you if the seller was fraudulent (e.g., $8 for HQ claims)\n"
+                f"- Only challenge if you received lower quality than advertised!\n"
+            )
+            return challenge_prompt
             
         else:
             # Other cases return basic environment information
