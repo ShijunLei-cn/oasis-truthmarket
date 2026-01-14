@@ -5,34 +5,124 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 import argparse
 import numpy as np
+import os
+from collections import defaultdict
+from typing import Dict, List, Any
 
 def load_probe_results(experiment_dir: str):
     """Load all cognitive probe results from the experiment directory."""
     path = Path(experiment_dir)
     all_results = []
     
+    if not path.exists():
+        print(f"ERROR: Experiment directory does not exist: {experiment_dir}")
+        return pd.DataFrame()
+    
     # Find all run_*_cognitive_probes.json files
     probe_files = list(path.glob("run_*_cognitive_probes.json"))
     if not probe_files:
-        print(f"Warning: No probe result files found in {experiment_dir}")
+        print(f"ERROR: No cognitive probe result files found in {experiment_dir}")
+        print(f"  Expected files: run_*_cognitive_probes.json")
+        print(f"  Available files in directory:")
+        for f in sorted(path.glob("run_*")):
+            print(f"    - {f.name}")
+        print(f"\n  This usually means:")
+        print(f"    1. RQ1 experiment did not run cognitive probes")
+        print(f"    2. Cognitive probe results were not saved")
+        print(f"    3. Files are in a different location")
         return pd.DataFrame()
-        
+    
+    print(f"Found {len(probe_files)} cognitive probe files")
     for file in probe_files:
         try:
             with open(file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
+                if not data:
+                    print(f"  Warning: {file.name} is empty")
+                    continue
+                # Add run identifier
+                run_id = file.stem.replace("_cognitive_probes", "").replace("run_", "")
+                for item in data:
+                    item["run_id"] = run_id
                 all_results.extend(data)
+                print(f"  Loaded {len(data)} probes from {file.name}")
         except Exception as e:
-            print(f"Error loading {file}: {e}")
+            print(f"  ERROR loading {file.name}: {e}")
+            import traceback
+            traceback.print_exc()
             
+    if not all_results:
+        print(f"ERROR: No probe results loaded from {experiment_dir}")
+        return pd.DataFrame()
+    
+    print(f"Total: {len(all_results)} probe results loaded")
     return pd.DataFrame(all_results)
+
+def calculate_statistics(df: pd.DataFrame) -> Dict[str, Any]:
+    """Calculate aggregate statistics from probe results."""
+    if df.empty:
+        return {"error": "No results found"}
+    
+    stats = {
+        "total_probes": len(df),
+        "total_manipulation_detected": int(df["manipulation_detected"].sum()),
+        "overall_manipulation_rate": float(df["manipulation_detected"].mean()),
+        "unique_agents": int(df["agent_id"].nunique()),
+        "unique_rounds": int(df["round_num"].nunique()),
+        "by_vulnerability_type": {},
+        "by_round": {},
+        "by_agent": {},
+    }
+    
+    # By vulnerability type
+    for vuln_type in df["vulnerability_type"].unique():
+        subset = df[df["vulnerability_type"] == vuln_type]
+        stats["by_vulnerability_type"][vuln_type] = {
+            "total_probes": int(len(subset)),
+            "manipulation_detected": int(subset["manipulation_detected"].sum()),
+            "manipulation_rate": float(subset["manipulation_detected"].mean()),
+            "agents_manipulating": list(
+                subset[subset["manipulation_detected"]]["agent_id"].unique()
+            ),
+        }
+        
+        # Severity for reputation lag
+        if vuln_type == "reputation_lag":
+            severities = subset["severity_score"].dropna()
+            if len(severities) > 0:
+                stats["by_vulnerability_type"][vuln_type]["avg_expected_lag"] = float(
+                    severities.mean()
+                )
+                stats["by_vulnerability_type"][vuln_type]["max_expected_lag"] = float(
+                    severities.max()
+                )
+    
+    # By round
+    for round_num in sorted(df["round_num"].unique()):
+        subset = df[df["round_num"] == round_num]
+        stats["by_round"][int(round_num)] = {
+            "total_probes": int(len(subset)),
+            "manipulation_detected": int(subset["manipulation_detected"].sum()),
+            "manipulation_rate": float(subset["manipulation_detected"].mean()),
+        }
+    
+    # By agent
+    for agent_id in sorted(df["agent_id"].unique()):
+        subset = df[df["agent_id"] == agent_id]
+        stats["by_agent"][int(agent_id)] = {
+            "total_probes": int(len(subset)),
+            "manipulation_detected": int(subset["manipulation_detected"].sum()),
+            "manipulation_rate": float(subset["manipulation_detected"].mean()),
+        }
+    
+    return stats
 
 def plot_manipulation_heatmap(df: pd.DataFrame, output_path: Path):
     """Create a heatmap of manipulation detection rates per seller and probe type."""
     if df.empty:
         print("No data to plot.")
         return
-
+    
     # Calculate detection rate: sum(manipulation_detected) / count(*)
     # Group by agent_id and vulnerability_type
     stats = df.groupby(['agent_id', 'vulnerability_type']).agg(
@@ -88,6 +178,423 @@ def plot_manipulation_heatmap(df: pd.DataFrame, output_path: Path):
     plt.close()
     print(f"✓ Generated heatmap: {output_path}")
 
+def plot_manipulation_by_vulnerability(stats: Dict, output_path: Path):
+    """Create bar chart of manipulation rates by vulnerability type."""
+    if "by_vulnerability_type" not in stats or not stats["by_vulnerability_type"]:
+        return
+    
+    vuln_data = stats["by_vulnerability_type"]
+    
+    # Prepare data
+    vuln_types = list(vuln_data.keys())
+    rates = [vuln_data[v]["manipulation_rate"] * 100 for v in vuln_types]
+    counts = [vuln_data[v]["manipulation_detected"] for v in vuln_types]
+    totals = [vuln_data[v]["total_probes"] for v in vuln_types]
+    
+    # Clean labels
+    labels = [v.replace("_", " ").title() for v in vuln_types]
+    
+    # Create figure
+    fig, ax = plt.subplots(figsize=(12, 6))
+    
+    # Colors
+    colors = ["#e74c3c", "#f39c12", "#3498db", "#2ecc71", "#9b59b6"]
+    
+    bars = ax.bar(
+        labels, rates, color=colors[: len(labels)], edgecolor="black", linewidth=1.2
+    )
+    
+    # Add value labels on bars
+    for bar, count, total in zip(bars, counts, totals):
+        height = bar.get_height()
+        ax.annotate(
+            f"{height:.1f}%\n({count}/{total})",
+            xy=(bar.get_x() + bar.get_width() / 2, height),
+            xytext=(0, 3),
+            textcoords="offset points",
+            ha="center",
+            va="bottom",
+            fontsize=10,
+            fontweight="bold",
+        )
+    
+    ax.set_ylabel("Manipulation Detection Rate (%)", fontsize=12)
+    ax.set_xlabel("Vulnerability Type", fontsize=12)
+    ax.set_title(
+        "RQ1: Manipulation Detection Rate by Vulnerability Type",
+        fontsize=14,
+        fontweight="bold",
+    )
+    ax.set_ylim(0, max(rates) * 1.3 if rates else 100)
+    
+    # Add grid
+    ax.yaxis.grid(True, linestyle="--", alpha=0.7)
+    ax.set_axisbelow(True)
+    
+    plt.xticks(rotation=15, ha="right")
+    plt.tight_layout()
+    
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.close()
+    print(f"✓ Generated vulnerability comparison: {output_path}")
+
+def plot_manipulation_over_rounds(stats: Dict, output_path: Path):
+    """Create line chart of manipulation trends over rounds."""
+    if "by_round" not in stats or not stats["by_round"]:
+        return
+    
+    round_data = stats["by_round"]
+    
+    rounds = sorted(round_data.keys())
+    rates = [round_data[r]["manipulation_rate"] * 100 for r in rounds]
+    
+    fig, ax = plt.subplots(figsize=(12, 6))
+    
+    ax.plot(rounds, rates, marker="o", linewidth=2, markersize=8, color="#e74c3c")
+    ax.fill_between(rounds, rates, alpha=0.3, color="#e74c3c")
+    
+    ax.set_xlabel("Round Number", fontsize=12)
+    ax.set_ylabel("Manipulation Detection Rate (%)", fontsize=12)
+    ax.set_title("RQ1: Manipulation Behavior Over Time", fontsize=14, fontweight="bold")
+    
+    ax.set_xticks(rounds)
+    ax.yaxis.grid(True, linestyle="--", alpha=0.7)
+    ax.set_axisbelow(True)
+    
+    # Highlight early rounds (initial window)
+    if len(rounds) >= 2:
+        ax.axvspan(0.5, 2.5, alpha=0.2, color="yellow", label="Initial Window")
+        ax.legend()
+    
+    plt.tight_layout()
+    
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.close()
+    print(f"✓ Generated temporal trend: {output_path}")
+
+def plot_option_distribution(df: pd.DataFrame, output_path: Path):
+    """Create stacked bar chart of option selections."""
+    if df.empty or "selected_option" not in df.columns:
+        return
+    
+    # Count options by vulnerability type
+    option_counts = (
+        df.groupby(["vulnerability_type", "selected_option"])
+        .size()
+        .unstack(fill_value=0)
+    )
+    
+    # Clean labels
+    option_counts.index = [v.replace("_", " ").title() for v in option_counts.index]
+    
+    fig, ax = plt.subplots(figsize=(12, 6))
+    
+    colors = {"A": "#e74c3c", "B": "#2ecc71", "C": "#3498db", None: "#95a5a6"}
+    
+    bottom = np.zeros(len(option_counts))
+    for option in ["A", "B", "C"]:
+        if option in option_counts.columns:
+            values = option_counts[option].values
+            ax.bar(
+                option_counts.index,
+                values,
+                bottom=bottom,
+                label=f"Option {option}",
+                color=colors.get(option, "#95a5a6"),
+            )
+            bottom += values
+    
+    ax.set_xlabel("Vulnerability Type", fontsize=12)
+    ax.set_ylabel("Number of Responses", fontsize=12)
+    ax.set_title(
+        "RQ1: Response Distribution by Vulnerability Type",
+        fontsize=14,
+        fontweight="bold",
+    )
+    ax.legend(title="Selected Option")
+    
+    plt.xticks(rotation=15, ha="right")
+    plt.tight_layout()
+    
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.close()
+    print(f"✓ Generated option distribution: {output_path}")
+
+def plot_reputation_lag_severity(df: pd.DataFrame, output_path: Path):
+    """Create histogram of expected reputation lag values."""
+    if df.empty:
+        return
+    
+    lag_data = df[df["vulnerability_type"] == "reputation_lag"][
+        "severity_score"
+    ].dropna()
+    
+    if len(lag_data) == 0:
+        return
+    
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    ax.hist(
+        lag_data,
+        bins=range(0, int(lag_data.max()) + 2),
+        color="#3498db",
+        edgecolor="black",
+        alpha=0.7,
+    )
+    
+    ax.axvline(
+        lag_data.mean(),
+        color="#e74c3c",
+        linestyle="--",
+        linewidth=2,
+        label=f"Mean: {lag_data.mean():.1f} rounds",
+    )
+    
+    ax.set_xlabel("Expected Reputation Lag (Rounds)", fontsize=12)
+    ax.set_ylabel("Frequency", fontsize=12)
+    ax.set_title(
+        "RQ1: Distribution of Expected Reputation Lag", fontsize=14, fontweight="bold"
+    )
+    ax.legend()
+    
+    plt.tight_layout()
+    
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.close()
+    print(f"✓ Generated reputation lag severity: {output_path}")
+
+def print_summary_report(stats: Dict):
+    """Print formatted summary report."""
+    if "error" in stats:
+        print(f"Error: {stats['error']}")
+        return
+    
+    print("\n" + "=" * 70)
+    print("RQ1 COGNITIVE PROBING ANALYSIS REPORT")
+    print("=" * 70)
+    
+    print(f"\n📊 OVERVIEW")
+    print(f"  Total Probes: {stats['total_probes']}")
+    print(f"  Manipulation Detected: {stats['total_manipulation_detected']}")
+    print(f"  Overall Rate: {stats['overall_manipulation_rate']*100:.1f}%")
+    print(f"  Unique Agents: {stats['unique_agents']}")
+    print(f"  Unique Rounds: {stats['unique_rounds']}")
+    
+    if stats.get("by_vulnerability_type"):
+        print(f"\n📋 BY VULNERABILITY TYPE")
+        for vuln_type, data in stats["by_vulnerability_type"].items():
+            label = vuln_type.replace("_", " ").upper()
+            print(f"\n  {label}:")
+            print(
+                f"    Manipulation Rate: {data['manipulation_rate']*100:.1f}% ({data['manipulation_detected']}/{data['total_probes']})"
+            )
+            if "avg_expected_lag" in data:
+                print(f"    Avg Expected Lag: {data['avg_expected_lag']:.1f} rounds")
+                print(f"    Max Expected Lag: {data['max_expected_lag']:.0f} rounds")
+            if data["agents_manipulating"]:
+                print(f"    Agents Detected: {data['agents_manipulating']}")
+    
+    print(f"\n🎯 KEY FINDINGS")
+    
+    # Find most exploited vulnerability
+    if stats.get("by_vulnerability_type"):
+        most_exploited = max(
+            stats["by_vulnerability_type"].items(),
+            key=lambda x: x[1]["manipulation_rate"],
+        )
+        print(
+            f"  Most Exploited: {most_exploited[0].replace('_', ' ').title()} ({most_exploited[1]['manipulation_rate']*100:.1f}%)"
+        )
+    
+    # Find most manipulative agent
+    if stats.get("by_agent"):
+        most_manipulative = max(
+            stats["by_agent"].items(), key=lambda x: x[1]["manipulation_rate"]
+        )
+        print(
+            f"  Most Manipulative Agent: Agent {most_manipulative[0]} ({most_manipulative[1]['manipulation_rate']*100:.1f}%)"
+        )
+    
+    print("\n" + "=" * 70)
+
+def _format_number(value: float, decimals: int = 2) -> str:
+    """Format number with specified decimal places"""
+    if pd.isna(value) or np.isnan(value):
+        return "N/A"
+    return f"{value:.{decimals}f}"
+
+def _generate_markdown_table(headers: List[str], rows: List[List[str]], 
+                             caption: str = "") -> str:
+    """Generate markdown table with three-line format"""
+    lines = []
+    
+    if caption:
+        lines.append(f"**{caption}**\n")
+    
+    # Header
+    lines.append("| " + " | ".join(headers) + " |")
+    lines.append("|" + "|".join(["---" for _ in headers]) + "|")
+    
+    # Rows
+    for row in rows:
+        lines.append("| " + " | ".join(row) + " |")
+    
+    return "\n".join(lines)
+
+def _generate_latex_table(headers: List[str], rows: List[List[str]], 
+                         caption: str = "", label: str = "") -> str:
+    """Generate LaTeX table with three-line format (booktabs style)"""
+    lines = []
+    lines.append("```latex")
+    lines.append("\\begin{table}[htbp]")
+    lines.append("\\centering")
+    if caption:
+        lines.append(f"\\caption{{{caption}}}")
+    if label:
+        lines.append(f"\\label{{{label}}}")
+    # Auto-detect column alignment (use 'c' for all columns, can be customized)
+    col_spec = "c" * len(headers)
+    lines.append(f"\\begin{{tabular}}{{{col_spec}}}")
+    lines.append("\\toprule")
+    lines.append(" & ".join(headers) + " \\\\")
+    lines.append("\\midrule")
+    
+    for row in rows:
+        lines.append(" & ".join(row) + " \\\\")
+    
+    lines.append("\\bottomrule")
+    lines.append("\\end{tabular}")
+    lines.append("\\end{table}")
+    lines.append("```")
+    
+    return "\n".join(lines)
+
+def generate_tables(df: pd.DataFrame, stats: Dict, output_dir: Path):
+    """Generate all tables for RQ1 analysis"""
+    if df.empty:
+        print("⚠️  Warning: No data available for table generation")
+        return
+    
+    if "error" in stats:
+        print(f"⚠️  Warning: Error in statistics: {stats.get('error')}")
+        return
+    
+    table_dir = Path("visualization/table")
+    table_dir.mkdir(parents=True, exist_ok=True)
+    
+    print(f"\n📊 Generating RQ1 tables...")
+    
+    # 1. Manipulation Detection by Vulnerability Type
+    if stats.get("by_vulnerability_type"):
+        headers = ["Vulnerability Type", "Total Probes", "Manipulation Detected", 
+                  "Detection Rate (%)", "Agents Detected"]
+        rows = []
+        for vuln_type, data in sorted(stats["by_vulnerability_type"].items()):
+            label = vuln_type.replace("_", " ").title()
+            rate_pct = data['manipulation_rate'] * 100
+            agents_str = ", ".join(map(str, data['agents_manipulating'])) if data['agents_manipulating'] else "None"
+            rows.append([
+                label,
+                str(data['total_probes']),
+                str(data['manipulation_detected']),
+                _format_number(rate_pct, 1),
+                agents_str
+            ])
+        
+        md_table = _generate_markdown_table(headers, rows, 
+                                           "Manipulation Detection by Vulnerability Type")
+        latex_table = _generate_latex_table(headers, rows,
+                                          "Manipulation Detection by Vulnerability Type",
+                                          "tab:rq1_vulnerability")
+        
+        table_file = table_dir / "rq1_vulnerability_detection.md"
+        with open(table_file, 'w', encoding='utf-8') as f:
+            f.write(md_table)
+            f.write("\n\n")
+            f.write(latex_table)
+        print(f"  ✓ Generated: rq1_vulnerability_detection.md")
+    
+    # 2. Manipulation Detection by Seller
+    if stats.get("by_agent"):
+        headers = ["Seller ID", "Total Probes", "Manipulation Detected", "Detection Rate (%)"]
+        rows = []
+        for agent_id, data in sorted(stats["by_agent"].items()):
+            rate_pct = data['manipulation_rate'] * 100
+            rows.append([
+                str(agent_id),
+                str(data['total_probes']),
+                str(data['manipulation_detected']),
+                _format_number(rate_pct, 1)
+            ])
+        
+        md_table = _generate_markdown_table(headers, rows, 
+                                           "Manipulation Detection by Seller")
+        latex_table = _generate_latex_table(headers, rows,
+                                          "Manipulation Detection by Seller",
+                                          "tab:rq1_seller")
+        
+        table_file = table_dir / "rq1_seller_detection.md"
+        with open(table_file, 'w', encoding='utf-8') as f:
+            f.write(md_table)
+            f.write("\n\n")
+            f.write(latex_table)
+        print(f"  ✓ Generated: rq1_seller_detection.md")
+    
+    # 3. Manipulation Detection by Round
+    if stats.get("by_round"):
+        headers = ["Round", "Total Probes", "Manipulation Detected", "Detection Rate (%)"]
+        rows = []
+        for round_num, data in sorted(stats["by_round"].items()):
+            rate_pct = data['manipulation_rate'] * 100
+            rows.append([
+                str(round_num),
+                str(data['total_probes']),
+                str(data['manipulation_detected']),
+                _format_number(rate_pct, 1)
+            ])
+        
+        md_table = _generate_markdown_table(headers, rows, 
+                                           "Manipulation Detection by Round")
+        latex_table = _generate_latex_table(headers, rows,
+                                          "Manipulation Detection by Round",
+                                          "tab:rq1_round")
+        
+        table_file = table_dir / "rq1_round_detection.md"
+        with open(table_file, 'w', encoding='utf-8') as f:
+            f.write(md_table)
+            f.write("\n\n")
+            f.write(latex_table)
+        print(f"  ✓ Generated: rq1_round_detection.md")
+    
+    # 4. Overall Summary Statistics
+    headers = ["Metric", "Value"]
+    rows = [
+        ["Total Probes", str(stats['total_probes'])],
+        ["Manipulation Detected", str(stats['total_manipulation_detected'])],
+        ["Overall Detection Rate (%)", _format_number(stats['overall_manipulation_rate'] * 100, 1)],
+        ["Unique Agents", str(stats['unique_agents'])],
+        ["Unique Rounds", str(stats['unique_rounds'])]
+    ]
+    
+    md_table = _generate_markdown_table(headers, rows, 
+                                       "RQ1 Overall Summary Statistics")
+    latex_table = _generate_latex_table(headers, rows,
+                                      "RQ1 Overall Summary Statistics",
+                                      "tab:rq1_summary")
+    
+    table_file = table_dir / "rq1_summary_statistics.md"
+    with open(table_file, 'w', encoding='utf-8') as f:
+        f.write(md_table)
+        f.write("\n\n")
+        f.write(latex_table)
+    print(f"  ✓ Generated: rq1_summary_statistics.md")
+    
+    print(f"\n✅ All tables generated in: {table_dir}")
+
 def extract_prefix_from_path(path_str: str) -> str:
     """Extract prefix from path (e.g., 'experiments/1230/r_wo' -> '1230', '1230/r_wo' -> '1230')"""
     path = Path(path_str)
@@ -108,12 +615,18 @@ def extract_prefix_from_path(path_str: str) -> str:
     for part in parts:
         if part and part[0].isdigit():
             return part
+    
+    # Try to extract from paper/rq1/r_wo format
+    if 'paper' in parts:
+        return 'paper'
+    
     return ""
 
 def main():
     parser = argparse.ArgumentParser(description="Visualize RQ1 Cognitive Probe Results")
     parser.add_argument("--input-dir", type=str, required=True, help="Directory containing run_*_cognitive_probes.json")
     parser.add_argument("--output-dir", type=str, default=None, help="Directory to save figures (default: visualization/figs/{prefix}/rq1_analysis)")
+    parser.add_argument("--save-stats", action="store_true", help="Save statistics JSON file")
     
     args = parser.parse_args()
     
@@ -129,17 +642,77 @@ def main():
     else:
         output_dir = Path(args.output_dir)
     
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
     print(f"Analyzing probe results in {input_path}...")
+    if not input_path.exists():
+        print(f"ERROR: Input directory does not exist: {input_path}")
+        print(f"Please check the experiment directory path.")
+        return
+    
     df = load_probe_results(args.input_dir)
     
-    if not df.empty:
-        # Plot 1: Heatmap
-        plot_manipulation_heatmap(df, output_dir / "1_manipulation_heatmap.png")
-        
-        # We can add more plots later if needed
-    else:
-        print("Analysis skipped due to lack of data.")
+    if df.empty:
+        print("\n" + "="*70)
+        print("ERROR: No data available for visualization")
+        print("="*70)
+        print(f"Input directory: {input_path}")
+        print(f"Output directory: {output_dir}")
+        print("\nPossible reasons:")
+        print("  1. RQ1 experiment did not generate cognitive probe files")
+        print("  2. Cognitive probe files are missing or in wrong location")
+        print("  3. Experiment did not complete successfully")
+        print("\nTo fix:")
+        print("  1. Re-run RQ1 experiment: python example/run_rq1_experiment.py ...")
+        print("  2. Check that cognitive probes are enabled and running")
+        print("  3. Verify files are saved as: run_*_cognitive_probes.json")
+        print("="*70)
+        return
+    
+    print(f"   Loaded {len(df)} probe results")
+    
+    # Calculate statistics
+    print(f"\n📊 Calculating statistics...")
+    stats = calculate_statistics(df)
+    
+    # Save statistics if requested
+    if args.save_stats:
+        import json
+        stats_path = output_dir / "rq1_statistics.json"
+        with open(stats_path, "w") as f:
+            json.dump(stats, f, indent=2, default=str)
+        print(f"   Saved: {stats_path}")
+    
+    # Generate visualizations
+    print(f"\n📈 Generating visualizations...")
+    
+    # 1. Heatmap (agent x vulnerability type)
+    plot_manipulation_heatmap(df, output_dir / "1_manipulation_heatmap.png")
+    
+    # 2. Manipulation rate by vulnerability type
+    plot_manipulation_by_vulnerability(stats, output_dir / "2_manipulation_by_vulnerability.png")
+    
+    # 3. Manipulation trends over rounds
+    plot_manipulation_over_rounds(stats, output_dir / "3_manipulation_over_rounds.png")
+    
+    # 4. Option distribution
+    plot_option_distribution(df, output_dir / "4_option_distribution.png")
+    
+    # 5. Reputation lag severity
+    plot_reputation_lag_severity(df, output_dir / "5_reputation_lag_severity.png")
+    
+    # Print summary report
+    print_summary_report(stats)
+    
+    # Generate tables
+    try:
+        generate_tables(df, stats, output_dir)
+    except Exception as e:
+        print(f"⚠️  Warning: Table generation failed: {e}")
+        import traceback
+        traceback.print_exc()
+    
+    print(f"\n✅ Analysis complete! Results saved to: {output_dir}")
 
 if __name__ == "__main__":
     main()
-

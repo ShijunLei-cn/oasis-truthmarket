@@ -278,7 +278,7 @@ Make each seller distinct by varying:
    - +2 = very good, +1 = good, 0 = neutral, -1 = bad, -2 = very bad
    - Your Rating is tracked as 👍 thumbs-up and 👎 thumbs-down counts
    - A higher rating may attract more buyers
-         """,
+        """,
             "reputation_and_warrant": f"""
 ## Reputation & Truth Warrant System
 
@@ -297,7 +297,7 @@ Make each seller distinct by varying:
        - **Catching misleading LQ claim**: Lose ${lq_warrant_escrow:.1f} points
      - This penalty overrides any sales income from that transaction
    - Your warrant is only at risk if you are challenged for false advertising
-         """,
+        """,
     }
 
     # Keep MARKET_RULES as class property for backward compatibility
@@ -638,7 +638,7 @@ Make each buyer distinct by varying:
 3. Use seller ratings to guide your purchasing decisions
 4. There is NO warranty/challenge system in this market
 5. You cannot challenge purchases after buying
-         """,
+        """,
             "reputation_and_warrant": f"""
 ## Reputation & Truth Warrant System
 
@@ -655,7 +655,7 @@ Make each buyer distinct by varying:
      - **Winning challenge against LQ claim**: Earn ${lq_warrant_escrow:.1f} points
    - **If the warrant was honest**: You lose your ${challenge_cost:.1f} challenge fee
    - Only challenge warranted products where you received lower quality than advertised!
-         """,
+        """,
     }
 
     # Keep MARKET_RULES as class property for backward compatibility
@@ -813,7 +813,7 @@ Based on the feedback from previous rounds and current market conditions, decide
 ## Purchase Decision
 Based on the available products and seller ratings, decide which products to purchase.
 """
-            )
+    )
         else:
             return TextPrompt(
                 """
@@ -867,7 +867,7 @@ Rate on a scale from -2 to +2: -2 (very bad), -1 (bad), 0 (neutral), +1 (good), 
 - Consider each product's quality relative to its advertised quality
 - Be honest in your ratings to help other buyers make informed decisions
 """
-            )
+    )
         else:
             return TextPrompt(
                 """

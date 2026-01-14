@@ -141,14 +141,26 @@ def _get_reputation_history(cursor: sqlite3.Cursor, seller_id: int):
     """Get reputation history for the seller"""
     cursor.execute(
         """
-        SELECT round, public_reputation_score
+        SELECT round, public_thumbs_up, public_thumbs_down
         FROM reputation_history
         WHERE seller_id = ?
         ORDER BY round ASC
         """,
         (seller_id,),
     )
-    return {int(r): float(rep) for r, rep in cursor.fetchall()}
+    # Calculate reputation score from thumbs_up and thumbs_down
+    reputation_history = {}
+    for r, thumbs_up, thumbs_down in cursor.fetchall():
+        thumbs_up = thumbs_up or 0
+        thumbs_down = thumbs_down or 0
+        total = thumbs_up + thumbs_down
+        if total > 0:
+            # Reputation score: (thumbs_up - thumbs_down) / (thumbs_up + thumbs_down)
+            rep_score = (thumbs_up - thumbs_down) / total
+        else:
+            rep_score = 0.0
+        reputation_history[int(r)] = float(rep_score)
+    return reputation_history
 
 
 def _detect_systematic_deception(deception_pattern: list, threshold: float = 0.7) -> Tuple[bool, float]:

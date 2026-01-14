@@ -247,17 +247,17 @@ Please respond with:
                     final_prompt = f"=== COGNITIVE PROBE: {probe_type.value.upper()} (Round {round_num}) ===\n\n{prompt}"
                     
                     action = ManualAction(
-                        action_type=ActionType.INTERVIEW,
-                        action_args={
+                    action_type=ActionType.INTERVIEW,
+                    action_args={
                             "prompt": final_prompt,
-                            "metadata": {
-                                "round_num": round_num,
-                                "agent_id": agent_id,
+                        "metadata": {
+                            "round_num": round_num,
+                            "agent_id": agent_id,
                                 "probe_type": probe_type.value,
                                 "context": context
-                            },
                         },
-                    )
+                    },
+                )
                     probe_actions.append((agent, probe_type, action))
 
         return probe_actions
@@ -426,10 +426,31 @@ Please respond with:
 
         results_data = [asdict(r) for r in self.probe_results]
 
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(results_data, f, indent=2, ensure_ascii=False, default=str)
+        # Debug: Print information about probe results
+        print(f"\n[DEBUG] Saving probe results:")
+        print(f"  Database path: {self.database_path}")
+        print(f"  Output path: {output_path}")
+        print(f"  Total probe results: {len(self.probe_results)}")
+        print(f"  Results data length: {len(results_data)}")
 
-        print(f"Saved {len(results_data)} probe results to {output_path}")
+        try:
+            with open(output_path, "w", encoding="utf-8") as f:
+                json.dump(results_data, f, indent=2, ensure_ascii=False, default=str)
+
+                print(f"✓ Saved {len(results_data)} probe results to {output_path}")
+                
+                # Verify file was created
+                if os.path.exists(output_path):
+                    file_size = os.path.getsize(output_path)
+                    print(f"  File created successfully (size: {file_size} bytes)")
+                else:
+                    print(f"  ⚠️  Warning: File was not created at {output_path}")
+        except Exception as e:
+            print(f"  ❌ Error saving probe results: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
+        
         return output_path
 
     def query_from_trace_table(self) -> List[Dict]:
@@ -499,6 +520,8 @@ async def run_cognitive_probes(
     probe_actions_list = prober.create_probe_actions(agent_graph, round_num, probe_types)
 
     if not probe_actions_list:
+        print(f"  [Probing] Warning: No probe actions created for round {round_num}")
+        print(f"    This may indicate that probe trigger conditions were not met")
         return []
 
     print(f"  [Probing] Running {len(probe_actions_list)} individual cognitive probes...")

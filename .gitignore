@@ -223,6 +223,8 @@ configs
 analysis/bkp
 analysis/exp**
 visualization/bkp
-visualization/*
-!visualization/table
+visualization/table/
+visualization/figs/
+visualization/cache/
 **/cache/
+paper/*

@@ -90,9 +90,15 @@ class RQ3Visualizer:
     """RQ3 Communication Channel Impact Visualizer"""
     
     def _extract_prefix_from_exp_id(self, exp_id: str) -> str:
-        """Extract prefix from experiment ID (e.g., '1230/r_wo' -> '1230')"""
+        """Extract prefix from experiment ID (e.g., 'gpt-4o-mini/paper/rq3/r_wsc_F' -> 'gpt-4o-mini/paper')"""
         if '/' in exp_id:
-            return exp_id.split('/')[0]
+            parts = exp_id.split('/')
+            # If contains 'paper', extract up to and including 'paper'
+            if 'paper' in parts:
+                paper_idx = parts.index('paper')
+                return '/'.join(parts[:paper_idx + 1])
+            # Otherwise, return first part (backward compatibility)
+            return parts[0]
         return ""
     
     def __init__(self, experiment_ids: Dict[str, str], output_dir: Optional[str] = None):
@@ -205,7 +211,16 @@ class RQ3Visualizer:
         exp_dir = Path(f"experiments/{exp_id}")
         all_rounds_data = []
         
-        for db_file in sorted(exp_dir.glob("run_*.db")):
+        if not exp_dir.exists():
+            print(f"Warning: Experiment directory not found: {exp_dir}")
+            return pd.DataFrame()
+        
+        db_files = list(sorted(exp_dir.glob("run_*.db")))
+        if not db_files:
+            print(f"Warning: No database files found in {exp_dir}")
+            return pd.DataFrame()
+        
+        for db_file in db_files:
             run_id = int(db_file.stem.split('_')[1])
             try:
                 conn = sqlite3.connect(db_file)
@@ -222,31 +237,65 @@ class RQ3Visualizer:
                     conn
                 )
                 
-                # Load reputation history
+                # Load reputation history (using correct column names)
                 reputation = pd.read_sql_query(
-                    "SELECT round, seller_id, public_reputation_score FROM reputation_history",
+                    "SELECT round, seller_id, public_thumbs_up, public_thumbs_down FROM reputation_history",
                     conn
                 )
                 
                 conn.close()
                 
+                # Calculate reputation score from thumbs up/down
+                if not reputation.empty:
+                    # Reputation score = (thumbs_up - thumbs_down) / (thumbs_up + thumbs_down + 1)
+                    # Add 1 to avoid division by zero
+                    total_feedback = reputation['public_thumbs_up'] + reputation['public_thumbs_down'] + 1
+                    reputation['reputation_score'] = (reputation['public_thumbs_up'] - reputation['public_thumbs_down']) / total_feedback
+                else:
+                    reputation['reputation_score'] = pd.Series(dtype=float)
+                
                 # Get actual round numbers from data
                 all_round_numbers = set()
                 if not transactions.empty:
-                    all_round_numbers.update(transactions['round_number'].unique())
+                    all_round_numbers.update(transactions['round_number'].dropna().unique())
                 if not products.empty:
-                    all_round_numbers.update(products['round_number'].unique())
+                    all_round_numbers.update(products['round_number'].dropna().unique())
                 if not reputation.empty:
-                    all_round_numbers.update(reputation['round'].unique())
+                    all_round_numbers.update(reputation['round'].dropna().unique())
+                
+                if not all_round_numbers:
+                    print(f"Warning: No round data found in {db_file}")
+                    continue
                 
                 # Aggregate by round
                 for round_num in sorted(all_round_numbers):
                     if pd.isna(round_num):
                         continue
                     round_num = int(round_num)
-                    round_trans = transactions[transactions['round_number'] == round_num]
-                    round_prod = products[products['round_number'] == round_num]
-                    round_rep = reputation[reputation['round'] == round_num]
+                    round_trans = transactions[transactions['round_number'] == round_num] if not transactions.empty else pd.DataFrame()
+                    round_prod = products[products['round_number'] == round_num] if not products.empty else pd.DataFrame()
+                    round_rep = reputation[reputation['round'] == round_num] if not reputation.empty else pd.DataFrame()
+                    
+                    # Calculate averages
+                    avg_price_hq = np.nan
+                    if not round_prod.empty:
+                        hq_prod = round_prod[round_prod['advertised_quality'] == 'HQ']
+                        if not hq_prod.empty:
+                            avg_price_hq = hq_prod['price'].mean()
+                    
+                    avg_price_lq = np.nan
+                    if not round_prod.empty:
+                        lq_prod = round_prod[round_prod['advertised_quality'] == 'LQ']
+                        if not lq_prod.empty:
+                            avg_price_lq = lq_prod['price'].mean()
+                    
+                    avg_reputation = np.nan
+                    if not round_rep.empty and 'reputation_score' in round_rep.columns:
+                        avg_reputation = round_rep['reputation_score'].mean()
+                    
+                    deceptions = 0
+                    if not round_prod.empty:
+                        deceptions = len(round_prod[(round_prod['advertised_quality'] == 'HQ') & (round_prod['true_quality'] == 'LQ')])
                     
                     all_rounds_data.append({
                         'run_id': run_id,
@@ -254,15 +303,255 @@ class RQ3Visualizer:
                         'seller_profit': round_trans['seller_profit'].sum() if not round_trans.empty else 0,
                         'buyer_utility': round_trans['buyer_utility'].sum() if not round_trans.empty else 0,
                         'transactions': len(round_trans),
-                        'avg_price_hq': round_prod[round_prod['advertised_quality'] == 'HQ']['price'].mean() if not round_prod[round_prod['advertised_quality'] == 'HQ'].empty else np.nan,
-                        'avg_price_lq': round_prod[round_prod['advertised_quality'] == 'LQ']['price'].mean() if not round_prod[round_prod['advertised_quality'] == 'LQ'].empty else np.nan,
-                        'avg_reputation': round_rep['public_reputation_score'].mean() if not round_rep.empty else np.nan,
-                        'deceptions': len(round_prod[(round_prod['advertised_quality'] == 'HQ') & (round_prod['true_quality'] == 'LQ')]),
+                        'avg_price_hq': avg_price_hq,
+                        'avg_price_lq': avg_price_lq,
+                        'avg_reputation': avg_reputation,
+                        'deceptions': deceptions,
                     })
             except Exception as e:
                 print(f"Warning: Could not load data from {db_file}: {e}")
+                import traceback
+                traceback.print_exc()
+        
+        if not all_rounds_data:
+            print(f"Warning: No round data loaded for experiment {exp_id}")
+            return pd.DataFrame()
+        
+        df = pd.DataFrame(all_rounds_data)
+        print(f"Loaded {len(df)} round records from {len(db_files)} database files for {exp_id}")
+        return df
+    
+    def _load_round_profit_by_type(self, exp_id: str) -> pd.DataFrame:
+        """Load round-by-round data with honest/dishonest profit breakdown"""
+        exp_dir = Path(f"experiments/{exp_id}")
+        all_rounds_data = []
+        
+        for db_file in sorted(exp_dir.glob("run_*.db")):
+            run_id = int(db_file.stem.split('_')[1])
+            try:
+                conn = sqlite3.connect(db_file)
+                
+                # Load transactions with product quality information
+                transactions = pd.read_sql_query(
+                    "SELECT t.round_number, t.seller_profit, p.advertised_quality, p.true_quality "
+                    "FROM transactions t JOIN product p ON t.product_id = p.product_id",
+                    conn
+                )
+                
+                conn.close()
+                
+                if not transactions.empty:
+                    # Ensure quality values are strings and strip whitespace
+                    transactions['advertised_quality'] = transactions['advertised_quality'].astype(str).str.strip()
+                    transactions['true_quality'] = transactions['true_quality'].astype(str).str.strip()
+                    
+                    # Filter valid quality values
+                    valid_quality_mask = (
+                        (transactions['advertised_quality'].isin(['HQ', 'LQ'])) &
+                        (transactions['true_quality'].isin(['HQ', 'LQ']))
+                    )
+                    
+                    # Identify dishonest transactions: advertised HQ but delivered LQ
+                    dishonest_mask = (
+                        valid_quality_mask &
+                        (transactions['advertised_quality'] == 'HQ') & 
+                        (transactions['true_quality'] == 'LQ')
+                    )
+                    
+                    honest_mask = valid_quality_mask & ~dishonest_mask
+                    
+                    # Aggregate by round
+                    all_round_numbers = sorted(transactions['round_number'].dropna().unique())
+                    for round_num in all_round_numbers:
+                        round_num = int(round_num)
+                        round_trans = transactions[transactions['round_number'] == round_num]
+                        
+                        # Apply masks to the round-specific transactions
+                        round_valid_mask = (
+                            (round_trans['advertised_quality'].isin(['HQ', 'LQ'])) &
+                            (round_trans['true_quality'].isin(['HQ', 'LQ']))
+                        )
+                        round_dishonest_mask = (
+                            round_valid_mask &
+                            (round_trans['advertised_quality'] == 'HQ') & 
+                            (round_trans['true_quality'] == 'LQ')
+                        )
+                        round_honest_mask = round_valid_mask & ~round_dishonest_mask
+                        
+                        round_dishonest = round_trans[round_dishonest_mask]
+                        round_honest = round_trans[round_honest_mask]
+                        
+                        all_rounds_data.append({
+                            'run_id': run_id,
+                            'round': round_num,
+                            'honest_profit': round_honest['seller_profit'].fillna(0).sum(),
+                            'dishonest_profit': round_dishonest['seller_profit'].fillna(0).sum(),
+                        })
+            except Exception as e:
+                print(f"Warning: Could not load profit data from {db_file}: {e}")
         
         return pd.DataFrame(all_rounds_data)
+    
+    def _load_ratings_by_quality(self, exp_id: str) -> pd.DataFrame:
+        """Load rating data grouped by product quality"""
+        exp_dir = Path(f"experiments/{exp_id}")
+        all_ratings = []
+        
+        for db_file in sorted(exp_dir.glob("run_*.db")):
+            try:
+                conn = sqlite3.connect(db_file)
+                
+                # Join transactions with products to get quality information
+                ratings = pd.read_sql_query(
+                    """
+                    SELECT t.round_number, t.rating, p.true_quality
+                    FROM transactions t
+                    JOIN product p ON t.product_id = p.product_id
+                    WHERE t.rating IS NOT NULL
+                    """,
+                    conn
+                )
+                
+                conn.close()
+                
+                if not ratings.empty:
+                    # Ensure quality values are strings and strip whitespace
+                    ratings['true_quality'] = ratings['true_quality'].astype(str).str.strip()
+                    # Filter valid quality values
+                    ratings = ratings[ratings['true_quality'].isin(['HQ', 'LQ'])]
+                    all_ratings.append(ratings)
+            except Exception as e:
+                print(f"Warning: Could not load rating data from {db_file}: {e}")
+        
+        if all_ratings:
+            return pd.concat(all_ratings, ignore_index=True)
+        return pd.DataFrame(columns=['round_number', 'rating', 'true_quality'])
+    
+    def _load_product_quality_data(self, exp_id: str) -> pd.DataFrame:
+        """Load product quality data by round"""
+        exp_dir = Path(f"experiments/{exp_id}")
+        all_rounds_data = []
+        
+        for db_file in sorted(exp_dir.glob("run_*.db")):
+            run_id = int(db_file.stem.split('_')[1])
+            try:
+                conn = sqlite3.connect(db_file)
+                
+                # Load all products with quality information
+                products = pd.read_sql_query(
+                    "SELECT round_number, advertised_quality, true_quality FROM product",
+                    conn
+                )
+                
+                conn.close()
+                
+                if not products.empty:
+                    # Ensure quality values are strings and strip whitespace
+                    products['advertised_quality'] = products['advertised_quality'].astype(str).str.strip()
+                    products['true_quality'] = products['true_quality'].astype(str).str.strip()
+                    
+                    # Filter valid quality values
+                    valid_quality_mask = (
+                        (products['advertised_quality'].isin(['HQ', 'LQ'])) &
+                        (products['true_quality'].isin(['HQ', 'LQ']))
+                    )
+                    products = products[valid_quality_mask]
+                    
+                    # Aggregate by round
+                    all_round_numbers = sorted(products['round_number'].dropna().unique())
+                    for round_num in all_round_numbers:
+                        round_num = int(round_num)
+                        round_prod = products[products['round_number'] == round_num]
+                        
+                        # Count by four product types: (advertised, true)
+                        lq_lq = len(round_prod[(round_prod['advertised_quality'] == 'LQ') & (round_prod['true_quality'] == 'LQ')])
+                        lq_hq = len(round_prod[(round_prod['advertised_quality'] == 'LQ') & (round_prod['true_quality'] == 'HQ')])
+                        hq_hq = len(round_prod[(round_prod['advertised_quality'] == 'HQ') & (round_prod['true_quality'] == 'HQ')])
+                        hq_lq = len(round_prod[(round_prod['advertised_quality'] == 'HQ') & (round_prod['true_quality'] == 'LQ')])
+                        
+                        all_rounds_data.append({
+                            'run_id': run_id,
+                            'round': round_num,
+                            'lq_lq': lq_lq,  # LQ advertised, LQ true
+                            'lq_hq': lq_hq,  # LQ advertised, HQ true
+                            'hq_hq': hq_hq,  # HQ advertised, HQ true
+                            'hq_lq': hq_lq,  # HQ advertised, LQ true (dishonest)
+                        })
+            except Exception as e:
+                print(f"Warning: Could not load product quality data from {db_file}: {e}")
+        
+        return pd.DataFrame(all_rounds_data)
+    
+    def _load_transaction_quality_data(self, exp_id: str) -> pd.DataFrame:
+        """Load transaction quality data by round (only successful transactions)"""
+        exp_dir = Path(f"experiments/{exp_id}")
+        all_rounds_data = []
+        
+        for db_file in sorted(exp_dir.glob("run_*.db")):
+            run_id = int(db_file.stem.split('_')[1])
+            try:
+                conn = sqlite3.connect(db_file)
+                
+                transactions = pd.read_sql_query(
+                    "SELECT t.round_number, p.advertised_quality, p.true_quality "
+                    "FROM transactions t LEFT JOIN product p ON t.product_id = p.product_id",
+                    conn
+                )
+                
+                conn.close()
+                
+                if not transactions.empty:
+                    transactions = transactions.dropna(subset=['advertised_quality', 'true_quality'])
+                    transactions['advertised_quality'] = transactions['advertised_quality'].astype(str).str.strip()
+                    transactions['true_quality'] = transactions['true_quality'].astype(str).str.strip()
+                    transactions = transactions[
+                        (transactions['advertised_quality'] != 'nan') & 
+                        (transactions['true_quality'] != 'nan')
+                    ]
+                    
+                    valid_quality_mask = (
+                        (transactions['advertised_quality'].isin(['HQ', 'LQ'])) &
+                        (transactions['true_quality'].isin(['HQ', 'LQ']))
+                    )
+                    transactions = transactions[valid_quality_mask]
+                    
+                    all_round_numbers = sorted(transactions['round_number'].dropna().unique())
+                    for round_num in all_round_numbers:
+                        round_num = int(round_num)
+                        round_tx = transactions[transactions['round_number'] == round_num]
+                        
+                        # Count by four product types: (advertised, true)
+                        lq_lq = len(round_tx[(round_tx['advertised_quality'] == 'LQ') & (round_tx['true_quality'] == 'LQ')])
+                        lq_hq = len(round_tx[(round_tx['advertised_quality'] == 'LQ') & (round_tx['true_quality'] == 'HQ')])
+                        hq_hq = len(round_tx[(round_tx['advertised_quality'] == 'HQ') & (round_tx['true_quality'] == 'HQ')])
+                        hq_lq = len(round_tx[(round_tx['advertised_quality'] == 'HQ') & (round_tx['true_quality'] == 'LQ')])
+                        
+                        all_rounds_data.append({
+                            'run_id': run_id,
+                            'round': round_num,
+                            'lq_lq': lq_lq,  # LQ advertised, LQ true
+                            'lq_hq': lq_hq,  # LQ advertised, HQ true
+                            'hq_hq': hq_hq,  # HQ advertised, HQ true
+                            'hq_lq': hq_lq,  # HQ advertised, LQ true (dishonest)
+                        })
+            except Exception as e:
+                print(f"Warning: Could not load transaction quality data from {db_file}: {e}")
+        
+        return pd.DataFrame(all_rounds_data)
+    
+    def _get_errorbar_for_rounds(self, rounds, std_dict_or_array, last_round=10):
+        """Create error bar array that only shows error for the last round"""
+        if isinstance(std_dict_or_array, dict):
+            std_values = np.array([std_dict_or_array.get(r, 0) for r in rounds])
+        else:
+            std_values = np.array(std_dict_or_array)
+        
+        yerr = np.zeros(len(rounds))
+        if last_round in rounds:
+            last_idx = list(rounds).index(last_round)
+            if last_idx < len(std_values):
+                yerr[last_idx] = std_values[last_idx]
+        return yerr
     
     # Market-Level Visualization Methods
     def plot_price_evolution(self):
@@ -272,7 +561,12 @@ class RQ3Visualizer:
         all_rounds_data = {}
         for condition in ['R_F', 'R_R', 'RW_F', 'RW_R']:
             if condition in self.exp_ids:
-                all_rounds_data[condition] = self._load_round_data_from_db(self.exp_ids[condition])
+                data = self._load_round_data_from_db(self.exp_ids[condition])
+                all_rounds_data[condition] = data
+                if data.empty:
+                    print(f"Warning: No data loaded for {condition} ({self.exp_ids[condition]})")
+                else:
+                    print(f"Loaded {len(data)} records for {condition}")
         
         default_hq_price = self.market_params.get('hq_price', 5.0)
         default_lq_price = self.market_params.get('lq_price', 3.0)
@@ -384,55 +678,143 @@ class RQ3Visualizer:
         print("✓ Generated: 1_price_evolution.png")
     
     def plot_seller_profit(self):
-        """2. Seller Profit Over Rounds (2 columns: R vs RW)"""
-        fig, axes = plt.subplots(1, 2, figsize=(16, 6))
-        
+        """2. Seller Profit Over Rounds (2x4 layout: similar to plot_total_market_metrics)
+        - 2 rows: Row 0 = Total profit (Left: line plot, Right: distribution comparison)
+                  Row 1 = Honest & Dishonest profit (Left: Honest, Right: Dishonest)
+        - 4 columns: R_F, R_R, RW_F, RW_R (one condition per column)
+        - Distribution comparison: Compare distributions between two columns (e.g., R_F vs R_R, RW_F vs RW_R)
+        """
+        # Load data for all conditions
         all_rounds_data = {}
+        all_profit_by_type = {}
         for condition in ['R_F', 'R_R', 'RW_F', 'RW_R']:
             if condition in self.exp_ids:
-                all_rounds_data[condition] = self._load_round_data_from_db(self.exp_ids[condition])
+                data = self._load_round_data_from_db(self.exp_ids[condition])
+                profit_by_type = self._load_round_profit_by_type(self.exp_ids[condition])
+                all_rounds_data[condition] = data
+                all_profit_by_type[condition] = profit_by_type
+                if data.empty:
+                    print(f"Warning: No data loaded for {condition} ({self.exp_ids[condition]})")
         
-        # Left: Reputation-Only (R_F vs R_R)
-        for condition in ['R_F', 'R_R']:
+        # Create 2x4 layout: 2 rows × 4 columns
+        fig, axes = plt.subplots(2, 4, figsize=(20, 10))
+        
+        conditions = ['R_F', 'R_R', 'RW_F', 'RW_R']
+        
+        # Get all rounds for alignment
+        all_rounds = set()
+        for condition in conditions:
+            if condition in all_rounds_data and not all_rounds_data[condition].empty:
+                all_rounds.update(all_rounds_data[condition]['round'].unique())
+        rounds = sorted(all_rounds) if all_rounds else []
+        
+        # Row 0: Total profit line plots (4 columns, one condition per column)
+        for col_idx, condition in enumerate(conditions):
             if condition not in all_rounds_data or all_rounds_data[condition].empty:
                 continue
             
             rounds_df = all_rounds_data[condition]
             agg = rounds_df.groupby('round')['seller_profit'].agg(['mean', 'std']).reset_index()
-            rounds = sorted(agg['round'].unique())
             
-            fmt_str = 'o-' if LINESTYLES[condition] == '-' else 'o--'
-            axes[0].errorbar(rounds, agg['mean'], yerr=agg['std'],
-                           fmt=fmt_str, label=CONDITION_LABELS[condition],
-                           color=COLORS[condition], linewidth=2, markersize=7,
-                           capsize=4)
-        
-        axes[0].set_xlabel('Round', fontweight='bold')
-        axes[0].set_ylabel('Average Seller Profit ($)', fontweight='bold')
-        axes[0].set_title('Reputation-Only: Seller Profit Progression', fontweight='bold')
-        axes[0].legend(frameon=True, fancybox=True, shadow=True)
-        axes[0].grid(True, alpha=0.3, linestyle='--')
-        
-        # Right: Reputation+Warrant (RW_F vs RW_R)
-        for condition in ['RW_F', 'RW_R']:
-            if condition not in all_rounds_data or all_rounds_data[condition].empty:
-                continue
+            # Align data with all rounds
+            mean_dict = dict(zip(agg['round'], agg['mean']))
+            std_dict = dict(zip(agg['round'], agg['std']))
+            mean_aligned = [mean_dict.get(r, np.nan) for r in rounds]
+            yerr = self._get_errorbar_for_rounds(rounds, std_dict)
             
-            rounds_df = all_rounds_data[condition]
-            agg = rounds_df.groupby('round')['seller_profit'].agg(['mean', 'std']).reset_index()
-            rounds = sorted(agg['round'].unique())
-            
-            fmt_str = 'o-' if LINESTYLES[condition] == '-' else 'o--'
-            axes[1].errorbar(rounds, agg['mean'], yerr=agg['std'],
-                           fmt=fmt_str, label=CONDITION_LABELS[condition],
-                           color=COLORS[condition], linewidth=2, markersize=7,
-                           capsize=4)
+            axes[0, col_idx].errorbar(rounds, mean_aligned, yerr=yerr,
+                                     fmt='o-', color=COLORS[condition], linewidth=2, markersize=6,
+                                     capsize=3, alpha=0.6)
+            axes[0, col_idx].set_xlabel('Round', fontweight='bold')
+            axes[0, col_idx].set_ylabel('Average Seller Profit ($)', fontweight='bold')
+            axes[0, col_idx].set_title(f'Total Profit\n({CONDITION_LABELS[condition]})', fontweight='bold')
+            axes[0, col_idx].grid(True, alpha=0.3, linestyle='--')
+            if rounds:
+                axes[0, col_idx].set_xticks(rounds)
         
-        axes[1].set_xlabel('Round', fontweight='bold')
-        axes[1].set_ylabel('Average Seller Profit ($)', fontweight='bold')
-        axes[1].set_title('Reputation+Warrant: Seller Profit Progression', fontweight='bold')
-        axes[1].legend(frameon=True, fancybox=True, shadow=True)
-        axes[1].grid(True, alpha=0.3, linestyle='--')
+        # Row 1: Distribution comparison (compare distributions between two columns)
+        # Col 0-1: Compare R_F and R_R distributions
+        # Col 2-3: Compare RW_F and RW_R distributions
+        all_profits_dict = {}
+        for condition in conditions:
+            if condition in all_rounds_data and not all_rounds_data[condition].empty:
+                all_profits_dict[condition] = all_rounds_data[condition]['seller_profit'].dropna().values
+        
+        # Col 0: R_F distribution
+        if 'R_F' in all_profits_dict:
+            profits = all_profits_dict['R_F']
+            if len(profits) > 1 and np.std(profits) > 1e-10:
+                kde = stats.gaussian_kde(profits)
+                x_range = np.linspace(profits.min(), profits.max(), 200)
+                axes[1, 0].plot(x_range, kde(x_range), color=COLORS['R_F'], linewidth=2, alpha=0.6)
+                axes[1, 0].fill_between(x_range, kde(x_range), alpha=0.3, color=COLORS['R_F'])
+            else:
+                axes[1, 0].hist(profits, bins=20, alpha=0.7, color=COLORS['R_F'],
+                               density=True, edgecolor='black', linewidth=0.5)
+            axes[1, 0].axvline(np.mean(profits), color=COLORS['R_F'], linestyle=':',
+                             linewidth=1.5, alpha=0.7, label=f'Mean: {np.mean(profits):.2f}')
+        axes[1, 0].set_xlabel('Seller Profit ($)', fontweight='bold')
+        axes[1, 0].set_ylabel('Density', fontweight='bold')
+        axes[1, 0].set_title(f'Distribution\n({CONDITION_LABELS["R_F"]})', fontweight='bold')
+        axes[1, 0].legend(frameon=True, fancybox=True, shadow=True, fontsize=8)
+        axes[1, 0].grid(True, alpha=0.3, linestyle='--', axis='y')
+        
+        # Col 1: R_R distribution (for comparison with R_F)
+        if 'R_R' in all_profits_dict:
+            profits = all_profits_dict['R_R']
+            if len(profits) > 1 and np.std(profits) > 1e-10:
+                kde = stats.gaussian_kde(profits)
+                x_range = np.linspace(profits.min(), profits.max(), 200)
+                axes[1, 1].plot(x_range, kde(x_range), color=COLORS['R_R'], linewidth=2, alpha=0.6)
+                axes[1, 1].fill_between(x_range, kde(x_range), alpha=0.3, color=COLORS['R_R'])
+            else:
+                axes[1, 1].hist(profits, bins=20, alpha=0.7, color=COLORS['R_R'],
+                               density=True, edgecolor='black', linewidth=0.5)
+            axes[1, 1].axvline(np.mean(profits), color=COLORS['R_R'], linestyle=':',
+                             linewidth=1.5, alpha=0.7, label=f'Mean: {np.mean(profits):.2f}')
+        axes[1, 1].set_xlabel('Seller Profit ($)', fontweight='bold')
+        axes[1, 1].set_ylabel('Density', fontweight='bold')
+        axes[1, 1].set_title(f'Distribution\n({CONDITION_LABELS["R_R"]})', fontweight='bold')
+        axes[1, 1].legend(frameon=True, fancybox=True, shadow=True, fontsize=8)
+        axes[1, 1].grid(True, alpha=0.3, linestyle='--', axis='y')
+        
+        # Col 2: RW_F distribution
+        if 'RW_F' in all_profits_dict:
+            profits = all_profits_dict['RW_F']
+            if len(profits) > 1 and np.std(profits) > 1e-10:
+                kde = stats.gaussian_kde(profits)
+                x_range = np.linspace(profits.min(), profits.max(), 200)
+                axes[1, 2].plot(x_range, kde(x_range), color=COLORS['RW_F'], linewidth=2, alpha=0.6)
+                axes[1, 2].fill_between(x_range, kde(x_range), alpha=0.3, color=COLORS['RW_F'])
+            else:
+                axes[1, 2].hist(profits, bins=20, alpha=0.7, color=COLORS['RW_F'],
+                               density=True, edgecolor='black', linewidth=0.5)
+            axes[1, 2].axvline(np.mean(profits), color=COLORS['RW_F'], linestyle=':',
+                             linewidth=1.5, alpha=0.7, label=f'Mean: {np.mean(profits):.2f}')
+        axes[1, 2].set_xlabel('Seller Profit ($)', fontweight='bold')
+        axes[1, 2].set_ylabel('Density', fontweight='bold')
+        axes[1, 2].set_title(f'Distribution\n({CONDITION_LABELS["RW_F"]})', fontweight='bold')
+        axes[1, 2].legend(frameon=True, fancybox=True, shadow=True, fontsize=8)
+        axes[1, 2].grid(True, alpha=0.3, linestyle='--', axis='y')
+        
+        # Col 3: RW_R distribution (for comparison with RW_F)
+        if 'RW_R' in all_profits_dict:
+            profits = all_profits_dict['RW_R']
+            if len(profits) > 1 and np.std(profits) > 1e-10:
+                kde = stats.gaussian_kde(profits)
+                x_range = np.linspace(profits.min(), profits.max(), 200)
+                axes[1, 3].plot(x_range, kde(x_range), color=COLORS['RW_R'], linewidth=2, alpha=0.6)
+                axes[1, 3].fill_between(x_range, kde(x_range), alpha=0.3, color=COLORS['RW_R'])
+            else:
+                axes[1, 3].hist(profits, bins=20, alpha=0.7, color=COLORS['RW_R'],
+                               density=True, edgecolor='black', linewidth=0.5)
+            axes[1, 3].axvline(np.mean(profits), color=COLORS['RW_R'], linestyle=':',
+                             linewidth=1.5, alpha=0.7, label=f'Mean: {np.mean(profits):.2f}')
+        axes[1, 3].set_xlabel('Seller Profit ($)', fontweight='bold')
+        axes[1, 3].set_ylabel('Density', fontweight='bold')
+        axes[1, 3].set_title(f'Distribution\n({CONDITION_LABELS["RW_R"]})', fontweight='bold')
+        axes[1, 3].legend(frameon=True, fancybox=True, shadow=True, fontsize=8)
+        axes[1, 3].grid(True, alpha=0.3, linestyle='--', axis='y')
         
         plt.tight_layout()
         plt.savefig(self.output_dir / '2_seller_profit.png', dpi=300, bbox_inches='tight')
@@ -440,55 +822,80 @@ class RQ3Visualizer:
         print("✓ Generated: 2_seller_profit.png")
     
     def plot_buyer_utility(self):
-        """3. Buyer Utility Over Rounds (2 columns: R vs RW)"""
-        fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+        """3. Buyer Utility Over Rounds (2x4 layout: similar to plot_total_market_metrics)
+        - 2 rows: Row 0 = Utility line plots (4 columns, one condition per column)
+                  Row 1 = Distribution comparison (4 columns, one condition per column)
+        - 4 columns: R_F, R_R, RW_F, RW_R (one condition per column)
+        """
+        fig, axes = plt.subplots(2, 4, figsize=(20, 10))
         
         all_rounds_data = {}
         for condition in ['R_F', 'R_R', 'RW_F', 'RW_R']:
             if condition in self.exp_ids:
-                all_rounds_data[condition] = self._load_round_data_from_db(self.exp_ids[condition])
+                data = self._load_round_data_from_db(self.exp_ids[condition])
+                all_rounds_data[condition] = data
+                if data.empty:
+                    print(f"Warning: No data loaded for {condition} ({self.exp_ids[condition]})")
         
-        # Left: Reputation-Only (R_F vs R_R)
-        for condition in ['R_F', 'R_R']:
+        conditions = ['R_F', 'R_R', 'RW_F', 'RW_R']
+        
+        # Get all rounds for alignment
+        all_rounds = set()
+        for condition in conditions:
+            if condition in all_rounds_data and not all_rounds_data[condition].empty:
+                all_rounds.update(all_rounds_data[condition]['round'].unique())
+        rounds = sorted(all_rounds) if all_rounds else []
+        
+        # Row 0: Buyer utility line plots (4 columns, one condition per column)
+        for col_idx, condition in enumerate(conditions):
             if condition not in all_rounds_data or all_rounds_data[condition].empty:
                 continue
             
             rounds_df = all_rounds_data[condition]
             agg = rounds_df.groupby('round')['buyer_utility'].agg(['mean', 'std']).reset_index()
-            rounds = sorted(agg['round'].unique())
             
-            fmt_str = 'o-' if LINESTYLES[condition] == '-' else 'o--'
-            axes[0].errorbar(rounds, agg['mean'], yerr=agg['std'],
-                           fmt=fmt_str, label=CONDITION_LABELS[condition],
-                           color=COLORS[condition], linewidth=2, markersize=7,
-                           capsize=4)
+            # Align data with all rounds
+            mean_dict = dict(zip(agg['round'], agg['mean']))
+            std_dict = dict(zip(agg['round'], agg['std']))
+            mean_aligned = [mean_dict.get(r, np.nan) for r in rounds]
+            yerr = self._get_errorbar_for_rounds(rounds, std_dict)
+            
+            axes[0, col_idx].errorbar(rounds, mean_aligned, yerr=yerr,
+                                     fmt='o-', color=COLORS[condition], linewidth=2, markersize=6,
+                                     capsize=3, alpha=0.6)
+            axes[0, col_idx].set_xlabel('Round', fontweight='bold')
+            axes[0, col_idx].set_ylabel('Average Buyer Utility ($)', fontweight='bold')
+            axes[0, col_idx].set_title(f'Buyer Utility\n({CONDITION_LABELS[condition]})', fontweight='bold')
+            axes[0, col_idx].grid(True, alpha=0.3, linestyle='--')
+            if rounds:
+                axes[0, col_idx].set_xticks(rounds)
         
-        axes[0].set_xlabel('Round', fontweight='bold')
-        axes[0].set_ylabel('Average Buyer Utility ($)', fontweight='bold')
-        axes[0].set_title('Reputation-Only: Buyer Utility Progression', fontweight='bold')
-        axes[0].legend(frameon=True, fancybox=True, shadow=True)
-        axes[0].grid(True, alpha=0.3, linestyle='--')
+        # Row 1: Distribution comparison (4 columns, one condition per column)
+        all_utilities_dict = {}
+        for condition in conditions:
+            if condition in all_rounds_data and not all_rounds_data[condition].empty:
+                all_utilities_dict[condition] = all_rounds_data[condition]['buyer_utility'].dropna().values
         
-        # Right: Reputation+Warrant (RW_F vs RW_R)
-        for condition in ['RW_F', 'RW_R']:
-            if condition not in all_rounds_data or all_rounds_data[condition].empty:
+        for col_idx, condition in enumerate(conditions):
+            if condition not in all_utilities_dict:
                 continue
             
-            rounds_df = all_rounds_data[condition]
-            agg = rounds_df.groupby('round')['buyer_utility'].agg(['mean', 'std']).reset_index()
-            rounds = sorted(agg['round'].unique())
-            
-            fmt_str = 'o-' if LINESTYLES[condition] == '-' else 'o--'
-            axes[1].errorbar(rounds, agg['mean'], yerr=agg['std'],
-                           fmt=fmt_str, label=CONDITION_LABELS[condition],
-                           color=COLORS[condition], linewidth=2, markersize=7,
-                           capsize=4)
-        
-        axes[1].set_xlabel('Round', fontweight='bold')
-        axes[1].set_ylabel('Average Buyer Utility ($)', fontweight='bold')
-        axes[1].set_title('Reputation+Warrant: Buyer Utility Progression', fontweight='bold')
-        axes[1].legend(frameon=True, fancybox=True, shadow=True)
-        axes[1].grid(True, alpha=0.3, linestyle='--')
+            utilities = all_utilities_dict[condition]
+            if len(utilities) > 1 and np.std(utilities) > 1e-10:
+                kde = stats.gaussian_kde(utilities)
+                x_range = np.linspace(utilities.min(), utilities.max(), 200)
+                axes[1, col_idx].plot(x_range, kde(x_range), color=COLORS[condition], linewidth=2, alpha=0.6)
+                axes[1, col_idx].fill_between(x_range, kde(x_range), alpha=0.3, color=COLORS[condition])
+            else:
+                axes[1, col_idx].hist(utilities, bins=20, alpha=0.7, color=COLORS[condition],
+                                     density=True, edgecolor='black', linewidth=0.5)
+            axes[1, col_idx].axvline(np.mean(utilities), color=COLORS[condition], linestyle=':',
+                                   linewidth=1.5, alpha=0.7, label=f'Mean: {np.mean(utilities):.2f}')
+            axes[1, col_idx].set_xlabel('Buyer Utility ($)', fontweight='bold')
+            axes[1, col_idx].set_ylabel('Density', fontweight='bold')
+            axes[1, col_idx].set_title(f'Distribution\n({CONDITION_LABELS[condition]})', fontweight='bold')
+            axes[1, col_idx].legend(frameon=True, fancybox=True, shadow=True, fontsize=8)
+            axes[1, col_idx].grid(True, alpha=0.3, linestyle='--', axis='y')
         
         plt.tight_layout()
         plt.savefig(self.output_dir / '3_buyer_utility.png', dpi=300, bbox_inches='tight')
@@ -496,87 +903,214 @@ class RQ3Visualizer:
         print("✓ Generated: 3_buyer_utility.png")
     
     def plot_reputation(self):
-        """4. Seller Reputation Over Rounds (2 columns: R vs RW)"""
-        fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+        """4. Seller Reputation Over Rounds (2x4 layout: similar to plot_total_market_metrics)
+        - 2 rows: Row 0 = Average reputation progression (4 columns, one condition per column)
+                  Row 1 = Distribution comparison (4 columns, one condition per column)
+        - 4 columns: R_F, R_R, RW_F, RW_R (one condition per column)
+        """
+        fig, axes = plt.subplots(2, 4, figsize=(20, 10))
         
-        # Left: Reputation-Only (R_F vs R_R)
-        for condition in ['R_F', 'R_R']:
+        # Load reputation data from database
+        r_reps_dict = {}
+        for condition in ['R_F', 'R_R', 'RW_F', 'RW_R']:
             if condition not in self.exp_ids:
                 continue
-            
             exp_dir = Path(f"experiments/{self.exp_ids[condition]}")
             reps = []
-            
             for db_file in sorted(exp_dir.glob("run_*.db")):
                 try:
                     conn = sqlite3.connect(db_file)
                     rep = pd.read_sql_query(
-                        "SELECT round, seller_id, public_reputation_score FROM reputation_history",
+                        "SELECT round, seller_id, public_thumbs_up, public_thumbs_down FROM reputation_history",
                         conn
                     )
+                    if not rep.empty:
+                        rep['public_reputation_score'] = rep['public_thumbs_up'] - rep['public_thumbs_down']
                     reps.append(rep)
                     conn.close()
-                except:
-                    pass
-            
+                except Exception as e:
+                    print(f"Warning: Could not load reputation data from {db_file}: {e}")
             if reps:
-                all_rep = pd.concat(reps)
-                agg = all_rep.groupby('round')['public_reputation_score'].agg(['mean', 'std']).reset_index()
-                rounds = sorted(agg['round'].unique())
-                
-                fmt_str = 'o-' if LINESTYLES[condition] == '-' else 'o--'
-                axes[0].errorbar(rounds, agg['mean'], yerr=agg['std'],
-                               fmt=fmt_str, label=CONDITION_LABELS[condition],
-                               color=COLORS[condition], linewidth=2, markersize=7,
-                               capsize=4)
+                r_reps_dict[condition] = pd.concat(reps)
         
-        axes[0].set_xlabel('Round', fontweight='bold')
-        axes[0].set_ylabel('Average Reputation Score', fontweight='bold')
-        axes[0].set_title('Reputation-Only: Average Reputation Progression', fontweight='bold')
-        axes[0].legend(frameon=True, fancybox=True, shadow=True)
-        axes[0].grid(True, alpha=0.3, linestyle='--')
+        # Row 0: Average reputation progression (Left: Comparison line plot, Right: Distribution comparison)
+        all_rounds_data = {}
+        for condition in ['R_F', 'R_R', 'RW_F', 'RW_R']:
+            if condition in self.exp_ids:
+                data = self._load_round_data_from_db(self.exp_ids[condition])
+                all_rounds_data[condition] = data
         
-        # Right: Reputation+Warrant (RW_F vs RW_R)
-        for condition in ['RW_F', 'RW_R']:
-            if condition not in self.exp_ids:
+        # Calculate reputation aggregates
+        all_rounds = set()
+        agg_dict = {}
+        for condition in ['R_F', 'R_R', 'RW_F', 'RW_R']:
+            if condition in all_rounds_data and not all_rounds_data[condition].empty:
+                rounds_df = all_rounds_data[condition]
+                rounds_df_clean = rounds_df[rounds_df['avg_reputation'].notna()]
+                if not rounds_df_clean.empty:
+                    agg = rounds_df_clean.groupby('round')['avg_reputation'].agg(['mean', 'std']).reset_index()
+                    agg_dict[condition] = agg
+                    all_rounds.update(agg['round'].unique())
+        
+        rounds = sorted(all_rounds) if all_rounds else []
+        
+        # Row 0: Average reputation progression (4 columns, one condition per column)
+        conditions = ['R_F', 'R_R', 'RW_F', 'RW_R']
+        for col_idx, condition in enumerate(conditions):
+            if condition not in agg_dict:
+                continue
+            agg = agg_dict[condition]
+            mean_dict = dict(zip(agg['round'], agg['mean']))
+            std_dict = dict(zip(agg['round'], agg['std']))
+            mean_aligned = [mean_dict.get(r, np.nan) for r in rounds]
+            yerr = self._get_errorbar_for_rounds(rounds, std_dict)
+            
+            axes[0, col_idx].errorbar(rounds, mean_aligned, yerr=yerr,
+                                   fmt='o-', color=COLORS[condition], linewidth=2, markersize=6,
+                                   capsize=3, alpha=0.6)
+            axes[0, col_idx].set_xlabel('Round', fontweight='bold')
+            axes[0, col_idx].set_ylabel('Average Reputation Score', fontweight='bold')
+            axes[0, col_idx].set_title(f'Average Reputation\n({CONDITION_LABELS[condition]})', fontweight='bold')
+            axes[0, col_idx].grid(True, alpha=0.3, linestyle='--')
+            if rounds:
+                axes[0, col_idx].set_xticks(rounds)
+        
+        # Row 1: Distribution comparison (4 columns, one condition per column)
+        all_scores_dict = {}
+        for condition in conditions:
+            if condition in r_reps_dict and not r_reps_dict[condition].empty:
+                all_scores_dict[condition] = r_reps_dict[condition]['public_reputation_score'].dropna().values
+        
+        for col_idx, condition in enumerate(conditions):
+            if condition not in all_scores_dict:
                 continue
             
-            exp_dir = Path(f"experiments/{self.exp_ids[condition]}")
-            reps = []
-            
-            for db_file in sorted(exp_dir.glob("run_*.db")):
-                try:
-                    conn = sqlite3.connect(db_file)
-                    rep = pd.read_sql_query(
-                        "SELECT round, seller_id, public_reputation_score FROM reputation_history",
-                        conn
-                    )
-                    reps.append(rep)
-                    conn.close()
-                except:
-                    pass
-            
-            if reps:
-                all_rep = pd.concat(reps)
-                agg = all_rep.groupby('round')['public_reputation_score'].agg(['mean', 'std']).reset_index()
-                rounds = sorted(agg['round'].unique())
-                
-                fmt_str = 'o-' if LINESTYLES[condition] == '-' else 'o--'
-                axes[1].errorbar(rounds, agg['mean'], yerr=agg['std'],
-                               fmt=fmt_str, label=CONDITION_LABELS[condition],
-                               color=COLORS[condition], linewidth=2, markersize=7,
-                               capsize=4)
-        
-        axes[1].set_xlabel('Round', fontweight='bold')
-        axes[1].set_ylabel('Average Reputation Score', fontweight='bold')
-        axes[1].set_title('Reputation+Warrant: Average Reputation Progression', fontweight='bold')
-        axes[1].legend(frameon=True, fancybox=True, shadow=True)
-        axes[1].grid(True, alpha=0.3, linestyle='--')
+            scores = all_scores_dict[condition]
+            if len(scores) > 1 and np.std(scores) > 1e-10:
+                kde = stats.gaussian_kde(scores)
+                x_range = np.linspace(scores.min(), scores.max(), 200)
+                axes[1, col_idx].plot(x_range, kde(x_range), color=COLORS[condition], linewidth=2, alpha=0.6)
+                axes[1, col_idx].fill_between(x_range, kde(x_range), alpha=0.3, color=COLORS[condition])
+            else:
+                axes[1, col_idx].hist(scores, bins=20, alpha=0.7, color=COLORS[condition],
+                                     density=True, edgecolor='black', linewidth=0.5)
+            axes[1, col_idx].axvline(np.mean(scores), color=COLORS[condition], linestyle=':',
+                                   linewidth=1.5, alpha=0.7, label=f'Mean: {np.mean(scores):.2f}')
+            axes[1, col_idx].set_xlabel('Reputation Score', fontweight='bold')
+            axes[1, col_idx].set_ylabel('Density', fontweight='bold')
+            axes[1, col_idx].set_title(f'Distribution\n({CONDITION_LABELS[condition]})', fontweight='bold')
+            axes[1, col_idx].legend(frameon=True, fancybox=True, shadow=True, fontsize=8)
+            axes[1, col_idx].grid(True, alpha=0.3, linestyle='--', axis='y')
         
         plt.tight_layout()
         plt.savefig(self.output_dir / '4_reputation.png', dpi=300, bbox_inches='tight')
         plt.close()
         print("✓ Generated: 4_reputation.png")
+    
+    def plot_product_quality_evolution(self):
+        """5. Product Quality Evolution Over Rounds (2x4 layout: similar to plot_total_market_metrics)
+        - 2 rows: Row 0 = Number of Products (4 columns, one condition per column)
+                  Row 1 = Number of Transaction Products (4 columns, one condition per column)
+        - 4 columns: R_F, R_R, RW_F, RW_R (one condition per column)
+        - Each subplot shows 4 product types: LQ-LQ, LQ-HQ, HQ-HQ, HQ-LQ
+        """
+        # Load quality data for all conditions
+        quality_dict = {}
+        tx_quality_dict = {}
+        for condition in ['R_F', 'R_R', 'RW_F', 'RW_R']:
+            if condition in self.exp_ids:
+                quality_dict[condition] = self._load_product_quality_data(self.exp_ids[condition])
+                tx_quality_dict[condition] = self._load_transaction_quality_data(self.exp_ids[condition])
+        
+        fig, axes = plt.subplots(2, 4, figsize=(20, 10))
+        
+        # Define colors and markers for 4 product types
+        type_colors = {
+            'lq_lq': '#9467bd',    # Purple (LQ advertised, LQ true)
+            'lq_hq': '#ff7f0e',    # Orange (LQ advertised, HQ true)
+            'hq_hq': '#2ca02c',    # Green (HQ advertised, HQ true)
+            'hq_lq': '#d62728',    # Red (HQ advertised, LQ true - dishonest)
+        }
+        type_labels = {
+            'lq_lq': 'LQ-LQ',
+            'lq_hq': 'LQ-HQ',
+            'hq_hq': 'HQ-HQ',
+            'hq_lq': 'HQ-LQ',
+        }
+        type_markers = {
+            'lq_lq': 'o',
+            'lq_hq': 's',
+            'hq_hq': '^',
+            'hq_lq': 'v',
+        }
+        
+        conditions = ['R_F', 'R_R', 'RW_F', 'RW_R']
+        
+        # Get all rounds
+        all_rounds = set()
+        for condition in conditions:
+            if condition in quality_dict and not quality_dict[condition].empty:
+                all_rounds.update(quality_dict[condition]['round'].unique())
+            if condition in tx_quality_dict and not tx_quality_dict[condition].empty:
+                all_rounds.update(tx_quality_dict[condition]['round'].unique())
+        rounds = sorted(all_rounds) if all_rounds else []
+        
+        # Row 0: Number of Products (4 columns, one condition per column)
+        for col_idx, condition in enumerate(conditions):
+            if condition not in quality_dict or quality_dict[condition].empty:
+                continue
+            
+            quality = quality_dict[condition]
+            for ptype in ['lq_lq', 'lq_hq', 'hq_hq', 'hq_lq']:
+                agg = quality.groupby('round')[ptype].agg(['mean', 'std']).reset_index()
+                mean_dict = dict(zip(agg['round'], agg['mean']))
+                std_dict = dict(zip(agg['round'], agg['std']))
+                mean_aligned = [mean_dict.get(r, 0) for r in rounds]
+                yerr = self._get_errorbar_for_rounds(rounds, std_dict)
+                
+                axes[0, col_idx].errorbar(rounds, mean_aligned, yerr=yerr,
+                                         fmt=f'{type_markers[ptype]}-', label=type_labels[ptype],
+                                         color=type_colors[ptype], linewidth=2, markersize=6,
+                                         capsize=3, alpha=0.6)
+            
+            axes[0, col_idx].set_xlabel('Round', fontweight='bold')
+            axes[0, col_idx].set_ylabel('Number of Products', fontweight='bold')
+            axes[0, col_idx].set_title(f'Number of Products\n({CONDITION_LABELS[condition]})', fontweight='bold')
+            axes[0, col_idx].legend(frameon=True, fancybox=True, shadow=True, loc='best', fontsize=8)
+            axes[0, col_idx].grid(True, alpha=0.3, linestyle='--')
+            if rounds:
+                axes[0, col_idx].set_xticks(rounds)
+        
+        # Row 1: Number of Transaction Products (4 columns, one condition per column)
+        for col_idx, condition in enumerate(conditions):
+            if condition not in tx_quality_dict or tx_quality_dict[condition].empty:
+                continue
+            
+            tx_quality = tx_quality_dict[condition]
+            for ptype in ['lq_lq', 'lq_hq', 'hq_hq', 'hq_lq']:
+                agg = tx_quality.groupby('round')[ptype].agg(['mean', 'std']).reset_index()
+                mean_dict = dict(zip(agg['round'], agg['mean']))
+                std_dict = dict(zip(agg['round'], agg['std']))
+                mean_aligned = [mean_dict.get(r, 0) for r in rounds]
+                yerr = self._get_errorbar_for_rounds(rounds, std_dict)
+                
+                axes[1, col_idx].errorbar(rounds, mean_aligned, yerr=yerr,
+                                         fmt=f'{type_markers[ptype]}-', label=type_labels[ptype],
+                                         color=type_colors[ptype], linewidth=2, markersize=6,
+                                         capsize=3, alpha=0.6)
+            
+            axes[1, col_idx].set_xlabel('Round', fontweight='bold')
+            axes[1, col_idx].set_ylabel('Number of Transaction Products', fontweight='bold')
+            axes[1, col_idx].set_title(f'Number of Transaction Products\n({CONDITION_LABELS[condition]})', fontweight='bold')
+            axes[1, col_idx].legend(frameon=True, fancybox=True, shadow=True, loc='best', fontsize=8)
+            axes[1, col_idx].grid(True, alpha=0.3, linestyle='--')
+            if rounds:
+                axes[1, col_idx].set_xticks(rounds)
+        
+        plt.tight_layout()
+        plt.savefig(self.output_dir / '5_product_quality_evolution.png', dpi=300, bbox_inches='tight')
+        plt.close()
+        print("✓ Generated: 5_product_quality_evolution.png")
     
     def plot_total_market_metrics(self):
         """5. Total Market Metrics (4 conditions, 4x4 grid)"""
@@ -793,8 +1327,8 @@ class RQ3Visualizer:
         key_str = f"{exp_id}_{run_id}_{round_num}"
         return hashlib.md5(key_str.encode()).hexdigest()
     
-    def _load_communication_data(self, exp_id: str, run_id: int, round_num: int) -> Optional[List[Dict]]:
-        """Load seller communication data for a specific round"""
+    def _load_communication_data(self, exp_id: str, run_id: int, round_num: int = None) -> Optional[List[Dict]]:
+        """Load seller communication data for a specific round (or all rounds if round_num is None)"""
         # Post table is in the market database, not a separate social media DB
         exp_dir = Path(f"experiments/{exp_id}")
         db_file = exp_dir / f"run_{run_id}.db"
@@ -812,16 +1346,19 @@ class RQ3Visualizer:
                 conn.close()
                 return None
             
-            # Query posts from sellers with structured_info (tags)
+            # Query posts from sellers
+            # Note: structured_info may be empty string (""), so we don't filter by it
+            # Round filtering is approximate based on created_at timestamp
+            # If round_num is None, return all posts
             query = """
                 SELECT p.post_id, p.user_id, p.content, p.structured_info, p.created_at
                 FROM post p
                 JOIN user u ON p.user_id = u.user_id
-                WHERE u.role = 'seller' 
-                  AND p.structured_info IS NOT NULL 
-                  AND p.structured_info != ''
+                WHERE u.role = 'seller'
+                  AND p.original_post_id IS NULL
                 ORDER BY p.created_at
             """
+            
             posts = pd.read_sql_query(query, conn)
             conn.close()
             
@@ -829,6 +1366,7 @@ class RQ3Visualizer:
                 return None
             
             # Return all seller posts (round filtering can be improved using action_log)
+            # For now, return all posts and let the caller handle round-specific filtering
             return posts.to_dict('records')
         except Exception as e:
             print(f"Warning: Could not load communication data from {db_file}: {e}")
@@ -1136,8 +1674,7 @@ class RQ3Visualizer:
                     FROM post p
                     JOIN user u ON p.user_id = u.user_id
                     WHERE u.role = 'seller' 
-                      AND p.structured_info IS NOT NULL 
-                      AND p.structured_info != ''
+                      AND p.original_post_id IS NULL
                 """
                 posts = pd.read_sql_query(query, conn)
                 conn.close()
@@ -1190,156 +1727,961 @@ class RQ3Visualizer:
         return tag_data
     
     def plot_communication_content(self):
-        """7. Communication Content Analysis (2 columns: R vs RW)"""
-        print("  Extracting communication tags...")
-        fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+        """7. Communication Content Analysis (2 columns: R vs RW) - Communication Frequency Only"""
+        print("  Analyzing communication frequency...")
+        fig, axes = plt.subplots(1, 2, figsize=(14, 5))
         # Remove main title as requested
         
-        # Collect tag data for all conditions
-        all_tag_data = {}
+        # Collect communication data for all conditions (count posts, not tags)
+        all_comm_data = {}
         for condition in ['R_F', 'R_R', 'RW_F', 'RW_R']:
             if condition in self.exp_ids:
                 print(f"    Processing {condition}...")
-                all_tag_data[condition] = self._extract_communication_tags(self.exp_ids[condition])
-                total_tags = sum(len(tags) for tags in all_tag_data[condition].values())
-                print(f"      Extracted {total_tags} tags from {condition}")
+                exp_dir = Path(f"experiments/{self.exp_ids[condition]}")
+                total_posts = 0
+                for db_file in sorted(exp_dir.glob("run_*.db")):
+                    try:
+                        conn = sqlite3.connect(db_file)
+                        cursor = conn.cursor()
+                        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='post'")
+                        if cursor.fetchone():
+                            query = """
+                                SELECT COUNT(*) as count
+                                FROM post p
+                                JOIN user u ON p.user_id = u.user_id
+                                WHERE u.role = 'seller'
+                            """
+                            result = pd.read_sql_query(query, conn)
+                            if not result.empty:
+                                total_posts += result['count'].iloc[0]
+                        conn.close()
+                    except Exception as e:
+                        pass
+                all_comm_data[condition] = total_posts
+                print(f"      Found {total_posts} communication posts from {condition}")
         
-        # Left column: Reputation-Only (R_F, R_R)
-        # Top-left: Tag distribution (stacked bar)
-        has_tag_data_r = False
-        for condition in ['R_F', 'R_R']:
-            if condition not in all_tag_data:
-                continue
-            
-            # Aggregate tags across runs
-            tag_counts = {'Pro-Fraud': 0, 'Anti-Fraud': 0, 'Neutral': 0}
-            for run_data in all_tag_data[condition].values():
-                for item in run_data:
-                    tag = item['tag']
-                    if tag in tag_counts:
-                        tag_counts[tag] += 1
-            
-            total = sum(tag_counts.values())
-            if total > 0:
-                has_tag_data_r = True
-                tags = list(tag_counts.keys())
-                counts = [tag_counts[t] for t in tags]
-                x_pos = ['R_F', 'R_R'].index(condition)
-                width = 0.35
-                
-                bottom = 0
-                for i, tag in enumerate(tags):
-                    axes[0, 0].bar(x_pos, counts[i] / total * 100,
-                                  width, bottom=bottom, label=tag if condition == 'R_F' else "",
-                                  color=['red', 'green', 'gray'][i], alpha=0.7, edgecolor='black')
-                    bottom += counts[i] / total * 100
-        
-        if not has_tag_data_r:
-            axes[0, 0].text(0.5, 0.5, 'No tag data available', 
-                           ha='center', va='center', transform=axes[0, 0].transAxes,
-                           fontsize=12, style='italic')
-        
-        axes[0, 0].set_xlabel('Condition', fontweight='bold')
-        axes[0, 0].set_ylabel('Tag Frequency (%)', fontweight='bold')
-        axes[0, 0].set_title('Reputation-Only: Tag Distribution', fontweight='bold')
-        axes[0, 0].set_xticks([0, 1])
-        axes[0, 0].set_xticklabels(['R_F', 'R_R'])
-        if has_tag_data_r:
-            axes[0, 0].legend(frameon=True, fancybox=True, shadow=True)
-        axes[0, 0].grid(True, alpha=0.3, linestyle='--', axis='y')
-        
-        # Bottom-left: Communication frequency
+        # Left: Reputation-Only (R_F, R_R)
         comm_freq_r = {}
         for condition in ['R_F', 'R_R']:
-            if condition in all_tag_data:
-                total_posts = sum(len(run_data) for run_data in all_tag_data[condition].values())
-                comm_freq_r[condition] = total_posts
+            if condition in all_comm_data:
+                comm_freq_r[condition] = all_comm_data[condition]
         
         if comm_freq_r:
             conditions = list(comm_freq_r.keys())
             frequencies = [comm_freq_r[c] for c in conditions]
             colors_list = [COLORS[c] for c in conditions]
-            axes[1, 0].bar(conditions, frequencies, color=colors_list, alpha=0.7, edgecolor='black')
-            axes[1, 0].set_xlabel('Condition', fontweight='bold')
-            axes[1, 0].set_ylabel('Total Communication Posts', fontweight='bold')
-            axes[1, 0].set_title('Reputation-Only: Communication Frequency', fontweight='bold')
-            axes[1, 0].grid(True, alpha=0.3, linestyle='--', axis='y')
+            axes[0].bar(conditions, frequencies, color=colors_list, alpha=0.7, edgecolor='black')
+            axes[0].set_xlabel('Condition', fontweight='bold')
+            axes[0].set_ylabel('Total Communication Posts', fontweight='bold')
+            axes[0].set_title('Reputation-Only: Communication Frequency', fontweight='bold')
+            axes[0].grid(True, alpha=0.3, linestyle='--', axis='y')
         else:
-            axes[1, 0].text(0.5, 0.5, 'No communication data available', 
-                           ha='center', va='center', transform=axes[1, 0].transAxes,
-                           fontsize=12, style='italic')
-            axes[1, 0].set_title('Reputation-Only: Communication Frequency', fontweight='bold')
+            axes[0].text(0.5, 0.5, 'No communication data available', 
+                       ha='center', va='center', transform=axes[0].transAxes,
+                       fontsize=12, style='italic')
+            axes[0].set_title('Reputation-Only: Communication Frequency', fontweight='bold')
         
-        # Right column: Reputation+Warrant (RW_F, RW_R)
-        # Top-right: Tag distribution (stacked bar)
-        has_tag_data_rw = False
-        for condition in ['RW_F', 'RW_R']:
-            if condition not in all_tag_data:
-                continue
-            
-            # Aggregate tags across runs
-            tag_counts = {'Pro-Fraud': 0, 'Anti-Fraud': 0, 'Neutral': 0}
-            for run_data in all_tag_data[condition].values():
-                for item in run_data:
-                    tag = item['tag']
-                    if tag in tag_counts:
-                        tag_counts[tag] += 1
-            
-            total = sum(tag_counts.values())
-            if total > 0:
-                has_tag_data_rw = True
-                tags = list(tag_counts.keys())
-                counts = [tag_counts[t] for t in tags]
-                x_pos = ['RW_F', 'RW_R'].index(condition)
-                width = 0.35
-                
-                bottom = 0
-                for i, tag in enumerate(tags):
-                    axes[0, 1].bar(x_pos, counts[i] / total * 100,
-                                  width, bottom=bottom, label=tag if condition == 'RW_F' else "",
-                                  color=['red', 'green', 'gray'][i], alpha=0.7, edgecolor='black')
-                    bottom += counts[i] / total * 100
-        
-        if not has_tag_data_rw:
-            axes[0, 1].text(0.5, 0.5, 'No tag data available', 
-                           ha='center', va='center', transform=axes[0, 1].transAxes,
-                           fontsize=12, style='italic')
-        
-        axes[0, 1].set_xlabel('Condition', fontweight='bold')
-        axes[0, 1].set_ylabel('Tag Frequency (%)', fontweight='bold')
-        axes[0, 1].set_title('Reputation+Warrant: Tag Distribution', fontweight='bold')
-        axes[0, 1].set_xticks([0, 1])
-        axes[0, 1].set_xticklabels(['RW_F', 'RW_R'])
-        if has_tag_data_rw:
-            axes[0, 1].legend(frameon=True, fancybox=True, shadow=True)
-        axes[0, 1].grid(True, alpha=0.3, linestyle='--', axis='y')
-        
-        # Bottom-right: Communication frequency
+        # Right: Reputation+Warrant (RW_F, RW_R)
         comm_freq_rw = {}
         for condition in ['RW_F', 'RW_R']:
-            if condition in all_tag_data:
-                total_posts = sum(len(run_data) for run_data in all_tag_data[condition].values())
-                comm_freq_rw[condition] = total_posts
+            if condition in all_comm_data:
+                comm_freq_rw[condition] = all_comm_data[condition]
         
         if comm_freq_rw:
             conditions = list(comm_freq_rw.keys())
             frequencies = [comm_freq_rw[c] for c in conditions]
             colors_list = [COLORS[c] for c in conditions]
-            axes[1, 1].bar(conditions, frequencies, color=colors_list, alpha=0.7, edgecolor='black')
-            axes[1, 1].set_xlabel('Condition', fontweight='bold')
-            axes[1, 1].set_ylabel('Total Communication Posts', fontweight='bold')
-            axes[1, 1].set_title('Reputation+Warrant: Communication Frequency', fontweight='bold')
-            axes[1, 1].grid(True, alpha=0.3, linestyle='--', axis='y')
+            axes[1].bar(conditions, frequencies, color=colors_list, alpha=0.7, edgecolor='black')
+            axes[1].set_xlabel('Condition', fontweight='bold')
+            axes[1].set_ylabel('Total Communication Posts', fontweight='bold')
+            axes[1].set_title('Reputation+Warrant: Communication Frequency', fontweight='bold')
+            axes[1].grid(True, alpha=0.3, linestyle='--', axis='y')
         else:
-            axes[1, 1].text(0.5, 0.5, 'No communication data available', 
-                           ha='center', va='center', transform=axes[1, 1].transAxes,
-                           fontsize=12, style='italic')
-            axes[1, 1].set_title('Reputation+Warrant: Communication Frequency', fontweight='bold')
+            axes[1].text(0.5, 0.5, 'No communication data available', 
+                       ha='center', va='center', transform=axes[1].transAxes,
+                       fontsize=12, style='italic')
+            axes[1].set_title('Reputation+Warrant: Communication Frequency', fontweight='bold')
         
         plt.tight_layout()
         plt.savefig(self.output_dir / '7_communication_content.png', dpi=300, bbox_inches='tight')
         plt.close()
         print("✓ Generated: 7_communication_content.png")
+    
+    def _format_number(self, value: float, decimals: int = 2) -> str:
+        """Format number with specified decimal places"""
+        if pd.isna(value) or np.isnan(value):
+            return "N/A"
+        return f"{value:.{decimals}f}"
+    
+    def _generate_markdown_table(self, headers: List[str], rows: List[List[str]], 
+                                 caption: str = "") -> str:
+        """Generate markdown table with three-line format"""
+        lines = []
+        
+        if caption:
+            lines.append(f"**{caption}**\n")
+        
+        # Header
+        lines.append("| " + " | ".join(headers) + " |")
+        lines.append("|" + "|".join(["---" for _ in headers]) + "|")
+        
+        # Rows
+        for row in rows:
+            lines.append("| " + " | ".join(row) + " |")
+        
+        return "\n".join(lines)
+    
+    def _generate_latex_table(self, headers: List[str], rows: List[List[str]], 
+                             caption: str = "", label: str = "") -> str:
+        """Generate LaTeX table with three-line format (booktabs style)"""
+        lines = []
+        lines.append("```latex")
+        lines.append("\\begin{table}[htbp]")
+        lines.append("\\centering")
+        if caption:
+            lines.append(f"\\caption{{{caption}}}")
+        if label:
+            lines.append(f"\\label{{{label}}}")
+        col_spec = "c" * len(headers)
+        lines.append(f"\\begin{{tabular}}{{{col_spec}}}")
+        lines.append("\\toprule")
+        lines.append(" & ".join(headers) + " \\\\")
+        lines.append("\\midrule")
+        
+        for row in rows:
+            lines.append(" & ".join(row) + " \\\\")
+        
+        lines.append("\\bottomrule")
+        lines.append("\\end{tabular}")
+        lines.append("\\end{table}")
+        lines.append("```")
+        
+        return "\n".join(lines)
+    
+    def _get_model_name(self, exp_id: str) -> str:
+        """Extract model name from experiment configuration"""
+        config = self._load_experiment_config(exp_id)
+        if not config:
+            config_file = f"experiments/{exp_id}/config.json"
+            if not os.path.exists(config_file):
+                config_file = f"experiments/{exp_id}/experiment_config.json"
+            if os.path.exists(config_file):
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+        
+        model_name = None
+        if 'MODEL_TYPE' in config:
+            model_name = config['MODEL_TYPE']
+        elif 'model_type' in config:
+            model_name = config['model_type']
+        elif 'MODEL_PLATFORM' in config and 'MODEL_TYPE' in config:
+            model_name = f"{config.get('MODEL_PLATFORM', 'unknown')}/{config.get('MODEL_TYPE', 'unknown')}"
+        elif 'model_platform' in config and 'model_type' in config:
+            model_name = f"{config.get('model_platform', 'unknown')}/{config.get('model_type', 'unknown')}"
+        
+        if not model_name:
+            model_name = SimulationConfig.MODEL_TYPE if hasattr(SimulationConfig, 'MODEL_TYPE') else "Unknown"
+        
+        return model_name
+    
+    def generate_tables(self):
+        """Generate all tables for RQ3 analysis"""
+        print(f"\n📊 Generating tables...")
+        
+        # 1. Coordination Score Statistics by Condition
+        coordination_data = {condition: [] for condition in ['R_F', 'R_R', 'RW_F', 'RW_R']}
+        
+        for condition in ['R_F', 'R_R', 'RW_F', 'RW_R']:
+            if condition not in self.exp_ids:
+                continue
+            
+            exp_id = self.exp_ids[condition]
+            exp_dir = Path(f"experiments/{exp_id}")
+            market_type = "Reputation-Only" if condition.startswith('R_') else "Reputation+Warrant"
+            channel_type = "Fake" if condition.endswith('_F') else "Real"
+            
+            db_files = sorted(exp_dir.glob("run_*.db"))
+            for db_file in db_files:
+                run_id = int(db_file.stem.split('_')[1])
+                try:
+                    conn = sqlite3.connect(db_file)
+                    rounds = pd.read_sql_query("SELECT DISTINCT round_number FROM transactions", conn)
+                    conn.close()
+                    
+                    for round_num in rounds['round_number'].unique():
+                        result = self._call_overseer_agent(exp_id, run_id, int(round_num),
+                                                          market_type, channel_type)
+                        if result:
+                            coordination_data[condition].append(result['coordination_score'])
+                except Exception as e:
+                    pass
+        
+        # Generate coordination score table
+        headers = ["Condition", "Mean Score", "Std Dev", "Min", "Max", "Count"]
+        rows = []
+        for condition in ['R_F', 'R_R', 'RW_F', 'RW_R']:
+            if condition not in coordination_data or not coordination_data[condition]:
+                rows.append([CONDITION_LABELS[condition], "N/A", "N/A", "N/A", "N/A", "0"])
+            else:
+                scores = coordination_data[condition]
+                rows.append([
+                    CONDITION_LABELS[condition],
+                    self._format_number(np.mean(scores), 2),
+                    self._format_number(np.std(scores), 2),
+                    self._format_number(np.min(scores), 1),
+                    self._format_number(np.max(scores), 1),
+                    str(len(scores))
+                ])
+        
+        md_table = self._generate_markdown_table(headers, rows, 
+                                                "Coordination Score Statistics by Condition")
+        latex_table = self._generate_latex_table(headers, rows,
+                                                 "Coordination Score Statistics by Condition",
+                                                 "tab:rq3_coordination")
+        
+        table_file = self.table_dir / "rq3_coordination_scores.md"
+        with open(table_file, 'w', encoding='utf-8') as f:
+            f.write(md_table)
+            f.write("\n\n")
+            f.write(latex_table)
+        print(f"  ✓ Generated: rq3_coordination_scores.md")
+        
+        # 2. Market Metrics Comparison (4 conditions)
+        all_conditions_data = {}
+        for condition in ['R_F', 'R_R', 'RW_F', 'RW_R']:
+            if condition in self.exp_ids:
+                exp_dir = Path(f"experiments/{self.exp_ids[condition]}")
+                all_conditions_data[condition] = self._prepare_cross_run_data(self.exp_ids[condition], exp_dir)
+        
+        headers = ["Condition", "Seller Profit (Mean ± Std)", "Buyer Utility (Mean ± Std)", 
+                  "Transactions (Mean ± Std)", "Deceptions (Mean ± Std)"]
+        rows = []
+        for condition in ['R_F', 'R_R', 'RW_F', 'RW_R']:
+            if condition not in all_conditions_data or not all_conditions_data[condition].get('run_ids'):
+                rows.append([CONDITION_LABELS[condition], "N/A", "N/A", "N/A", "N/A"])
+                continue
+            
+            data = all_conditions_data[condition]
+            profit_str = f"{self._format_number(np.mean(data['seller_profits']), 1)} ± {self._format_number(np.std(data['seller_profits']), 1)}"
+            utility_str = f"{self._format_number(np.mean(data['buyer_utilities']), 1)} ± {self._format_number(np.std(data['buyer_utilities']), 1)}"
+            tx_str = f"{self._format_number(np.mean(data['transaction_counts']), 1)} ± {self._format_number(np.std(data['transaction_counts']), 1)}"
+            dec_str = f"{self._format_number(np.mean(data['deceptions']), 1)} ± {self._format_number(np.std(data['deceptions']), 1)}"
+            
+            rows.append([
+                CONDITION_LABELS[condition],
+                profit_str,
+                utility_str,
+                tx_str,
+                dec_str
+            ])
+        
+        md_table = self._generate_markdown_table(headers, rows, 
+                                                "Market Metrics Comparison Across Conditions")
+        latex_table = self._generate_latex_table(headers, rows,
+                                                 "Market Metrics Comparison Across Conditions",
+                                                 "tab:rq3_metrics")
+        
+        table_file = self.table_dir / "rq3_market_metrics.md"
+        with open(table_file, 'w', encoding='utf-8') as f:
+            f.write(md_table)
+            f.write("\n\n")
+            f.write(latex_table)
+        print(f"  ✓ Generated: rq3_market_metrics.md")
+        
+        # 3. Profit and Utility by Round (4 conditions)
+        self.generate_profit_utility_by_round_table()
+        
+        # 4. Reputation tables (4 conditions)
+        self.generate_reputation_tables()
+        
+        # 5. Rating by quality table (4 conditions)
+        self.generate_rating_by_quality_table()
+        
+        # 6. Summary statistics with Gini coefficient and profit margin (4 conditions)
+        self.generate_summary_statistics_table()
+        
+        print(f"\n✅ All tables generated in: {self.table_dir}")
+    
+    def generate_summary_statistics_table(self):
+        """Generate Summary Statistics Table with Gini Coefficient and Profit Margin (4 conditions)"""
+        # Prepare cross-run data for all conditions
+        all_conditions_data = {}
+        for condition in ['R_F', 'R_R', 'RW_F', 'RW_R']:
+            if condition in self.exp_ids:
+                exp_dir = Path(f"experiments/{self.exp_ids[condition]}")
+                all_conditions_data[condition] = self._prepare_cross_run_data(self.exp_ids[condition], exp_dir)
+        
+        # Calculate Gini coefficients by run, then take mean
+        gini_data = {}
+        for condition in ['R_F', 'R_R', 'RW_F', 'RW_R']:
+            if condition in self.exp_ids:
+                seller_gini_mean, seller_gini_std = self._calculate_gini_by_run(self.exp_ids[condition], 'seller_profit')
+                buyer_gini_mean, buyer_gini_std = self._calculate_gini_by_run(self.exp_ids[condition], 'buyer_utility')
+                gini_data[condition] = {
+                    'seller_gini': seller_gini_mean,
+                    'buyer_gini': buyer_gini_mean
+                }
+        
+        # Calculate profit margins for sellers and buyers
+        profit_margin_data = {}
+        for condition in ['R_F', 'R_R', 'RW_F', 'RW_R']:
+            if condition not in self.exp_ids:
+                continue
+            
+            exp_dir = Path(f"experiments/{self.exp_ids[condition]}")
+            seller_margins = []
+            buyer_margins = []
+            
+            for db_file in sorted(exp_dir.glob("run_*.db")):
+                try:
+                    conn = sqlite3.connect(db_file)
+                    tx_data = pd.read_sql_query(
+                        "SELECT t.seller_profit, t.buyer_utility, p.price "
+                        "FROM transactions t JOIN product p ON t.product_id = p.product_id "
+                        "WHERE t.seller_profit IS NOT NULL AND p.price IS NOT NULL",
+                        conn
+                    )
+                    conn.close()
+                    
+                    if not tx_data.empty:
+                        seller_profits = tx_data['seller_profit'].values
+                        prices = tx_data['price'].values
+                        valid_mask = prices > 0
+                        if np.sum(valid_mask) > 0:
+                            margins = seller_profits[valid_mask] / prices[valid_mask]
+                            seller_margins.extend(margins.tolist())
+                        
+                        buyer_utils = tx_data['buyer_utility'].values
+                        valid_mask = prices > 0
+                        if np.sum(valid_mask) > 0:
+                            margins = buyer_utils[valid_mask] / prices[valid_mask]
+                            buyer_margins.extend(margins.tolist())
+                except Exception as e:
+                    print(f"Warning: Could not calculate profit margins from {db_file}: {e}")
+            
+            profit_margin_data[condition] = {
+                'seller_margins': seller_margins,
+                'buyer_margins': buyer_margins
+            }
+        
+        # Helper function to format Mean±Std
+        def format_mean_std(values):
+            if len(values) == 0:
+                return "N/A"
+            mean = np.mean(values) if len(values) > 0 else 0.0
+            std = np.std(values) if len(values) > 1 else 0.0
+            return f"{self._format_number(mean, 1)}±{self._format_number(std, 1)}"
+        
+        # Generate table with multi-level headers
+        headers_row1 = ['Condition', 'Transaction Count', 'Profit', 'Profit', 
+                        'Profit margin', 'Profit margin', 'Gini Coefficient', 'Gini Coefficient']
+        headers_row2 = ['', '', 'Seller', 'Buyer', 'Seller', 'Buyer', 'Seller', 'Buyer']
+        rows = []
+        
+        for condition in ['R_F', 'R_R', 'RW_F', 'RW_R']:
+            if condition not in all_conditions_data or not all_conditions_data[condition].get('run_ids'):
+                continue
+            
+            data = all_conditions_data[condition]
+            tx_counts = data['transaction_counts']
+            profits = data['seller_profits']
+            utilities = data['buyer_utilities']
+            
+            seller_margins = profit_margin_data.get(condition, {}).get('seller_margins', [])
+            buyer_margins = profit_margin_data.get(condition, {}).get('buyer_margins', [])
+            
+            seller_gini = gini_data.get(condition, {}).get('seller_gini', 0.0)
+            buyer_gini = gini_data.get(condition, {}).get('buyer_gini', 0.0)
+            
+            rows.append([
+                CONDITION_LABELS[condition],
+                format_mean_std(tx_counts),
+                format_mean_std(profits),
+                format_mean_std(utilities),
+                format_mean_std(seller_margins) if len(seller_margins) > 0 else "N/A",
+                format_mean_std(buyer_margins) if len(buyer_margins) > 0 else "N/A",
+                f"{self._format_number(seller_gini, 3)}",
+                f"{self._format_number(buyer_gini, 3)}"
+            ])
+        
+        # Generate markdown and LaTeX tables with multi-level headers
+        md_table = self._generate_markdown_table_multi_level(headers_row1, headers_row2, rows,
+                                                  "Summary Statistics with Gini Coefficient")
+        latex_table = self._generate_latex_table_multi_level_gini(headers_row1, headers_row2, rows,
+                                                "Summary Statistics with Gini Coefficient",
+                                                "tab:rq3_summary_stats")
+        
+        table_file = self.table_dir / "rq3_summary_statistics.md"
+        with open(table_file, 'w', encoding='utf-8') as f:
+            f.write(md_table)
+            f.write("\n\n")
+            f.write(latex_table)
+        
+        print(f"  ✓ Generated: rq3_summary_statistics.md")
+    
+    def _generate_markdown_table_multi_level(self, headers_row1: List[str], headers_row2: List[str],
+                                            rows: List[List[str]], caption: str = "") -> str:
+        """Generate markdown table with multi-level headers (two header rows)"""
+        lines = []
+        
+        if caption:
+            lines.append(f"**{caption}**\n")
+        
+        # First header row
+        lines.append("| " + " | ".join(headers_row1) + " |")
+        # Second header row
+        lines.append("| " + " | ".join(headers_row2) + " |")
+        # Separator
+        lines.append("|" + "|".join(["---" for _ in headers_row1]) + "|")
+        
+        # Data rows
+        for row in rows:
+            lines.append("| " + " | ".join(row) + " |")
+        
+        return "\n".join(lines)
+    
+    def _generate_latex_table_multi_level_gini(self, headers_row1: List[str], headers_row2: List[str],
+                                        rows: List[List[str]], caption: str = "", label: str = "") -> str:
+        """Generate LaTeX table with multi-level headers for Gini coefficient table"""
+        lines = []
+        lines.append("```latex")
+        lines.append("\\begin{table}[htbp]")
+        lines.append("\\centering")
+        if caption:
+            lines.append(f"\\caption{{{caption}}}")
+        if label:
+            lines.append(f"\\label{{{label}}}")
+        
+        # Count columns
+        num_cols = len(headers_row1)
+        lines.append("\\begin{tabular}{" + "c" * num_cols + "}")
+        lines.append("\\toprule")
+        
+        # First header row with \multicolumn for grouped columns
+        header1_parts = []
+        header1_parts.append(headers_row1[0])  # Condition
+        header1_parts.append(headers_row1[1])  # Transaction Count
+        # Group Profit columns (Seller, Buyer)
+        header1_parts.append("\\multicolumn{2}{c}{Profit}")
+        # Group Profit margin columns (Seller, Buyer)
+        header1_parts.append("\\multicolumn{2}{c}{Profit margin}")
+        # Group Gini Coefficient columns (Seller, Buyer)
+        header1_parts.append("\\multicolumn{2}{c}{Gini Coefficient}")
+        lines.append(" & ".join(header1_parts) + " \\\\")
+        lines.append("\\cmidrule(lr){3-4} \\cmidrule(lr){5-6} \\cmidrule(lr){7-8}")
+        
+        # Second header row
+        lines.append(" & ".join(headers_row2) + " \\\\")
+        lines.append("\\midrule")
+        
+        # Data rows
+        for row in rows:
+            lines.append(" & ".join(row) + " \\\\")
+        
+        lines.append("\\bottomrule")
+        lines.append("\\end{tabular}")
+        lines.append("\\end{table}")
+        lines.append("```")
+        
+        return "\n".join(lines)
+    
+    def generate_profit_utility_by_round_table(self):
+        """Generate Profit and Utility Comparison Table by Round (4 conditions)"""
+        all_rounds_data = {}
+        all_profit_by_type = {}
+        for condition in ['R_F', 'R_R', 'RW_F', 'RW_R']:
+            if condition in self.exp_ids:
+                all_rounds_data[condition] = self._load_round_data_from_db(self.exp_ids[condition])
+                all_profit_by_type[condition] = self._load_round_profit_by_type(self.exp_ids[condition])
+        
+        # Get all rounds
+        all_rounds = set()
+        for condition in ['R_F', 'R_R', 'RW_F', 'RW_R']:
+            if condition in all_rounds_data and not all_rounds_data[condition].empty:
+                all_rounds.update(all_rounds_data[condition]['round'].unique())
+        rounds = sorted(all_rounds) if all_rounds else []
+        
+        if not rounds:
+            return
+        
+        # Aggregate by round for each condition
+        agg_dict = {}
+        profit_type_dict = {}
+        for condition in ['R_F', 'R_R', 'RW_F', 'RW_R']:
+            if condition in all_rounds_data and not all_rounds_data[condition].empty:
+                agg_dict[condition] = all_rounds_data[condition].groupby('round').agg({
+                    'seller_profit': ['mean', 'std'],
+                    'buyer_utility': ['mean', 'std']
+                }).reset_index()
+            
+            if condition in all_profit_by_type and not all_profit_by_type[condition].empty:
+                profit_type_dict[condition] = {
+                    'honest': all_profit_by_type[condition].groupby('round')['honest_profit'].agg(['mean', 'std']).reset_index(),
+                    'dishonest': all_profit_by_type[condition].groupby('round')['dishonest_profit'].agg(['mean', 'std']).reset_index()
+                }
+        
+        # Generate round-by-round table
+        headers = ['Round'] + [f'{c}-Total Profit' for c in ['R_F', 'R_R', 'RW_F', 'RW_R']] + \
+                  [f'{c}-Buyer Utility' for c in ['R_F', 'R_R', 'RW_F', 'RW_R']] + \
+                  [f'{c}-Honest Profit' for c in ['R_F', 'R_R', 'RW_F', 'RW_R']] + \
+                  [f'{c}-Dishonest Profit' for c in ['R_F', 'R_R', 'RW_F', 'RW_R']]
+        
+        rows = []
+        for round_num in rounds:
+            row = [str(round_num)]
+            # Total profit
+            for condition in ['R_F', 'R_R', 'RW_F', 'RW_R']:
+                if condition in agg_dict:
+                    r_data = agg_dict[condition][agg_dict[condition]['round'] == round_num]
+                    if not r_data.empty:
+                        val = r_data[('seller_profit', 'mean')].values[0]
+                        row.append(self._format_number(val, 1))
+                    else:
+                        row.append("N/A")
+                else:
+                    row.append("N/A")
+            # Buyer utility
+            for condition in ['R_F', 'R_R', 'RW_F', 'RW_R']:
+                if condition in agg_dict:
+                    r_data = agg_dict[condition][agg_dict[condition]['round'] == round_num]
+                    if not r_data.empty:
+                        val = r_data[('buyer_utility', 'mean')].values[0]
+                        row.append(self._format_number(val, 1))
+                    else:
+                        row.append("N/A")
+                else:
+                    row.append("N/A")
+            # Honest profit
+            for condition in ['R_F', 'R_R', 'RW_F', 'RW_R']:
+                if condition in profit_type_dict and 'honest' in profit_type_dict[condition]:
+                    h_data = profit_type_dict[condition]['honest'][profit_type_dict[condition]['honest']['round'] == round_num]
+                    if not h_data.empty:
+                        val = h_data['mean'].values[0]
+                        row.append(self._format_number(val, 1))
+                    else:
+                        row.append("N/A")
+                else:
+                    row.append("N/A")
+            # Dishonest profit
+            for condition in ['R_F', 'R_R', 'RW_F', 'RW_R']:
+                if condition in profit_type_dict and 'dishonest' in profit_type_dict[condition]:
+                    d_data = profit_type_dict[condition]['dishonest'][profit_type_dict[condition]['dishonest']['round'] == round_num]
+                    if not d_data.empty:
+                        val = d_data['mean'].values[0]
+                        row.append(self._format_number(val, 1))
+                    else:
+                        row.append("N/A")
+                else:
+                    row.append("N/A")
+            rows.append(row)
+        
+        # Add overall row (mean/sum)
+        overall_row = ['Overall (Mean)']
+        # Total profit mean
+        for condition in ['R_F', 'R_R', 'RW_F', 'RW_R']:
+            if condition in all_rounds_data and not all_rounds_data[condition].empty:
+                overall_row.append(self._format_number(all_rounds_data[condition]['seller_profit'].mean(), 1))
+            else:
+                overall_row.append("N/A")
+        # Buyer utility mean
+        for condition in ['R_F', 'R_R', 'RW_F', 'RW_R']:
+            if condition in all_rounds_data and not all_rounds_data[condition].empty:
+                overall_row.append(self._format_number(all_rounds_data[condition]['buyer_utility'].mean(), 1))
+            else:
+                overall_row.append("N/A")
+        # Honest profit mean
+        for condition in ['R_F', 'R_R', 'RW_F', 'RW_R']:
+            if condition in all_profit_by_type and not all_profit_by_type[condition].empty:
+                overall_row.append(self._format_number(all_profit_by_type[condition]['honest_profit'].mean(), 1))
+            else:
+                overall_row.append("N/A")
+        # Dishonest profit mean
+        for condition in ['R_F', 'R_R', 'RW_F', 'RW_R']:
+            if condition in all_profit_by_type and not all_profit_by_type[condition].empty:
+                overall_row.append(self._format_number(all_profit_by_type[condition]['dishonest_profit'].mean(), 1))
+            else:
+                overall_row.append("N/A")
+        rows.append(overall_row)
+        
+        # Generate and save table
+        md_table = self._generate_markdown_table(headers, rows, "Profit and Utility by Round (4 Conditions)")
+        latex_table = self._generate_latex_table(headers, rows, "Profit and Utility by Round (4 Conditions)", "tab:rq3_profit_utility")
+        
+        table_file = self.table_dir / "rq3_profit_utility_by_round.md"
+        with open(table_file, 'w', encoding='utf-8') as f:
+            f.write(md_table)
+            f.write("\n\n")
+            f.write(latex_table)
+        
+        # Table 2: Overall Profit and Utility Statistics (similar to RQ2 format)
+        # Calculate statistics across all rounds
+        def format_mean_std(values):
+            if len(values) == 0:
+                return "N/A"
+            mean = np.mean(values) if len(values) > 0 else 0.0
+            std = np.std(values) if len(values) > 1 else 0.0
+            return f"{self._format_number(mean, 1)}±{self._format_number(std, 1)}"
+        
+        # New format: rows = condition, columns = metrics with Mean±Std format
+        headers2 = ['Condition', 'Total Profit', 'Honest Profit', 'Dishonest Profit', 'Buyer Utility']
+        rows2 = []
+        
+        for condition in ['R_F', 'R_R', 'RW_F', 'RW_R']:
+            if condition in all_rounds_data and not all_rounds_data[condition].empty:
+                total_profit_all = all_rounds_data[condition]['seller_profit'].values
+                buyer_utility_all = all_rounds_data[condition]['buyer_utility'].values
+                
+                honest_profit_all = all_profit_by_type[condition]['honest_profit'].values if condition in all_profit_by_type and not all_profit_by_type[condition].empty else np.array([])
+                dishonest_profit_all = all_profit_by_type[condition]['dishonest_profit'].values if condition in all_profit_by_type and not all_profit_by_type[condition].empty else np.array([])
+                
+                rows2.append([
+                    CONDITION_LABELS[condition],
+                    format_mean_std(total_profit_all),
+                    format_mean_std(honest_profit_all),
+                    format_mean_std(dishonest_profit_all),
+                    format_mean_std(buyer_utility_all)
+                ])
+        
+        md_table2 = self._generate_markdown_table(headers2, rows2,
+                                                  "Overall Profit and Utility Statistics (All Rounds)")
+        latex_table2 = self._generate_latex_table(headers2, rows2,
+                                                   "Overall Profit and Utility Statistics (All Rounds)",
+                                                   "tab:rq3_profit_utility_overall")
+        
+        # Append to the same file
+        with open(table_file, 'a', encoding='utf-8') as f:
+            f.write("\n\n")
+            f.write(md_table2)
+            f.write("\n\n")
+            f.write(latex_table2)
+        
+        print(f"  ✓ Generated: rq3_profit_utility_by_round.md")
+    
+    def _calculate_gini_coefficient(self, values):
+        """Calculate Gini coefficient for a list of values"""
+        if len(values) == 0 or np.sum(values) == 0:
+            return 0.0
+        values = np.array([v for v in values if v > 0])  # Only consider positive values for Gini
+        if len(values) == 0:
+            return 0.0
+        values = np.sort(values)
+        n = len(values)
+        indices = np.arange(1, n + 1)
+        gini = (2 * np.sum(indices * values)) / (n * np.sum(values)) - (n + 1) / n
+        return max(0.0, min(1.0, gini))  # Ensure output is within [0, 1]
+    
+    def _calculate_gini_by_run(self, exp_id: str, metric_type: str) -> Tuple[float, float]:
+        """Calculate Gini coefficient by run, then return mean and std"""
+        exp_dir = Path(f"experiments/{exp_id}")
+        gini_values = []
+        
+        for db_file in sorted(exp_dir.glob("run_*.db")):
+            try:
+                conn = sqlite3.connect(db_file)
+                if metric_type == 'seller_profit':
+                    query = "SELECT seller_id, SUM(seller_profit) as total_value FROM transactions GROUP BY seller_id"
+                else:  # buyer_utility
+                    query = "SELECT buyer_id, SUM(buyer_utility) as total_value FROM transactions GROUP BY buyer_id"
+                result = pd.read_sql_query(query, conn)
+                conn.close()
+                if not result.empty:
+                    values = result['total_value'].dropna().tolist()
+                    if len(values) > 0:
+                        gini = self._calculate_gini_coefficient(values)
+                        gini_values.append(gini)
+            except Exception as e:
+                print(f"Warning: Could not calculate Gini for {db_file}: {e}")
+        if len(gini_values) == 0:
+            return (0.0, 0.0)
+        return (np.mean(gini_values), np.std(gini_values))
+    
+    def generate_reputation_tables(self):
+        """Generate Reputation Tables (4 conditions) with advanced metrics"""
+        # Load reputation data for all conditions
+        r_reps_dict = {}
+        r_transactions_dict = {}
+        
+        for condition in ['R_F', 'R_R', 'RW_F', 'RW_R']:
+            if condition not in self.exp_ids:
+                continue
+            exp_dir = Path(f"experiments/{self.exp_ids[condition]}")
+            reps = []
+            transactions_list = []
+            
+            for db_file in sorted(exp_dir.glob("run_*.db")):
+                try:
+                    conn = sqlite3.connect(db_file)
+                    # Load reputation data
+                    rep = pd.read_sql_query(
+                        "SELECT round, seller_id, public_thumbs_up, public_thumbs_down FROM reputation_history",
+                        conn
+                    )
+                    if not rep.empty:
+                        rep['public_reputation_score'] = rep['public_thumbs_up'] - rep['public_thumbs_down']
+                    reps.append(rep)
+                    
+                    # Load transaction data for rating analysis
+                    tx = pd.read_sql_query(
+                        "SELECT rating, round_number FROM transactions WHERE rating IS NOT NULL",
+                        conn
+                    )
+                    transactions_list.append(tx)
+                    conn.close()
+                except Exception as e:
+                    print(f"Warning: Could not load reputation data from {db_file}: {e}")
+            
+            if reps:
+                r_reps_dict[condition] = pd.concat(reps)
+            if transactions_list:
+                r_transactions_dict[condition] = pd.concat(transactions_list)
+        
+        # Table 1: Reputation by round
+        all_rounds_data = {}
+        for condition in ['R_F', 'R_R', 'RW_F', 'RW_R']:
+            if condition in self.exp_ids:
+                all_rounds_data[condition] = self._load_round_data_from_db(self.exp_ids[condition])
+        
+        all_rounds = set()
+        for condition in ['R_F', 'R_R', 'RW_F', 'RW_R']:
+            if condition in all_rounds_data and not all_rounds_data[condition].empty:
+                all_rounds.update(all_rounds_data[condition]['round'].unique())
+        rounds = sorted(all_rounds) if all_rounds else []
+        
+        if rounds:
+            headers = ['Round'] + [f'{c}-Avg Reputation' for c in ['R_F', 'R_R', 'RW_F', 'RW_R']]
+            rows = []
+            for round_num in rounds:
+                row = [str(round_num)]
+                for condition in ['R_F', 'R_R', 'RW_F', 'RW_R']:
+                    if condition in all_rounds_data and not all_rounds_data[condition].empty:
+                        r_data = all_rounds_data[condition][all_rounds_data[condition]['round'] == round_num]
+                        r_data_clean = r_data[r_data['avg_reputation'].notna()]
+                        if not r_data_clean.empty:
+                            row.append(self._format_number(r_data_clean['avg_reputation'].mean(), 2))
+                        else:
+                            row.append("N/A")
+                    else:
+                        row.append("N/A")
+                rows.append(row)
+            
+            # Overall row
+            overall_row = ['Overall (Mean)']
+            for condition in ['R_F', 'R_R', 'RW_F', 'RW_R']:
+                if condition in all_rounds_data and not all_rounds_data[condition].empty:
+                    r_clean = all_rounds_data[condition][all_rounds_data[condition]['avg_reputation'].notna()]
+                    if not r_clean.empty:
+                        overall_row.append(self._format_number(r_clean['avg_reputation'].mean(), 2))
+                    else:
+                        overall_row.append("N/A")
+                else:
+                    overall_row.append("N/A")
+            rows.append(overall_row)
+            
+            md_table1 = self._generate_markdown_table(headers, rows, "Reputation by Round (4 Conditions)")
+            latex_table1 = self._generate_latex_table(headers, rows, "Reputation by Round (4 Conditions)", "tab:rq3_reputation_round")
+        else:
+            md_table1 = ""
+            latex_table1 = ""
+        
+        # Table 2: Advanced reputation statistics (similar to RQ2)
+        # Helper function to format Mean±Std
+        def format_mean_std(values):
+            if len(values) == 0:
+                return "N/A"
+            mean = np.mean(values) if len(values) > 0 else 0.0
+            std = np.std(values) if len(values) > 1 else 0.0
+            return f"{self._format_number(mean, 1)}±{self._format_number(std, 1)}"
+        
+        # Advanced metrics calculation
+        def calculate_advanced_metrics(scores, thumbs_up, thumbs_down, delta_list, transactions_df):
+            """Calculate advanced reputation metrics"""
+            metrics = {}
+            
+            if len(scores) == 0:
+                return {k: "N/A" for k in ['rep_mean_std', 'rep_cv', 'pos_rate', 'rep_growth']}
+            
+            # Basic statistics
+            metrics['rep_mean_std'] = format_mean_std(scores)
+            
+            # Coefficient of Variation (stability/volatility)
+            if np.mean(scores) != 0:
+                cv = np.std(scores) / np.abs(np.mean(scores))
+                metrics['rep_cv'] = f"{self._format_number(cv, 3)}"
+            else:
+                metrics['rep_cv'] = "N/A"
+            
+            # Positive rate (thumbs_up / (thumbs_up + thumbs_down))
+            if len(thumbs_up) > 0 and len(thumbs_down) > 0:
+                total_feedback = np.sum(thumbs_up) + np.sum(thumbs_down)
+                if total_feedback > 0:
+                    pos_rate = np.sum(thumbs_up) / total_feedback
+                    metrics['pos_rate'] = f"{self._format_number(pos_rate * 100, 1)}%"
+                else:
+                    metrics['pos_rate'] = "N/A"
+            else:
+                metrics['pos_rate'] = "N/A"
+            
+            # Reputation growth (average delta)
+            delta_nonzero = [d for d in delta_list if d != 0.0]
+            if len(delta_nonzero) > 0:
+                metrics['rep_growth'] = format_mean_std(delta_nonzero)
+            else:
+                metrics['rep_growth'] = "N/A"
+            
+            return metrics
+        
+        # Calculate metrics for each condition
+        condition_metrics = {}
+        for condition in ['R_F', 'R_R', 'RW_F', 'RW_R']:
+            if condition not in r_reps_dict or r_reps_dict[condition].empty:
+                continue
+            
+            all_rep = r_reps_dict[condition]
+            all_scores = all_rep['public_reputation_score'].dropna().values
+            
+            # Calculate thumbs_up and thumbs_down
+            thumbs_up_all = []
+            thumbs_down_all = []
+            if 'public_thumbs_up' in all_rep.columns and 'public_thumbs_down' in all_rep.columns:
+                thumbs_up_all = all_rep['public_thumbs_up'].dropna().values
+                thumbs_down_all = all_rep['public_thumbs_down'].dropna().values
+            
+            # Calculate delta reputation
+            agg = all_rep.groupby('round')['public_reputation_score'].agg(['mean']).reset_index()
+            agg_sorted = agg.sort_values('round')
+            delta_list = []
+            for i, round_num in enumerate(sorted(agg_sorted['round'].unique())):
+                if i == 0:
+                    delta_list.append(0.0)
+                else:
+                    prev_round = sorted(agg_sorted['round'].unique())[i-1]
+                    curr_mean = agg_sorted[agg_sorted['round'] == round_num]['mean'].values[0]
+                    prev_mean = agg_sorted[agg_sorted['round'] == prev_round]['mean'].values[0]
+                    delta_list.append(curr_mean - prev_mean)
+            
+            # Get transaction data
+            tx_all = r_transactions_dict.get(condition, pd.DataFrame())
+            
+            condition_metrics[condition] = calculate_advanced_metrics(
+                all_scores, thumbs_up_all, thumbs_down_all, delta_list, tx_all
+            )
+        
+        # Generate table
+        headers2 = ['Condition', 'Reputation', 'Reputation CV',
+                    'Positive Rate', 'Reputation Growth']
+        rows2 = []
+        
+        for condition in ['R_F', 'R_R', 'RW_F', 'RW_R']:
+            if condition in condition_metrics:
+                rows2.append([
+                    CONDITION_LABELS[condition],
+                    condition_metrics[condition]['rep_mean_std'],
+                    condition_metrics[condition]['rep_cv'],
+                    condition_metrics[condition]['pos_rate'],
+                    condition_metrics[condition]['rep_growth']
+                ])
+        
+        md_table2 = self._generate_markdown_table(headers2, rows2,
+                                                "Average Reputation Statistics (All Rounds)")
+        latex_table2 = self._generate_latex_table(headers2, rows2,
+                                                "Average Reputation Statistics (All Rounds)",
+                                                "tab:rq3_reputation_statistics")
+        
+        # Save both tables to the same file
+        table_file = self.table_dir / "rq3_reputation_by_round.md"
+        with open(table_file, 'w', encoding='utf-8') as f:
+            if md_table1:
+                f.write(md_table1)
+                f.write("\n\n")
+                f.write(latex_table1)
+                f.write("\n\n")
+            f.write(md_table2)
+            f.write("\n\n")
+            f.write(latex_table2)
+        
+        print(f"  ✓ Generated: rq3_reputation_by_round.md")
+    
+    def generate_rating_by_quality_table(self):
+        """Generate Rating by Quality Table (4 conditions)"""
+        ratings_dict = {}
+        for condition in ['R_F', 'R_R', 'RW_F', 'RW_R']:
+            if condition in self.exp_ids:
+                ratings_dict[condition] = self._load_ratings_by_quality(self.exp_ids[condition])
+        
+        all_rounds = set()
+        for condition in ['R_F', 'R_R', 'RW_F', 'RW_R']:
+            if condition in ratings_dict and not ratings_dict[condition].empty:
+                all_rounds.update(ratings_dict[condition]['round_number'].unique())
+        rounds = sorted(all_rounds) if all_rounds else []
+        
+        if not rounds:
+            return
+        
+        headers = ['Round'] + [f'{c}-HQ Rating' for c in ['R_F', 'R_R', 'RW_F', 'RW_R']] + \
+                  [f'{c}-LQ Rating' for c in ['R_F', 'R_R', 'RW_F', 'RW_R']]
+        
+        rows = []
+        for round_num in rounds:
+            row = [str(round_num)]
+            # HQ ratings
+            for condition in ['R_F', 'R_R', 'RW_F', 'RW_R']:
+                if condition in ratings_dict and not ratings_dict[condition].empty:
+                    hq_data = ratings_dict[condition][
+                        (ratings_dict[condition]['round_number'] == round_num) & 
+                        (ratings_dict[condition]['true_quality'] == 'HQ')
+                    ]
+                    if not hq_data.empty:
+                        row.append(self._format_number(hq_data['rating'].mean(), 2))
+                    else:
+                        row.append("N/A")
+                else:
+                    row.append("N/A")
+            # LQ ratings
+            for condition in ['R_F', 'R_R', 'RW_F', 'RW_R']:
+                if condition in ratings_dict and not ratings_dict[condition].empty:
+                    lq_data = ratings_dict[condition][
+                        (ratings_dict[condition]['round_number'] == round_num) & 
+                        (ratings_dict[condition]['true_quality'] == 'LQ')
+                    ]
+                    if not lq_data.empty:
+                        row.append(self._format_number(lq_data['rating'].mean(), 2))
+                    else:
+                        row.append("N/A")
+                else:
+                    row.append("N/A")
+            rows.append(row)
+        
+        # Overall row
+        overall_row = ['Overall (Mean)']
+        for condition in ['R_F', 'R_R', 'RW_F', 'RW_R']:
+            if condition in ratings_dict and not ratings_dict[condition].empty:
+                hq_all = ratings_dict[condition][ratings_dict[condition]['true_quality'] == 'HQ']
+                if not hq_all.empty:
+                    overall_row.append(self._format_number(hq_all['rating'].mean(), 2))
+                else:
+                    overall_row.append("N/A")
+            else:
+                overall_row.append("N/A")
+        for condition in ['R_F', 'R_R', 'RW_F', 'RW_R']:
+            if condition in ratings_dict and not ratings_dict[condition].empty:
+                lq_all = ratings_dict[condition][ratings_dict[condition]['true_quality'] == 'LQ']
+                if not lq_all.empty:
+                    overall_row.append(self._format_number(lq_all['rating'].mean(), 2))
+                else:
+                    overall_row.append("N/A")
+            else:
+                overall_row.append("N/A")
+        rows.append(overall_row)
+        
+        md_table = self._generate_markdown_table(headers, rows, "Rating by Product Quality (4 Conditions)")
+        latex_table = self._generate_latex_table(headers, rows, "Rating by Product Quality (4 Conditions)", "tab:rq3_rating_quality")
+        
+        table_file = self.table_dir / "rq3_rating_by_quality.md"
+        with open(table_file, 'w', encoding='utf-8') as f:
+            f.write(md_table)
+            f.write("\n\n")
+            f.write(latex_table)
+        print(f"  ✓ Generated: rq3_rating_by_quality.md")
     
     def generate_all(self):
         """Generate all visualizations"""
@@ -1352,6 +2694,7 @@ class RQ3Visualizer:
         self.plot_seller_profit()
         self.plot_buyer_utility()
         self.plot_reputation()
+        self.plot_product_quality_evolution()
         self.plot_total_market_metrics()
         
         # Agent-Level Analysis
@@ -1359,6 +2702,9 @@ class RQ3Visualizer:
         
         # Communication Content Analysis
         self.plot_communication_content()
+        
+        # Generate tables
+        self.generate_tables()
         
         print()
         print(f"✓ All visualizations generated in: {self.output_dir}")
