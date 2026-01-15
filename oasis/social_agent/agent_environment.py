@@ -106,12 +106,12 @@ class SocialEnvironment(Environment):
                         )
                     else:
                         warrant_str = "Warranted" if has_warrant else "No Warrant"
-                    listings += (
+                        listings += (
                             f"  Product {product_id}: {adv_quality} quality, "
                             f"Price ${price:.2f}, "
                             f"Brand {brand_name} (👍{thumbs_up} 👎{thumbs_down}), "
                             f"{warrant_str}\n"
-                    )
+                        )
         except sqlite3.Error as e:
             print(f"Database query error (get_product_listings_for_env): {e}")
         finally:
