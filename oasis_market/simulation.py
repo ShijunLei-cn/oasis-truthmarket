@@ -348,6 +348,7 @@ class MarketSimulation:
             model_type=self.config.MODEL_TYPE,
             api_key=os.getenv("MODEL_API_KEY"),
             url=os.getenv("MODEL_BASE_URL"),
+            temperature=getattr(self.config, 'MODEL_TEMPERATURE', 0.0),
         )
         
         # Initialize agents and environment
@@ -456,7 +457,7 @@ async def run_single_simulation(database_path: str, market_type: Optional[str] =
         communication_channel_type: Type of communication channel ("Fake" or "Real")
         posts4seller: Type of initial posts for sellers ('policy_making', 'pressure_quickprofits', 'psychological-based-attack')
     """
-    from config import SimulationConfig
+    from config import SimulationConfig  #NOTE：The imported class will be loaded from the cache, and the configuration of yaml will be passed in normally.  
     
     # Override communication type in config if needed
     original_comm_type = getattr(SimulationConfig, 'COMMUNICATION_TYPE', 'none')

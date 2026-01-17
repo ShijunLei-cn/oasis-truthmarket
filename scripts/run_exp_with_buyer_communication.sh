@@ -8,42 +8,59 @@ echo "=========================================="
 echo "RQ4 Experiment: Buyer Adaptation Mechanisms"
 echo "=========================================="
 
+# Configuration file path (optional - if not provided, uses default config.py)
+CONFIG_FILE="${CONFIG_FILE:-configs/rq4_experiment_0.yaml}"
+
+
+
 # Reputation only market - Fake channel
 echo ""
 echo "Running Reputation-Only + Buyer Communication + Fake Channel..."
-python ./example/run_single_config_experiment.py \
+echo "Using config: ${CONFIG_FILE:-default config.py}"
+python ./example/run_single_config_ablation_experiment.py \
     --experiment-id r_wbc_F \
     --market-type reputation_only \
-    --communication buyer \
+    --communication both \
     --communication-channel-type Fake \
-    --runs 5
+    --Posts4Seller policy_making \
+    --runs 5 \
+    --config "${CONFIG_FILE}"
 
 # Reputation only market - Real channel
 echo ""
 echo "Running Reputation-Only + Buyer Communication + Real Channel..."
-python ./example/run_single_config_experiment.py \
+echo "Using config: ${CONFIG_FILE:-default config.py}"
+python ./example/run_single_config_ablation_experiment.py \
     --experiment-id r_wbc_R \
     --market-type reputation_only \
-    --communication buyer \
+    --communication both \
     --communication-channel-type Real \
-    --runs 5
+    --Posts4Seller policy_making \
+    --runs 5 \
+    --config "${CONFIG_FILE}"
 
 # Reputation and warrant market - Fake channel
 echo ""
 echo "Running Reputation+Warrant + Buyer Communication + Fake Channel..."
-python ./example/run_single_config_experiment.py \
+echo "Using config: ${CONFIG_FILE:-default config.py}"
+python ./example/run_single_config_ablation_experiment.py \
     --experiment-id rw_wbc_F \
     --market-type reputation_and_warrant \
-    --communication buyer \
+    --communication both \
     --communication-channel-type Fake \
-    --runs 5
+    --Posts4Seller policy_making \
+    --runs 5 \
+    --config "${CONFIG_FILE}"
 
 # Reputation and warrant market - Real channel
 echo ""
 echo "Running Reputation+Warrant + Buyer Communication + Real Channel..."
-python ./example/run_single_config_experiment.py \
+echo "Using config: ${CONFIG_FILE:-default config.py}"
+python ./example/run_single_config_ablation_experiment.py \
     --experiment-id rw_wbc_R \
     --market-type reputation_and_warrant \
-    --communication buyer \
+    --communication both \
     --communication-channel-type Real \
-    --runs 5
+    --Posts4Seller policy_making \
+    --runs 5 \
+    --config "${CONFIG_FILE}"

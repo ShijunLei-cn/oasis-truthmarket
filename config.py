@@ -70,6 +70,7 @@ class SimulationConfig:
     MODEL_TYPE = "gpt-4o-mini"
     # MODEL_TYPE = "gpt-4.1"
     # MODEL_TYPE = "Qwen3-8B"
+    MODEL_TEMPERATURE = 0.0  # Temperature for LLM responses (default: 0.0 for deterministic behavior)
 
     # Path configuration
     BASE_DATA_PATH = "experiments"
@@ -117,7 +118,8 @@ class SimulationConfig:
             'COMMUNICATION_TYPE': cls.COMMUNICATION_TYPE,
             'COMMUNICATION_CHANNEL_TYPE': cls.COMMUNICATION_CHANNEL_TYPE,
             'MODEL_PLATFORM': cls.MODEL_PLATFORM,
-            'MODEL_TYPE': cls.MODEL_TYPE
+            'MODEL_TYPE': cls.MODEL_TYPE,
+            'MODEL_TEMPERATURE': cls.MODEL_TEMPERATURE
         }
 
     @classmethod
@@ -186,6 +188,7 @@ class SimulationConfig:
             model_config = config_dict['model']
             cls.MODEL_PLATFORM = model_config.get('platform', cls.MODEL_PLATFORM)
             cls.MODEL_TYPE = model_config.get('type', cls.MODEL_TYPE)
+            cls.MODEL_TEMPERATURE = model_config.get('temperature', cls.MODEL_TEMPERATURE)
         
         # Load path configuration
         if 'paths' in config_dict:
