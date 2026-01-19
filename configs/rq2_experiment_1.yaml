@@ -1,0 +1,46 @@
+# RQ2 Experiment Configuration
+# Configuration file for RQ2 experiments comparing Reputation-Only vs Reputation+Warrant markets
+
+experiment:
+  runs: 5
+  num_sellers: 5
+  num_buyers: 5
+  simulation_rounds: 10
+
+market_params:
+  # Production costs
+  hq_cost: 4.0
+  lq_cost: 2.0
+  # Prices
+  hq_price: 8.0
+  lq_price: 3.0
+  # Consumer values (utility)
+  hq_utility: 12.0
+  lq_utility: 4.0
+  # Warranty/Escrow system
+  hq_warrant_escrow: 8.0
+  lq_warrant_escrow: 2.0
+  # Challenge mechanism
+  challenge_cost: 1.0
+  # Budget configuration (refreshed at the start of each round)
+  seller_budget: 30.0
+  buyer_budget: 60.0
+
+market_rules:
+  reputation_lag: null
+  reentry_allowed_round: null
+  initial_window_rounds: []
+  exit_round: null
+  market_type: reputation_only  # Will be overridden by command line argument
+  communication_type: none  # Will be overridden by command line argument
+  communication_channel_type: Fake
+
+model:
+  platform: openai
+  type: gpt-4o-mini
+  temperature: 0.0
+
+paths:
+  base_data_path: experiments
+  base_analysis_path: analysis
+

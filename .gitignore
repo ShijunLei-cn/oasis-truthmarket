@@ -218,7 +218,7 @@ analysis/comparison_*
 analysis/agent_analysis
 analysis/*
 comparisions
-configs
+
 
 analysis/bkp
 analysis/exp**

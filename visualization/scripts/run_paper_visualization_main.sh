@@ -25,7 +25,7 @@ echo "=========================================="
 
 RQ1_R_INPUT_DIR="experiments/${EXPERIMENT_PREFIX}/rq1/r_wo"
 RQ1_RW_INPUT_DIR="experiments/${EXPERIMENT_PREFIX}/rq1/rw_wo"
-RQ1_OUTPUT_DIR="visualization/figs/${EXPERIMENT_PREFIX}/rq1_analysis"
+RQ1_OUTPUT_DIR="visualization/figs/${EXPERIMENT_PREFIX}/rq1_comparison"
 
 # Check if RQ1 data exists
 if [ -d "$RQ1_R_INPUT_DIR" ] || [ -d "$RQ1_RW_INPUT_DIR" ]; then
@@ -36,18 +36,22 @@ if [ -d "$RQ1_R_INPUT_DIR" ] || [ -d "$RQ1_RW_INPUT_DIR" ]; then
     # Create output directory
     mkdir -p "$RQ1_OUTPUT_DIR"
     
-    # Run RQ1 visualization for reputation_only
-    if [ -d "$RQ1_R_INPUT_DIR" ]; then
-        echo "  Processing Reputation-Only experiments..."
+    # Run RQ1 comparison visualization (generates both individual and comparison analyses)
+    if [ -d "$RQ1_R_INPUT_DIR" ] && [ -d "$RQ1_RW_INPUT_DIR" ]; then
+        echo "  Processing both market types with comparison analysis..."
+        python3 visualization/scripts/rq1_visualization.py \
+            --r-input-dir "$RQ1_R_INPUT_DIR" \
+            --rw-input-dir "$RQ1_RW_INPUT_DIR" \
+            --output-dir "$RQ1_OUTPUT_DIR" \
+            --save-stats || echo "  Warning: RQ1 comparison visualization failed"
+    elif [ -d "$RQ1_R_INPUT_DIR" ]; then
+        echo "  Processing Reputation-Only experiments (single analysis)..."
         python3 visualization/scripts/rq1_visualization.py \
             --input-dir "$RQ1_R_INPUT_DIR" \
             --output-dir "$RQ1_OUTPUT_DIR/r_wo" \
             --save-stats || echo "  Warning: RQ1 R visualization failed"
-    fi
-    
-    # Run RQ1 visualization for reputation_and_warrant
-    if [ -d "$RQ1_RW_INPUT_DIR" ]; then
-        echo "  Processing Reputation+Warrant experiments..."
+    elif [ -d "$RQ1_RW_INPUT_DIR" ]; then
+        echo "  Processing Reputation+Warrant experiments (single analysis)..."
         python3 visualization/scripts/rq1_visualization.py \
             --input-dir "$RQ1_RW_INPUT_DIR" \
             --output-dir "$RQ1_OUTPUT_DIR/rw_wo" \
@@ -205,7 +209,7 @@ echo "All visualizations complete!"
 echo "=========================================="
 echo ""
 echo "Results saved in:"
-echo "  - visualization/figs/${EXPERIMENT_PREFIX}/rq1_analysis/ (RQ1)"
+echo "  - visualization/figs/${EXPERIMENT_PREFIX}/rq1_comparison/ (RQ1)"
 echo "  - visualization/figs/${EXPERIMENT_PREFIX}/rq2_comparison/ (RQ2)"
 echo "  - visualization/figs/${EXPERIMENT_PREFIX}/rq3_comparison/ (RQ3)"
 if [ -d "experiments/$RQ4_R_F_EXP_ID" ] || [ -d "experiments/$RQ4_R_R_EXP_ID" ]; then

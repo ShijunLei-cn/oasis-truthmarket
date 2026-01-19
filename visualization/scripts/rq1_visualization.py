@@ -595,6 +595,211 @@ def generate_tables(df: pd.DataFrame, stats: Dict, output_dir: Path):
     
     print(f"\n✅ All tables generated in: {table_dir}")
 
+def generate_comparison_tables(df_r: pd.DataFrame, stats_r: Dict, df_rw: pd.DataFrame, stats_rw: Dict):
+    """Generate comparison tables for RQ1 analysis (Reputation Only vs Reputation + Warrant)"""
+    table_dir = Path("visualization/table")
+    table_dir.mkdir(parents=True, exist_ok=True)
+    
+    print(f"\n📊 Generating RQ1 comparison tables...")
+    
+    # 1. Manipulation Detection by Vulnerability Type (Comparison)
+    if (stats_r.get("by_vulnerability_type") or stats_rw.get("by_vulnerability_type")):
+        # Get all vulnerability types from both
+        all_vuln_types = set()
+        if stats_r.get("by_vulnerability_type"):
+            all_vuln_types.update(stats_r["by_vulnerability_type"].keys())
+        if stats_rw.get("by_vulnerability_type"):
+            all_vuln_types.update(stats_rw["by_vulnerability_type"].keys())
+        
+        headers = ["Vulnerability Type", "R: Total Probes", "R: Detected", "R: Rate (%)",
+                  "RW: Total Probes", "RW: Detected", "RW: Rate (%)"]
+        rows = []
+        
+        for vuln_type in sorted(all_vuln_types):
+            label = vuln_type.replace("_", " ").title()
+            
+            # Reputation Only data
+            r_data = stats_r.get("by_vulnerability_type", {}).get(vuln_type, {})
+            r_total = r_data.get('total_probes', 0) if r_data else 0
+            r_detected = r_data.get('manipulation_detected', 0) if r_data else 0
+            r_rate = r_data.get('manipulation_rate', 0) * 100 if r_data else 0
+            
+            # Reputation + Warrant data
+            rw_data = stats_rw.get("by_vulnerability_type", {}).get(vuln_type, {})
+            rw_total = rw_data.get('total_probes', 0) if rw_data else 0
+            rw_detected = rw_data.get('manipulation_detected', 0) if rw_data else 0
+            rw_rate = rw_data.get('manipulation_rate', 0) * 100 if rw_data else 0
+            
+            rows.append([
+                label,
+                str(r_total) if r_total > 0 else "N/A",
+                str(r_detected) if r_total > 0 else "N/A",
+                _format_number(r_rate, 1) if r_total > 0 else "N/A",
+                str(rw_total) if rw_total > 0 else "N/A",
+                str(rw_detected) if rw_total > 0 else "N/A",
+                _format_number(rw_rate, 1) if rw_total > 0 else "N/A"
+            ])
+        
+        md_table = _generate_markdown_table(headers, rows,
+                                           "Manipulation Detection by Vulnerability Type (Comparison)")
+        latex_table = _generate_latex_table(headers, rows,
+                                          "Manipulation Detection by Vulnerability Type (Comparison)",
+                                          "tab:rq1_vulnerability_comparison")
+        
+        table_file = table_dir / "rq1_vulnerability_detection_comparison.md"
+        with open(table_file, 'w', encoding='utf-8') as f:
+            f.write(md_table)
+            f.write("\n\n")
+            f.write(latex_table)
+        print(f"  ✓ Generated: rq1_vulnerability_detection_comparison.md")
+    
+    # 2. Manipulation Detection by Round (Comparison)
+    if (stats_r.get("by_round") or stats_rw.get("by_round")):
+        # Get all rounds from both
+        all_rounds = set()
+        if stats_r.get("by_round"):
+            all_rounds.update(stats_r["by_round"].keys())
+        if stats_rw.get("by_round"):
+            all_rounds.update(stats_rw["by_round"].keys())
+        
+        headers = ["Round", "R: Total Probes", "R: Detected", "R: Rate (%)",
+                  "RW: Total Probes", "RW: Detected", "RW: Rate (%)"]
+        rows = []
+        
+        for round_num in sorted(all_rounds):
+            # Reputation Only data
+            r_data = stats_r.get("by_round", {}).get(round_num, {})
+            r_total = r_data.get('total_probes', 0) if r_data else 0
+            r_detected = r_data.get('manipulation_detected', 0) if r_data else 0
+            r_rate = r_data.get('manipulation_rate', 0) * 100 if r_data else 0
+            
+            # Reputation + Warrant data
+            rw_data = stats_rw.get("by_round", {}).get(round_num, {})
+            rw_total = rw_data.get('total_probes', 0) if rw_data else 0
+            rw_detected = rw_data.get('manipulation_detected', 0) if rw_data else 0
+            rw_rate = rw_data.get('manipulation_rate', 0) * 100 if rw_data else 0
+            
+            rows.append([
+                str(round_num),
+                str(r_total) if r_total > 0 else "N/A",
+                str(r_detected) if r_total > 0 else "N/A",
+                _format_number(r_rate, 1) if r_total > 0 else "N/A",
+                str(rw_total) if rw_total > 0 else "N/A",
+                str(rw_detected) if rw_total > 0 else "N/A",
+                _format_number(rw_rate, 1) if rw_total > 0 else "N/A"
+            ])
+        
+        md_table = _generate_markdown_table(headers, rows,
+                                           "Manipulation Detection by Round (Comparison)")
+        latex_table = _generate_latex_table(headers, rows,
+                                          "Manipulation Detection by Round (Comparison)",
+                                          "tab:rq1_round_comparison")
+        
+        table_file = table_dir / "rq1_round_detection_comparison.md"
+        with open(table_file, 'w', encoding='utf-8') as f:
+            f.write(md_table)
+            f.write("\n\n")
+            f.write(latex_table)
+        print(f"  ✓ Generated: rq1_round_detection_comparison.md")
+    
+    # 3. Overall Summary Statistics (Comparison) - Vulnerability Detection Rates by Market Type
+    # Define the 5 vulnerability types in standard order
+    vulnerability_types = [
+        ('initial_window', 'Initial Window'),
+        ('reputation_lag', 'Reputation Lag'),
+        ('value_imbalance', 'Value Imbalance'),
+        ('reentry', 'Re-entry'),
+        ('exit_strategy', 'Exit Strategy')
+    ]
+    
+    headers = ["Market Type"] + [label for _, label in vulnerability_types]
+    rows = []
+    
+    # Row 1: Reputation Only
+    r_row = ["Reputation Only"]
+    for vuln_type, _ in vulnerability_types:
+        r_data = stats_r.get("by_vulnerability_type", {}).get(vuln_type, {}) if stats_r and 'error' not in stats_r else {}
+        r_rate = r_data.get('manipulation_rate', 0) * 100 if r_data else 0
+        r_row.append(_format_number(r_rate, 1) if r_data else "N/A")
+    rows.append(r_row)
+    
+    # Row 2: Reputation + Warrant
+    rw_row = ["Reputation + Warrant"]
+    for vuln_type, _ in vulnerability_types:
+        rw_data = stats_rw.get("by_vulnerability_type", {}).get(vuln_type, {}) if stats_rw and 'error' not in stats_rw else {}
+        rw_rate = rw_data.get('manipulation_rate', 0) * 100 if rw_data else 0
+        rw_row.append(_format_number(rw_rate, 1) if rw_data else "N/A")
+    rows.append(rw_row)
+    
+    md_table = _generate_markdown_table(headers, rows,
+                                       "RQ1 Manipulation Detection Rate by Vulnerability Type and Market Type")
+    latex_table = _generate_latex_table(headers, rows,
+                                      "RQ1 Manipulation Detection Rate by Vulnerability Type and Market Type",
+                                      "tab:rq1_summary_comparison")
+    
+    table_file = table_dir / "rq1_summary_statistics_comparison.md"
+    with open(table_file, 'w', encoding='utf-8') as f:
+        f.write(md_table)
+        f.write("\n\n")
+        f.write(latex_table)
+    print(f"  ✓ Generated: rq1_summary_statistics_comparison.md")
+    
+    # 4. Option Distribution by Vulnerability Type (Comparison)
+    if (not df_r.empty and "selected_option" in df_r.columns) or \
+       (not df_rw.empty and "selected_option" in df_rw.columns):
+        # Get all vulnerability types from both dataframes
+        all_vuln_types = set()
+        if not df_r.empty and "vulnerability_type" in df_r.columns:
+            all_vuln_types.update(df_r["vulnerability_type"].unique())
+        if not df_rw.empty and "vulnerability_type" in df_rw.columns:
+            all_vuln_types.update(df_rw["vulnerability_type"].unique())
+        
+        headers = ["Vulnerability Type", "R: Option A", "R: Option B", "R: Option C",
+                  "RW: Option A", "RW: Option B", "RW: Option C"]
+        rows = []
+        
+        for vuln_type in sorted(all_vuln_types):
+            label = vuln_type.replace("_", " ").title()
+            
+            # Reputation Only option counts
+            r_subset = df_r[df_r["vulnerability_type"] == vuln_type] if not df_r.empty else pd.DataFrame()
+            r_option_counts = r_subset["selected_option"].value_counts().to_dict() if not r_subset.empty and "selected_option" in r_subset.columns else {}
+            r_a = r_option_counts.get("A", 0)
+            r_b = r_option_counts.get("B", 0)
+            r_c = r_option_counts.get("C", 0)
+            
+            # Reputation + Warrant option counts
+            rw_subset = df_rw[df_rw["vulnerability_type"] == vuln_type] if not df_rw.empty else pd.DataFrame()
+            rw_option_counts = rw_subset["selected_option"].value_counts().to_dict() if not rw_subset.empty and "selected_option" in rw_subset.columns else {}
+            rw_a = rw_option_counts.get("A", 0)
+            rw_b = rw_option_counts.get("B", 0)
+            rw_c = rw_option_counts.get("C", 0)
+            
+            rows.append([
+                label,
+                str(r_a) if not r_subset.empty else "N/A",
+                str(r_b) if not r_subset.empty else "N/A",
+                str(r_c) if not r_subset.empty else "N/A",
+                str(rw_a) if not rw_subset.empty else "N/A",
+                str(rw_b) if not rw_subset.empty else "N/A",
+                str(rw_c) if not rw_subset.empty else "N/A"
+            ])
+        
+        md_table = _generate_markdown_table(headers, rows,
+                                           "Option Distribution by Vulnerability Type (Comparison)")
+        latex_table = _generate_latex_table(headers, rows,
+                                          "Option Distribution by Vulnerability Type (Comparison)",
+                                          "tab:rq1_option_comparison")
+        
+        table_file = table_dir / "rq1_option_distribution_comparison.md"
+        with open(table_file, 'w', encoding='utf-8') as f:
+            f.write(md_table)
+            f.write("\n\n")
+            f.write(latex_table)
+        print(f"  ✓ Generated: rq1_option_distribution_comparison.md")
+    
+    print(f"\n✅ All comparison tables generated in: {table_dir}")
+
 def extract_prefix_from_path(path_str: str) -> str:
     """Extract prefix from path (e.g., 'experiments/1230/r_wo' -> '1230', '1230/r_wo' -> '1230')"""
     path = Path(path_str)
@@ -622,97 +827,412 @@ def extract_prefix_from_path(path_str: str) -> str:
     
     return ""
 
+def plot_comparison_manipulation_heatmap(df_r: pd.DataFrame, df_rw: pd.DataFrame, output_path: Path):
+    """Create side-by-side heatmap comparison of manipulation detection rates."""
+    if df_r.empty and df_rw.empty:
+        print("No data to plot for comparison.")
+        return
+    
+    fig, axes = plt.subplots(1, 2, figsize=(24, 8))
+    
+    rename_map = {
+        'initial_window': 'Initial Window',
+        'reputation_lag': 'Reputation Lag',
+        'value_imbalance': 'Value Imbalance',
+        'reentry': 'Re-entry',
+        'exit_strategy': 'Exit Strategy'
+    }
+    
+    sns.set_theme(style="white")
+    
+    for idx, (df, label, ax) in enumerate([(df_r, "Reputation Only", axes[0]), (df_rw, "Reputation + Warrant", axes[1])]):
+        if df.empty:
+            ax.text(0.5, 0.5, f"No data for {label}", ha='center', va='center', transform=ax.transAxes)
+            ax.set_title(label, fontsize=14, fontweight='bold', pad=20)
+            continue
+        
+        # Calculate detection rate
+        stats = df.groupby(['agent_id', 'vulnerability_type']).agg(
+            detected_count=('manipulation_detected', 'sum'),
+            total_count=('manipulation_detected', 'count')
+        ).reset_index()
+        
+        stats['detection_rate'] = stats['detected_count'] / stats['total_count']
+        
+        # Pivot for heatmap
+        pivot_df = stats.pivot(index='agent_id', columns='vulnerability_type', values='detection_rate')
+        pivot_df = pivot_df.sort_index()
+        pivot_df.columns = [rename_map.get(col, col) for col in pivot_df.columns]
+        
+        sns.heatmap(
+            pivot_df,
+            annot=True,
+            fmt=".2f",
+            cmap="YlOrRd",
+            linewidths=.5,
+            cbar_kws={'label': 'Detection Rate'},
+            vmin=0, vmax=1,
+            ax=ax
+        )
+        
+        ax.set_title(label, fontsize=14, fontweight='bold', pad=20)
+        ax.set_xlabel('Probe Type (Manipulation Strategy)', fontsize=12, fontweight='bold')
+        if idx == 0:
+            ax.set_ylabel('Seller ID', fontsize=12, fontweight='bold')
+        else:
+            ax.set_ylabel('')
+    
+    plt.suptitle('RQ1: Cognitive Manipulation Detection Rate Comparison', fontsize=16, fontweight='bold', y=1.02)
+    plt.tight_layout()
+    
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"✓ Generated comparison heatmap: {output_path}")
+
+def plot_comparison_manipulation_by_vulnerability(stats_r: Dict, stats_rw: Dict, output_path: Path):
+    """Create side-by-side bar chart comparison of manipulation rates by vulnerability type."""
+    if ("by_vulnerability_type" not in stats_r or not stats_r["by_vulnerability_type"]) and \
+       ("by_vulnerability_type" not in stats_rw or not stats_rw["by_vulnerability_type"]):
+        return
+    
+    fig, axes = plt.subplots(1, 2, figsize=(24, 6))
+    
+    for idx, (stats, label, ax) in enumerate([(stats_r, "Reputation Only", axes[0]), (stats_rw, "Reputation + Warrant", axes[1])]):
+        if "by_vulnerability_type" not in stats or not stats["by_vulnerability_type"]:
+            ax.text(0.5, 0.5, f"No data for {label}", ha='center', va='center', transform=ax.transAxes)
+            ax.set_title(label, fontsize=14, fontweight='bold')
+            continue
+        
+        vuln_data = stats["by_vulnerability_type"]
+        vuln_types = list(vuln_data.keys())
+        rates = [vuln_data[v]["manipulation_rate"] * 100 for v in vuln_types]
+        counts = [vuln_data[v]["manipulation_detected"] for v in vuln_types]
+        totals = [vuln_data[v]["total_probes"] for v in vuln_types]
+        labels = [v.replace("_", " ").title() for v in vuln_types]
+        
+        colors = ["#e74c3c", "#f39c12", "#3498db", "#2ecc71", "#9b59b6"]
+        bars = ax.bar(labels, rates, color=colors[:len(labels)], edgecolor="black", linewidth=1.2)
+        
+        for bar, count, total in zip(bars, counts, totals):
+            height = bar.get_height()
+            ax.annotate(
+                f"{height:.1f}%\n({count}/{total})",
+                xy=(bar.get_x() + bar.get_width() / 2, height),
+                xytext=(0, 3),
+                textcoords="offset points",
+                ha="center",
+                va="bottom",
+                fontsize=10,
+                fontweight="bold",
+            )
+        
+        ax.set_ylabel("Manipulation Detection Rate (%)", fontsize=12)
+        ax.set_xlabel("Vulnerability Type", fontsize=12)
+        ax.set_title(label, fontsize=14, fontweight="bold")
+        ax.set_ylim(0, max(rates) * 1.3 if rates else 100)
+        ax.yaxis.grid(True, linestyle="--", alpha=0.7)
+        ax.set_axisbelow(True)
+        plt.setp(ax.xaxis.get_majorticklabels(), rotation=15, ha="right")
+    
+    plt.suptitle('RQ1: Manipulation Detection Rate by Vulnerability Type Comparison', fontsize=16, fontweight='bold', y=1.02)
+    plt.tight_layout()
+    
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"✓ Generated comparison vulnerability chart: {output_path}")
+
+def plot_comparison_manipulation_over_rounds(stats_r: Dict, stats_rw: Dict, output_path: Path):
+    """Create side-by-side line chart comparison of manipulation trends over rounds."""
+    if ("by_round" not in stats_r or not stats_r["by_round"]) and \
+       ("by_round" not in stats_rw or not stats_rw["by_round"]):
+        return
+    
+    fig, axes = plt.subplots(1, 2, figsize=(24, 6))
+    
+    for idx, (stats, label, ax, color) in enumerate([
+        (stats_r, "Reputation Only", axes[0], "#d62728"),
+        (stats_rw, "Reputation + Warrant", axes[1], "#1f77b4")
+    ]):
+        if "by_round" not in stats or not stats["by_round"]:
+            ax.text(0.5, 0.5, f"No data for {label}", ha='center', va='center', transform=ax.transAxes)
+            ax.set_title(label, fontsize=14, fontweight='bold')
+            continue
+        
+        round_data = stats["by_round"]
+        rounds = sorted(round_data.keys())
+        rates = [round_data[r]["manipulation_rate"] * 100 for r in rounds]
+        
+        ax.plot(rounds, rates, marker="o", linewidth=2, markersize=8, color=color)
+        ax.fill_between(rounds, rates, alpha=0.3, color=color)
+        
+        ax.set_xlabel("Round Number", fontsize=12)
+        ax.set_ylabel("Manipulation Detection Rate (%)", fontsize=12)
+        ax.set_title(label, fontsize=14, fontweight="bold")
+        ax.set_xticks(rounds)
+        ax.yaxis.grid(True, linestyle="--", alpha=0.7)
+        ax.set_axisbelow(True)
+        
+        if len(rounds) >= 2:
+            ax.axvspan(0.5, 2.5, alpha=0.2, color="yellow", label="Initial Window")
+            ax.legend()
+    
+    plt.suptitle('RQ1: Manipulation Behavior Over Time Comparison', fontsize=16, fontweight='bold', y=1.02)
+    plt.tight_layout()
+    
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"✓ Generated comparison temporal trend: {output_path}")
+
+def plot_comparison_option_distribution(df_r: pd.DataFrame, df_rw: pd.DataFrame, output_path: Path):
+    """Create side-by-side stacked bar chart comparison of option selections."""
+    if df_r.empty and df_rw.empty:
+        return
+    
+    fig, axes = plt.subplots(1, 2, figsize=(24, 6))
+    
+    for idx, (df, label, ax) in enumerate([(df_r, "Reputation Only", axes[0]), (df_rw, "Reputation + Warrant", axes[1])]):
+        if df.empty or "selected_option" not in df.columns:
+            ax.text(0.5, 0.5, f"No data for {label}", ha='center', va='center', transform=ax.transAxes)
+            ax.set_title(label, fontsize=14, fontweight='bold')
+            continue
+        
+        option_counts = df.groupby(["vulnerability_type", "selected_option"]).size().unstack(fill_value=0)
+        option_counts.index = [v.replace("_", " ").title() for v in option_counts.index]
+        
+        colors = {"A": "#e74c3c", "B": "#2ecc71", "C": "#3498db", None: "#95a5a6"}
+        bottom = np.zeros(len(option_counts))
+        
+        for option in ["A", "B", "C"]:
+            if option in option_counts.columns:
+                values = option_counts[option].values
+                ax.bar(option_counts.index, values, bottom=bottom, label=f"Option {option}", color=colors.get(option, "#95a5a6"))
+                bottom += values
+        
+        ax.set_xlabel("Vulnerability Type", fontsize=12)
+        ax.set_ylabel("Number of Responses", fontsize=12)
+        ax.set_title(label, fontsize=14, fontweight="bold")
+        ax.legend(title="Selected Option")
+        plt.setp(ax.xaxis.get_majorticklabels(), rotation=15, ha="right")
+    
+    plt.suptitle('RQ1: Response Distribution by Vulnerability Type Comparison', fontsize=16, fontweight='bold', y=1.02)
+    plt.tight_layout()
+    
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"✓ Generated comparison option distribution: {output_path}")
+
+def generate_comparison_analysis(r_input_dir: str, rw_input_dir: str, output_dir: Path):
+    """Generate comparison analysis between two market types."""
+    print(f"\n📊 Generating comparison analysis...")
+    print(f"  Reputation Only: {r_input_dir}")
+    print(f"  Reputation + Warrant: {rw_input_dir}")
+    
+    df_r = load_probe_results(r_input_dir)
+    df_rw = load_probe_results(rw_input_dir)
+    
+    if df_r.empty and df_rw.empty:
+        print("  ⚠️  Warning: No data available for comparison")
+        return
+    
+    stats_r = calculate_statistics(df_r) if not df_r.empty else {}
+    stats_rw = calculate_statistics(df_rw) if not df_rw.empty else {}
+    
+    # Generate comparison visualizations
+    plot_comparison_manipulation_heatmap(df_r, df_rw, output_dir / "comparison_1_manipulation_heatmap.png")
+    plot_comparison_manipulation_by_vulnerability(stats_r, stats_rw, output_dir / "comparison_2_manipulation_by_vulnerability.png")
+    plot_comparison_manipulation_over_rounds(stats_r, stats_rw, output_dir / "comparison_3_manipulation_over_rounds.png")
+    plot_comparison_option_distribution(df_r, df_rw, output_dir / "comparison_4_option_distribution.png")
+    
+    # Generate comparison tables
+    try:
+        generate_comparison_tables(df_r, stats_r, df_rw, stats_rw)
+    except Exception as e:
+        print(f"  ⚠️  Warning: Comparison table generation failed: {e}")
+        import traceback
+        traceback.print_exc()
+    
+    print(f"  ✅ Comparison analysis complete!")
+
 def main():
     parser = argparse.ArgumentParser(description="Visualize RQ1 Cognitive Probe Results")
-    parser.add_argument("--input-dir", type=str, required=True, help="Directory containing run_*_cognitive_probes.json")
-    parser.add_argument("--output-dir", type=str, default=None, help="Directory to save figures (default: visualization/figs/{prefix}/rq1_analysis)")
+    parser.add_argument("--input-dir", type=str, default=None, help="Directory containing run_*_cognitive_probes.json (for single analysis)")
+    parser.add_argument("--r-input-dir", type=str, default=None, help="Reputation Only input directory (for comparison)")
+    parser.add_argument("--rw-input-dir", type=str, default=None, help="Reputation + Warrant input directory (for comparison)")
+    parser.add_argument("--output-dir", type=str, default=None, help="Directory to save figures")
     parser.add_argument("--save-stats", action="store_true", help="Save statistics JSON file")
     
     args = parser.parse_args()
     
-    input_path = Path(args.input_dir)
+    # Determine if this is a comparison or single analysis
+    is_comparison = args.r_input_dir is not None and args.rw_input_dir is not None
     
-    # Determine output directory
-    if args.output_dir is None:
-        prefix = extract_prefix_from_path(args.input_dir)
-        if prefix:
-            output_dir = Path(f"visualization/figs/{prefix}/rq1_analysis")
+    if is_comparison:
+        # Comparison mode
+        r_input_path = Path(args.r_input_dir)
+        rw_input_path = Path(args.rw_input_dir)
+        
+        # Determine output directory
+        if args.output_dir is None:
+            prefix = extract_prefix_from_path(args.r_input_dir)
+            if prefix:
+                output_dir = Path(f"visualization/figs/{prefix}/rq1_comparison")
+            else:
+                output_dir = Path("visualization/figs/rq1_comparison")
         else:
-            output_dir = Path("visualization/figs/rq1_analysis")
-    else:
-        output_dir = Path(args.output_dir)
-    
-    output_dir.mkdir(parents=True, exist_ok=True)
-    
-    print(f"Analyzing probe results in {input_path}...")
-    if not input_path.exists():
-        print(f"ERROR: Input directory does not exist: {input_path}")
-        print(f"Please check the experiment directory path.")
-        return
-    
-    df = load_probe_results(args.input_dir)
-    
-    if df.empty:
+            output_dir = Path(args.output_dir)
+        
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Generate individual analyses
+        print("="*70)
+        print("RQ1: Individual Market Type Analysis")
+        print("="*70)
+        
+        # Reputation Only analysis
+        r_output_dir = output_dir / "r_wo"
+        r_output_dir.mkdir(parents=True, exist_ok=True)
+        print(f"\n📊 Analyzing Reputation Only market...")
+        df_r = load_probe_results(args.r_input_dir)
+        if not df_r.empty:
+            stats_r = calculate_statistics(df_r)
+            if args.save_stats:
+                import json
+                stats_path = r_output_dir / "rq1_statistics.json"
+                with open(stats_path, "w") as f:
+                    json.dump(stats_r, f, indent=2, default=str)
+            plot_manipulation_heatmap(df_r, r_output_dir / "1_manipulation_heatmap.png")
+            plot_manipulation_by_vulnerability(stats_r, r_output_dir / "2_manipulation_by_vulnerability.png")
+            plot_manipulation_over_rounds(stats_r, r_output_dir / "3_manipulation_over_rounds.png")
+            plot_option_distribution(df_r, r_output_dir / "4_option_distribution.png")
+            plot_reputation_lag_severity(df_r, r_output_dir / "5_reputation_lag_severity.png")
+            print_summary_report(stats_r)
+            print(f"  ✅ Reputation Only analysis saved to: {r_output_dir}")
+        else:
+            print(f"  ⚠️  Warning: No data found for Reputation Only")
+        
+        # Reputation + Warrant analysis
+        rw_output_dir = output_dir / "rw_wo"
+        rw_output_dir.mkdir(parents=True, exist_ok=True)
+        print(f"\n📊 Analyzing Reputation + Warrant market...")
+        df_rw = load_probe_results(args.rw_input_dir)
+        if not df_rw.empty:
+            stats_rw = calculate_statistics(df_rw)
+            if args.save_stats:
+                import json
+                stats_path = rw_output_dir / "rq1_statistics.json"
+                with open(stats_path, "w") as f:
+                    json.dump(stats_rw, f, indent=2, default=str)
+            plot_manipulation_heatmap(df_rw, rw_output_dir / "1_manipulation_heatmap.png")
+            plot_manipulation_by_vulnerability(stats_rw, rw_output_dir / "2_manipulation_by_vulnerability.png")
+            plot_manipulation_over_rounds(stats_rw, rw_output_dir / "3_manipulation_over_rounds.png")
+            plot_option_distribution(df_rw, rw_output_dir / "4_option_distribution.png")
+            plot_reputation_lag_severity(df_rw, rw_output_dir / "5_reputation_lag_severity.png")
+            print_summary_report(stats_rw)
+            print(f"  ✅ Reputation + Warrant analysis saved to: {rw_output_dir}")
+        else:
+            print(f"  ⚠️  Warning: No data found for Reputation + Warrant")
+        
+        # Generate comparison analysis
         print("\n" + "="*70)
-        print("ERROR: No data available for visualization")
+        print("RQ1: Comparison Analysis")
         print("="*70)
-        print(f"Input directory: {input_path}")
-        print(f"Output directory: {output_dir}")
-        print("\nPossible reasons:")
-        print("  1. RQ1 experiment did not generate cognitive probe files")
-        print("  2. Cognitive probe files are missing or in wrong location")
-        print("  3. Experiment did not complete successfully")
-        print("\nTo fix:")
-        print("  1. Re-run RQ1 experiment: python example/run_rq1_experiment.py ...")
-        print("  2. Check that cognitive probes are enabled and running")
-        print("  3. Verify files are saved as: run_*_cognitive_probes.json")
-        print("="*70)
-        return
-    
-    print(f"   Loaded {len(df)} probe results")
-    
-    # Calculate statistics
-    print(f"\n📊 Calculating statistics...")
-    stats = calculate_statistics(df)
-    
-    # Save statistics if requested
-    if args.save_stats:
-        import json
-        stats_path = output_dir / "rq1_statistics.json"
-        with open(stats_path, "w") as f:
-            json.dump(stats, f, indent=2, default=str)
-        print(f"   Saved: {stats_path}")
-    
-    # Generate visualizations
-    print(f"\n📈 Generating visualizations...")
-    
-    # 1. Heatmap (agent x vulnerability type)
-    plot_manipulation_heatmap(df, output_dir / "1_manipulation_heatmap.png")
-    
-    # 2. Manipulation rate by vulnerability type
-    plot_manipulation_by_vulnerability(stats, output_dir / "2_manipulation_by_vulnerability.png")
-    
-    # 3. Manipulation trends over rounds
-    plot_manipulation_over_rounds(stats, output_dir / "3_manipulation_over_rounds.png")
-    
-    # 4. Option distribution
-    plot_option_distribution(df, output_dir / "4_option_distribution.png")
-    
-    # 5. Reputation lag severity
-    plot_reputation_lag_severity(df, output_dir / "5_reputation_lag_severity.png")
-    
-    # Print summary report
-    print_summary_report(stats)
-    
-    # Generate tables
-    try:
-        generate_tables(df, stats, output_dir)
-    except Exception as e:
-        print(f"⚠️  Warning: Table generation failed: {e}")
-        import traceback
-        traceback.print_exc()
-    
-    print(f"\n✅ Analysis complete! Results saved to: {output_dir}")
+        generate_comparison_analysis(args.r_input_dir, args.rw_input_dir, output_dir)
+        
+        print(f"\n✅ All analyses complete! Results saved to: {output_dir}")
+        
+    else:
+        # Single analysis mode (backward compatibility)
+        if args.input_dir is None:
+            print("ERROR: Either --input-dir or both --r-input-dir and --rw-input-dir must be provided")
+            return
+        
+        input_path = Path(args.input_dir)
+        
+        # Determine output directory
+        if args.output_dir is None:
+            prefix = extract_prefix_from_path(args.input_dir)
+            if prefix:
+                output_dir = Path(f"visualization/figs/{prefix}/rq1_analysis")
+            else:
+                output_dir = Path("visualization/figs/rq1_analysis")
+        else:
+            output_dir = Path(args.output_dir)
+        
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        print(f"Analyzing probe results in {input_path}...")
+        if not input_path.exists():
+            print(f"ERROR: Input directory does not exist: {input_path}")
+            print(f"Please check the experiment directory path.")
+            return
+        
+        df = load_probe_results(args.input_dir)
+        
+        if df.empty:
+            print("\n" + "="*70)
+            print("ERROR: No data available for visualization")
+            print("="*70)
+            print(f"Input directory: {input_path}")
+            print(f"Output directory: {output_dir}")
+            print("\nPossible reasons:")
+            print("  1. RQ1 experiment did not generate cognitive probe files")
+            print("  2. Cognitive probe files are missing or in wrong location")
+            print("  3. Experiment did not complete successfully")
+            print("\nTo fix:")
+            print("  1. Re-run RQ1 experiment: python example/run_rq1_experiment.py ...")
+            print("  2. Check that cognitive probes are enabled and running")
+            print("  3. Verify files are saved as: run_*_cognitive_probes.json")
+            print("="*70)
+            return
+        
+        print(f"   Loaded {len(df)} probe results")
+        
+        # Calculate statistics
+        print(f"\n📊 Calculating statistics...")
+        stats = calculate_statistics(df)
+        
+        # Save statistics if requested
+        if args.save_stats:
+            import json
+            stats_path = output_dir / "rq1_statistics.json"
+            with open(stats_path, "w") as f:
+                json.dump(stats, f, indent=2, default=str)
+            print(f"   Saved: {stats_path}")
+        
+        # Generate visualizations
+        print(f"\n📈 Generating visualizations...")
+        
+        # 1. Heatmap (agent x vulnerability type)
+        plot_manipulation_heatmap(df, output_dir / "1_manipulation_heatmap.png")
+        
+        # 2. Manipulation rate by vulnerability type
+        plot_manipulation_by_vulnerability(stats, output_dir / "2_manipulation_by_vulnerability.png")
+        
+        # 3. Manipulation trends over rounds
+        plot_manipulation_over_rounds(stats, output_dir / "3_manipulation_over_rounds.png")
+        
+        # 4. Option distribution
+        plot_option_distribution(df, output_dir / "4_option_distribution.png")
+        
+        # 5. Reputation lag severity
+        plot_reputation_lag_severity(df, output_dir / "5_reputation_lag_severity.png")
+        
+        # Print summary report
+        print_summary_report(stats)
+        
+        # Generate tables
+        try:
+            generate_tables(df, stats, output_dir)
+        except Exception as e:
+            print(f"⚠️  Warning: Table generation failed: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        print(f"\n✅ Analysis complete! Results saved to: {output_dir}")
 
 if __name__ == "__main__":
     main()
