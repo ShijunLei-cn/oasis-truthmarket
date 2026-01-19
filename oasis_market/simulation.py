@@ -348,7 +348,9 @@ class MarketSimulation:
             model_type=self.config.MODEL_TYPE,
             api_key=os.getenv("MODEL_API_KEY"),
             url=os.getenv("MODEL_BASE_URL"),
-            temperature=getattr(self.config, 'MODEL_TEMPERATURE', 0.0),
+            model_config_dict = {
+                "temperature": getattr(self.config, 'MODEL_TEMPERATURE', 0.0)
+            }
         )
         
         # Initialize agents and environment
