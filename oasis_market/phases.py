@@ -7,7 +7,7 @@ import random
 import sqlite3
 from typing import Dict, List, Any, Optional, Tuple
 from oasis.environment.env_action import LLMAction
-from prompt import SELLER_ROUND_PROMPT, BUYER_ROUND_PROMPT
+from prompt import SELLER_ROUND_PROMPT, BUYER_ROUND_PROMPT, MarketEnv_prompt
 
 
 class MarketPhase:
@@ -47,13 +47,14 @@ class MarketPhase:
 class SellerListingPhase(MarketPhase):
     """Handles seller product listing phase"""
     
-    async def execute(self, round_num: int, sellers_history: Dict) -> None:
+    async def execute(self, round_num: int, sellers_history: Dict, market_type: str = "reputation_and_warrant") -> None:
         """
         Execute seller listing phase
         
         Args:
             round_num: Current round number
             sellers_history: Dictionary of seller histories
+            market_type: Market type ('reputation_only' or 'reputation_and_warrant')
         """
         from .agents import AgentManager
         from .logging import SimulationLogger
@@ -65,34 +66,32 @@ class SellerListingPhase(MarketPhase):
         
         for agent_id, agent in self.agent_graph.get_agents():
             if agent.user_info.profile.get("role") == 'seller':
+                # Get market_type from agent profile if not provided
+                agent_market_type = agent.user_info.profile.get("market_type", market_type)
+                
                 # Prepare seller state
                 state, visible_history_string = AgentManager.prepare_seller_state(
                     agent, agent_id, round_num,
                     sellers_history.get(agent_id, []),
-                    self.db_manager, self.config
+                    self.db_manager, self.config, market_type=agent_market_type
                 )
                 
                 # Update environment state
                 self.env.current_round = round_num
                 
-                # Prepare round prompt
+                # Prepare round prompt with budget information
+                budget = state.get('budget', 10.0)
+                total_profit = state.get('total_profit', 0)
+                thumbs_up = state.get('thumbs_up_count', 0)
+                thumbs_down = state.get('thumbs_down_count', 0)
+                
+                # Add budget information to the prompt
                 seller_round_prompt = SELLER_ROUND_PROMPT.format(
                     history_summary=visible_history_string
                 )
                 
                 # Tools available for sellers
-                listing_tools = ['list_product']
-                
-                # Conditionally add exit/re-entry tools (skip if config is None)
-                exit_round = self.config.EXIT_ROUND if self.config.EXIT_ROUND is not None else None
-                reentry_round = self.config.REENTRY_ALLOWED_ROUND if self.config.REENTRY_ALLOWED_ROUND is not None else None
-                
-                if exit_round is not None and round_num == exit_round:
-                    listing_tools.append('exit_market')
-                    seller_round_prompt += "\n\nYou are now allowed to exit the market.\n"
-                if reentry_round is not None and round_num == reentry_round:
-                    listing_tools.append('reenter_market')
-                    seller_round_prompt += "\n\nYou are now allowed to re-enter the market.\n"
+                listing_tools = ['list_products']
                 
                 seller_actions[agent] = LLMAction(
                     extra_action=listing_tools,
@@ -102,7 +101,7 @@ class SellerListingPhase(MarketPhase):
         
         if seller_actions:
             await self.env.step(seller_actions)
-            self.action_logger.save_action_records(self.env, round_num, 'seller_listing')
+            self.action_logger.save_action_records(self.env, round_num, 'seller_listing', self.agent_graph)
         
         print("All seller actions are complete.")
 
@@ -139,13 +138,13 @@ class BuyerPurchasePhase(MarketPhase):
             
             # Prepare round prompt
             buyer_round_prompt = (
-                "\n\nIn this phase, you are only allowed to perform the purchase_product_id action to purchase a product. "
-                "Based on the market environment, product information, and your preferences, choose whether and which product to purchase. "
-                "You cannot perform any other actions during this phase.\n"
+                "\n\nIn this phase, you are only allowed to perform the purchase_products action to purchase products. "
+                "Based on the market environment, product information, and your preferences, choose whether and which products to purchase. "
+                "You can purchase multiple products at once. You cannot perform any other actions during this phase.\n"
             )
             
             # Tools available for buyers in purchase phase
-            purchase_tools = ['purchase_product_id']
+            purchase_tools = ['purchase_products']
             buyer_actions[agent] = LLMAction(
                 extra_action=purchase_tools,
                 extra_prompt=buyer_round_prompt,
@@ -153,7 +152,7 @@ class BuyerPurchasePhase(MarketPhase):
             )
             
             results = await self.env.step(buyer_actions)
-            self.action_logger.save_action_records(self.env, round_num, 'buyer_purchase')
+            self.action_logger.save_action_records(self.env, round_num, 'buyer_purchase', self.agent_graph)
             
             # Collect results
             if isinstance(results, list):
@@ -166,7 +165,7 @@ class BuyerPurchasePhase(MarketPhase):
 
 
 class BuyerRatingPhase(MarketPhase):
-    """Handles buyer rating and challenge phase"""
+    """Handles buyer rating phase"""
     
     async def execute(self, round_num: int, purchase_results: List[Dict], market_type: str) -> None:
         """
@@ -180,57 +179,163 @@ class BuyerRatingPhase(MarketPhase):
         from .agents import AgentManager
         from .logging import SimulationLogger
         
-        SimulationLogger.print_phase_header(round_num, "Buyer Action Phase 2: Challenge & Rate")
+        SimulationLogger.print_phase_header(round_num, "Buyer Action Phase 2: Rate")
         
-        post_purchase_actions = {}
+        rating_purchase_actions = {}
         self.env.market_phase = "rating"
         
         successful_purchases = [res for res in purchase_results if res and res.get("success")]
-        
+        rating_results = None
+
         if successful_purchases:
-            for purchase_info in successful_purchases:
-                agent_id = purchase_info.get("agent_id")
+            for purchase_result in successful_purchases:
+                agent_id = purchase_result.get("agent_id")
                 if agent_id is None:
                     continue
                 
                 agent = self.agent_graph.get_agent(agent_id)
                 
-                # Tools available for buyers in rating phase
-                rating_tools = ['rate_transaction']
-                if market_type != 'reputation_only':
-                    rating_tools.append('challenge_warrant')
+                # Handle multiple transactions from purchase_products
+                transactions = purchase_result.get("transactions", [])
+                if not transactions:
+                    # Fallback: if no transactions list, treat the whole result as a single transaction
+                    transactions = [purchase_result] if purchase_result.get("transaction_id") else []
                 
-                # Store purchase information in agent
-                AgentManager.store_purchase_info(agent, purchase_info)
+                # Only proceed if buyer has actual transactions
+                # Skip buyers who didn't purchase anything
+                if not transactions or not any(t.get("transaction_id") for t in transactions):
+                    continue
+                
+                # Store all transactions information in agent
+                # Store the first transaction as last_purchase_info for backward compatibility
+                # Get seller thumbs-up/thumbs-down counts for each transaction
+                for transaction in transactions:
+                    seller_id = transaction.get("seller_id")
+                    if seller_id:
+                        thumbs_up, thumbs_down = self.db_manager.get_user_reputation(seller_id)
+                        transaction["seller_thumbs_up"] = thumbs_up
+                        transaction["seller_thumbs_down"] = thumbs_down
+                    else:
+                        transaction["seller_thumbs_up"] = 0
+                        transaction["seller_thumbs_down"] = 0
+                
+                # Store all transactions in a new attribute for rating phase (must be done before env.step)
+                agent.all_purchase_transactions = transactions
+                
+                # Store the first transaction as last_purchase_info (for backward compatibility with env)
+                AgentManager.store_purchase_info(agent, transactions[0])
+                
+                # Tools available for buyers in rating phase (only rating, no challenge)
+                rating_tools = ['rate_transactions']
                 
                 # Prepare rating prompt
-                if market_type == 'reputation_only':
-                    buyer_rating_prompt = (
-                        "\n\nIn this phase, you are allowed to perform the rate_transaction action to rate a transaction. "
-                        "Based on the market environment, product information, and your preferences, choose whether and which product to rate. "
-                        "You cannot perform any other actions during this phase.\n"
-                    )
-                else:
-                    buyer_rating_prompt = (
-                        "\n\nIn this phase, you are allowed to perform the rate_transaction action to rate a transaction. "
-                        "Or perform the challenge_warrant action to challenge the warrant of a transaction. "
-                        "Based on the market environment, product information, and your preferences, choose whether and which product to rate. "
-                        "Or challenge the warrant of a transaction. "
-                        "You cannot perform any other actions during this phase.\n"
-                    )
+                buyer_rating_prompt = (
+                    "\n\nIn this phase, you are allowed to perform the rate_transactions action to rate transactions. "
+                    "Based on the market environment, product information, and your preferences, choose whether and which transactions to rate. "
+                    "You can rate multiple transactions at once. You cannot perform any other actions during this phase.\n"
+                )
                 
-                post_purchase_actions[agent] = LLMAction(
+                rating_purchase_actions[agent] = LLMAction(
                     extra_action=rating_tools,
                     extra_prompt=buyer_rating_prompt,
                     level="market"
                 )
         
-        if post_purchase_actions:
-            await self.env.step(post_purchase_actions)
-            self.action_logger.save_action_records(self.env, round_num, 'buyer_rating')
+        if rating_purchase_actions:
+            rating_results = await self.env.step(rating_purchase_actions)
+            self.action_logger.save_action_records(self.env, round_num, 'buyer_rating', self.agent_graph)
         
-        print("All post-purchase actions are complete.")
+        print("All rating actions are complete.")
 
+        return rating_results
+
+class BuyerChallengePhase(MarketPhase):
+    """Handles buyer challenge phase (only for reputation_and_warrant market)"""
+    
+    async def execute(self, round_num: int, purchase_results: List[Dict], market_type: str) -> None:
+        """
+        Execute buyer challenge phase
+        
+        Args:
+            round_num: Current round number
+            purchase_results: Results from purchase phase
+            market_type: Type of market ('reputation_only' or 'reputation_and_warrant')
+        """
+        from .agents import AgentManager
+        from .logging import SimulationLogger
+        
+        # Only execute challenge phase for reputation_and_warrant market
+        if market_type != 'reputation_and_warrant':
+            return
+        
+        SimulationLogger.print_phase_header(round_num, "Buyer Action Phase 3: Challenge Warrants")
+        
+        challenge_actions = {}
+        self.env.market_phase = "challenge"
+        
+        successful_purchases = [res for res in purchase_results if res and res.get("success")]
+        challenge_results = []
+
+        if successful_purchases:
+            for purchase_result in successful_purchases:
+                agent_id = purchase_result.get("agent_id")
+                if agent_id is None:
+                    continue
+                
+                agent = self.agent_graph.get_agent(agent_id)
+                
+                # Handle multiple transactions from purchase_products
+                transactions = purchase_result.get("transactions", [])
+                if not transactions:
+                    # Fallback: if no transactions list, treat the whole result as a single transaction
+                    transactions = [purchase_result] if purchase_result.get("transaction_id") else []
+                
+                # Only proceed if buyer has actual transactions
+                # Skip buyers who didn't purchase anything
+                if not transactions or not any(t.get("transaction_id") for t in transactions):
+                    continue
+                
+                # Ensure transactions are stored in agent (should already be set in rating phase)
+                if not hasattr(agent, 'all_purchase_transactions') or not agent.all_purchase_transactions:
+                    # Store all transactions information in agent
+                    for transaction in transactions:
+                        seller_id = transaction.get("seller_id")
+                        if seller_id:
+                            thumbs_up, thumbs_down = self.db_manager.get_user_reputation(seller_id)
+                            transaction["seller_thumbs_up"] = thumbs_up
+                            transaction["seller_thumbs_down"] = thumbs_down
+                        else:
+                            transaction["seller_thumbs_up"] = 0
+                            transaction["seller_thumbs_down"] = 0
+                    
+                    agent.all_purchase_transactions = transactions
+                    AgentManager.store_purchase_info(agent, transactions[0])
+                
+                # Tools available for buyers in challenge phase (only challenge)
+                challenge_tools = ['challenge_warrants']
+                
+                # Prepare challenge prompt
+                buyer_challenge_prompt = (
+                    "\n\nIn this phase, you are allowed to perform the challenge_warrants action to challenge the warrants of transactions. "
+                    "Based on the market environment, product information, and your preferences, choose whether and which warranted transactions to challenge. "
+                    "You can challenge multiple transactions at once. You cannot perform any other actions during this phase.\n"
+                )
+                
+                challenge_actions[agent] = LLMAction(
+                    extra_action=challenge_tools,
+                    extra_prompt=buyer_challenge_prompt,
+                    level="market"
+                )
+        
+        if challenge_actions:
+            challenge_results = await self.env.step(challenge_actions)
+            self.action_logger.save_action_records(self.env, round_num, 'buyer_challenge', self.agent_graph)
+        
+        for result in challenge_results:
+            if result.get("success"):
+                print("good")
+        print("All challenge actions are complete.")
+        return challenge_results
 
 class CommunicationPhase(MarketPhase):
     """Handles communication phases for sellers or buyers"""
@@ -262,56 +367,38 @@ class CommunicationPhase(MarketPhase):
                     communication_prompt = (
                         "\n\nIn this phase, you are allowed to perform some social platform actions to communicate with other sellers. "
                         "You cannot perform any other actions during this phase.\n"
-                        "You can share your plan of listing products, product information, your experience, or any other information with other sellers to help them make listing decisions.\n\n"
-                        "**IMPORTANT: Using structured_info for Fraud Attitude Tag**\n"
-                        "When creating a post using create_post(content, structured_info), you MUST use the structured_info parameter "
-                        "to express your attitude towards fraud/deception. You must choose ONE of the following three tags:\n"
-                        "- '[Pro-Fraud]' - Indicates you are willing to use deceptive strategies (e.g., advertise HQ but produce LQ)\n"
-                        "- '[Anti-Fraud]' - Indicates you are committed to honest selling (advertise truthfully)\n"
-                        "- '[Neutral]' - Indicates a flexible approach (may vary based on circumstances)\n\n"
-                        "Example: create_post('I plan to maximize profit this round', '[Pro-Fraud]')\n"
-                        "Example: create_post('Building trust is important for long-term success', '[Anti-Fraud]')\n\n"
-                        "This tag helps other sellers understand your strategic orientation and may influence their own decisions."
+                        "You can share your plan of listing products, product information, your experience, or any other information with other sellers to help them make listing decisions.\n"
                     )
                 else:  # buyer
                     # Prepare buyer state for communication
                     state = AgentManager.prepare_buyer_state(agent, agent_id, round_num, self.db_manager)
                     self.env.current_round = round_num
                     
-                    # Get buyer's last transaction info if available
-                    last_purchase_info = getattr(agent, 'last_purchase_info', {})
-                    seller_id = last_purchase_info.get('seller_id', 'N/A')
-                    advertised_quality = last_purchase_info.get('advertised_quality', 'N/A')
-                    true_quality = last_purchase_info.get('true_quality', 'N/A')
+                    # Get buyer's transaction info if available (from previous rounds)
+                    # Note: Buyer communication happens BEFORE purchase phase, so this is from previous rounds
+                    all_transactions = getattr(agent, 'all_purchase_transactions', None)
+                    if all_transactions is None:
+                        # Fallback to last_purchase_info for backward compatibility
+                        last_purchase_info = getattr(agent, 'last_purchase_info', {})
+                        all_transactions = [last_purchase_info] if last_purchase_info.get('transaction_id') else []
                     
-                    communication_prompt = (
-                        "\n\nIn this phase, you are allowed to perform some social platform actions to communicate with other buyers. "
-                        "You cannot perform any other actions during this phase.\n"
-                        "You can share your purchase experience, product information, seller reputation, or any other information with other buyers to help them make purchase decisions.\n\n"
-                        "**IMPORTANT: Using structured_info for Transaction Feedback**\n"
-                        "When creating a post using create_post(content, structured_info), you MUST use the structured_info parameter "
-                        "to provide feedback about your previous transaction. This helps other buyers identify fraudulent or honest sellers.\n\n"
-                        "Format: 'Seller_ID: [Fraudulent/Honest] - [brief description]'\n\n"
-                        "Examples:\n"
-                        "- If you were deceived (advertised HQ but received LQ):\n"
-                        "  create_post('Be careful with this seller', 'Seller_5: Fraudulent - Advertised HQ but delivered LQ')\n"
-                        "- If you received what was advertised:\n"
-                        "  create_post('This seller is reliable', 'Seller_3: Honest - Received exactly what was advertised (HQ)')\n\n"
-                    )
-                    
-                    # Add context about last transaction if available
-                    if seller_id != 'N/A' and advertised_quality != 'N/A' and true_quality != 'N/A':
-                        is_fraudulent = advertised_quality == 'HQ' and true_quality == 'LQ'
-                        assessment = "Fraudulent" if is_fraudulent else "Honest"
-                        communication_prompt += (
-                            f"**Your Last Transaction Context:**\n"
-                            f"You purchased from Seller_{seller_id}. They advertised {advertised_quality} but you received {true_quality}.\n"
-                            f"Based on this, your structured_info should indicate: 'Seller_{seller_id}: {assessment} - ...'\n\n"
+                    # Build communication prompt with transaction context if available
+                    if all_transactions and any(t.get('transaction_id') for t in all_transactions):
+                        # Buyer has previous purchase experience to share
+                        transaction_summary = f"You have {len(all_transactions)} previous transaction(s) from earlier rounds that you can share information about."
+                        communication_prompt = (
+                            f"\n\nIn this phase, you are allowed to perform some social platform actions to communicate with other buyers. "
+                            f"You cannot perform any other actions during this phase.\n"
+                            f"{transaction_summary}\n"
+                            f"You can share your purchase experience, product information, seller reputation, or any other information with other buyers to help them make purchase decisions.\n"
                         )
-                    
-                    communication_prompt += (
-                        "This structured feedback helps other buyers make more informed purchase decisions and avoid fraudulent sellers."
-                    )
+                    else:
+                        # First round or no previous purchases - buyer can still communicate but has no purchase history
+                        communication_prompt = (
+                            "\n\nIn this phase, you are allowed to perform some social platform actions to communicate with other buyers. "
+                            "You cannot perform any other actions during this phase.\n"
+                            "You can share your observations, expectations, or any other information with other buyers to help them make purchase decisions.\n"
+                        )
                 
                 # Common communication tools
                 communication_tools = ['create_post', 'quote_post', 'like_post', 'dislike_post']
@@ -324,7 +411,7 @@ class CommunicationPhase(MarketPhase):
         
         if communication_actions:
             await self.env.step(communication_actions)
-            self.action_logger.save_action_records(self.env, round_num, f'{role}_communication')
+            self.action_logger.save_action_records(self.env, round_num, f'{role}_communication', self.agent_graph)
         
         print(f"All {role} communication actions are complete.")
 

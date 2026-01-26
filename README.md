@@ -9,7 +9,6 @@ This project implements a multi-agent online market simulation environment featu
 - **Seller Agents**: Can list high or low quality products, choose whether to offer warranties
 - **Buyer Agents**: Make purchasing decisions based on seller reputation and product information
 - **Market Mechanisms**: Include reputation systems, warranty institutions, and transaction tracking
-- **Data Analysis**: Real-time statistics and market performance visualization
 
 ## 🚀 Quick Start
 
@@ -115,10 +114,6 @@ See [example/README.md](./example/README.md) for comprehensive documentation on:
 - Available command-line options
 - Configuration parameters
 - Communication types and market types
-- Analysis tools and workflows
-
-
-
 
 ## 🛠️ Customization
 
@@ -156,90 +151,6 @@ Modify prompt templates in `prompt.py`:
 - `BUYER_ROUND_PROMPT`: Dynamic prompt for buyers during each round
 
 ### Adjust Market Parameters
-
-## 📊 Data Analysis
-
-After running simulations, use the modular visualization tools to generate visualizations and insights. For comprehensive documentation, please refer to the [Visualization Documentation](./visualization/README.md).
-
-### Quick Start
-
-The visualization module provides three main analysis types:
-
-#### 1. Single Run Analysis
-
-Analyze a single market simulation database:
-
-```bash
-# Using convenience script (recommended)
-./visualization/run_visul.sh single experiments/exp_123/run_1.db
-
-# Using Python CLI
-python3 visualization/analyze_single.py experiments/exp_123/run_1.db
-```
-
-**Generated visualizations include:**
-- Reputation evolution across rounds
-- Price analysis by quality level
-- Seller action patterns
-- Manipulation behavior statistics
-
-#### 2. Multi-Run Aggregated Analysis
-
-Analyze all runs from a completed experiment:
-
-```bash
-# Using convenience script
-./visualization/run_visul.sh multi exp_20251216_120000
-
-# Using Python CLI
-python3 visualization/analyze_multi.py --experiment-id exp_20251216_120000
-```
-
-**Features:**
-- Cross-run comparison (grouped by configuration)
-- Round-by-round progression trends with mean ± std
-- Configuration-based aggregation (8 configurations × 5 runs)
-- Individual run analysis for each simulation
-- Seller deception behavior analysis
-
-#### 3. Experiment Comparison
-
-Compare different experiments (e.g., different market types):
-
-```bash
-# Using convenience script
-./visualization/run_visul.sh compare reputation_only:exp_123 reputation_warrant:exp_456
-
-# Using Python CLI
-python3 visualization/compare_experiments.py \
-    --exp reputation_only:exp_123 \
-    --exp reputation_warrant:exp_456
-```
-
-**Comparison coverage:**
-- Core metrics comparison (buyer utility, seller profit, transactions)
-- Round-by-round progression comparison
-- Deception behavior comparison
-- Statistical distributions and trends
-
-### Visualization Module Structure
-
-The visualization module is organized as follows:
-
-- **Core Modules** (`visualization/core/`): Data loading, statistics calculation, plotting components
-- **CLI Scripts**: Command-line interfaces for each analysis type
-- **Convenience Script** (`run_visul.sh`): Unified shell script for all visualization tasks
-
-### For More Information
-
-See [visualization/README.md](./visualization/README.md) for:
-- Complete API documentation
-- Detailed usage examples
-- Configuration file formats
-- Output directory structure
-- Python API usage examples
-- Communication effects visualization
-
 
 ## 📚 Related Resources
 

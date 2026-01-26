@@ -13,7 +13,8 @@ CREATE TABLE product (
     is_sold BOOLEAN DEFAULT 0,
     -- Round tracking
     round_number INTEGER,
-    -- Product status: 'on_sale', 'sold', 'challenged_success', 'challenged_fail'
+    -- Product status: 'on_sale', 'sold', 'challenged_success', 'challenged_fail', 'expired'
+    -- 'expired' means the product was not sold and is no longer on sale (preserved for analysis)
     status VARCHAR(20) DEFAULT 'on_sale',
     FOREIGN KEY(user_id) REFERENCES user(user_id)
 );

@@ -105,10 +105,13 @@ async def run_single_simulation_with_probing(
         if (
             round_num % probe_interval == 0 or round_num <= 2
         ):  # Always probe first 2 rounds
+            print(f"  [Probing] Running cognitive probes for round {round_num}...")
             probe_results = await run_cognitive_probes(
                 env, agent_graph, round_num, prober
             )
             all_probe_results.extend(probe_results)
+            print(f"  [Probing] Round {round_num}: {len(probe_results)} probe results collected")
+            print(f"  [Probing] Total probe results in prober: {len(prober.probe_results)}")
 
         # ============ NORMAL SIMULATION PHASES ============
         await simulation.run_round(round_num, market_type, "none")
@@ -119,7 +122,17 @@ async def run_single_simulation_with_probing(
     run_detection(config.SIMULATION_ROUNDS, db_path)
 
     # Save probe results
-    probe_output_path = prober.save_results()
+    print(f"\n[Probing] Preparing to save probe results...")
+    print(f"  Total probe results collected: {len(all_probe_results)}")
+    print(f"  Probe results in prober object: {len(prober.probe_results)}")
+    try:
+        probe_output_path = prober.save_results()
+        print(f"  ✓ Probe results saved to: {probe_output_path}")
+    except Exception as e:
+        print(f"  ❌ Error saving probe results: {e}")
+        import traceback
+        traceback.print_exc()
+        probe_output_path = None
 
     # Close environment
     await env.close()
@@ -266,8 +279,23 @@ def main():
         default=1,
         help="Probe every N rounds (default: 1)",
     )
+    parser.add_argument(
+        "--config",
+        dest="config_file",
+        type=str,
+        default=None,
+        help="Path to YAML configuration file (optional, overrides default config.py values)",
+    )
 
     args = parser.parse_args()
+
+    # Load configuration from YAML if provided
+    if args.config_file:
+        print(f"Loading configuration from {args.config_file}...")
+        SimulationConfig.load_from_yaml(args.config_file)
+        print("Configuration loaded from YAML.")
+    else:
+        print("No config file specified. Using default SimulationConfig.")
 
     # Load environment variables
     from dotenv import load_dotenv

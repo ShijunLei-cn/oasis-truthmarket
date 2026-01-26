@@ -3,8 +3,8 @@ CREATE TABLE reputation_history (
     seed INTEGER,
     round INTEGER,
     seller_id INTEGER,
-    public_reputation_score INTEGER,
-    public_num_ratings INTEGER,
+    public_thumbs_up INTEGER DEFAULT 0,
+    public_thumbs_down INTEGER DEFAULT 0,
     FOREIGN KEY(seller_id) REFERENCES user(user_id)
 );
 

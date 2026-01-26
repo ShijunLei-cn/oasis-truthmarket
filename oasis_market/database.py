@@ -66,7 +66,7 @@ class MarketDatabase:
         if not os.path.exists(self.database_path) or not self._table_exists('user'):
             # Return initial states if database doesn't exist or tables not initialized
             if role == 'seller':
-                return {'reputation_score': 0, 'total_profit': 0}
+                return {'thumbs_up_count': 0, 'thumbs_down_count': 0, 'total_profit': 0, 'budget': 5.0}
             else:
                 return {'cumulative_utility': 0, 'total_utility': 0}
         
@@ -75,14 +75,16 @@ class MarketDatabase:
         
         state = {}
         if role == 'seller':
-            # Get seller basic information
+            # Get seller basic information including budget
             cursor.execute(
-                "SELECT reputation_score, profit_utility_score FROM user WHERE agent_id = ?",
+                "SELECT thumbs_up_count, thumbs_down_count, profit_utility_score, budget FROM user WHERE agent_id = ?",
                 (agent_id,)
             )
             result = cursor.fetchone()
-            state['reputation_score'] = result[0] if result else 0
-            state['total_profit'] = result[1] if result else 0
+            state['thumbs_up_count'] = result[0] if result else 0
+            state['thumbs_down_count'] = result[1] if result else 0
+            state['total_profit'] = result[2] if result else 0
+            state['budget'] = result[3] if result and len(result) > 3 and result[3] is not None else 10.0
             
             # Get sales information for this round
             if round_num > 0:
@@ -173,14 +175,50 @@ class MarketDatabase:
         all_results = cursor.fetchall()
         
         if all_results:
-            one_result = all_results[0]
-            summary["advertised_quality"] = one_result[0]
-            summary["true_quality"] = one_result[1]
-            summary["warrant"] = one_result[2]
-            summary["is_sold"] = one_result[3]
-            summary["sold_numbers"] = sum(1 for p in all_results if p[3])
-            summary["cost"] = one_result[4]
-            summary["price"] = one_result[5]
+            # Aggregate information from all products in this round
+            total_products = len(all_results)
+            sold_count = sum(1 for p in all_results if p[3])  # is_sold
+            
+            # Group products by (advertised_quality, true_quality, has_warrant) combination
+            product_groups = {}
+            total_cost = 0
+            total_revenue = 0
+            
+            for result in all_results:
+                adv_q, true_q, has_warrant, is_sold, cost, price = result
+                key = (adv_q, true_q, bool(has_warrant))
+                
+                if key not in product_groups:
+                    product_groups[key] = {
+                        "count": 0,
+                        "sold_count": 0,
+                        "cost": cost,
+                        "price": price
+                    }
+                
+                product_groups[key]["count"] += 1
+                if is_sold:
+                    product_groups[key]["sold_count"] += 1
+                    total_revenue += price
+                    # Only count cost for sold products
+                    total_cost += cost
+            
+            # Store aggregated information
+            # For backward compatibility, use the first product's quality info
+            first_result = all_results[0]
+            summary["advertised_quality"] = first_result[0]
+            summary["true_quality"] = first_result[1]
+            summary["warrant"] = first_result[2]
+            summary["is_sold"] = 1 if sold_count > 0 else 0
+            summary["sold_numbers"] = sold_count
+            summary["cost"] = total_cost / total_products if total_products > 0 else 0  # Average cost
+            summary["price"] = first_result[5]  # Use first product's price
+            
+            # Store detailed product groups information
+            summary["product_groups"] = product_groups
+            summary["total_products_listed"] = total_products
+            summary["total_cost"] = total_cost
+            summary["total_revenue"] = total_revenue
         
         conn.close()
         return summary
@@ -209,7 +247,8 @@ class MarketDatabase:
         cursor.execute(
             """
             SELECT p.product_id, u.agent_id, p.advertised_quality, p.price, p.has_warrant, 
-                   COALESCE(u.reputation_score, 0) AS reputation_score
+                   COALESCE(u.thumbs_up_count, 0) AS thumbs_up_count,
+                   COALESCE(u.thumbs_down_count, 0) AS thumbs_down_count
             FROM product p
             LEFT JOIN user u ON u.user_id = p.user_id
             WHERE p.status = 'on_sale'
@@ -223,14 +262,14 @@ class MarketDatabase:
                 warrant_info = " (Warranted)" if p[4] else ""
                 listings += (
                     f"- Product ID: {p[0]}, Seller ID: {p[1]}, "
-                    f"Seller Reputation: {p[5]}, "
+                    f"Seller Rating: 👍{p[5]} 👎{p[6]}, "
                     f"Advertised Quality: {p[2]}, Price: ${p[3]:.2f}{warrant_info}\n"
                 )
         
         conn.close()
         return listings
     
-    def initialize_market_roles(self, agent_graph, num_sellers: int, num_buyers: int):
+    def initialize_market_roles(self, agent_graph, num_sellers: int, num_buyers: int, initial_seller_reputation: float = 0.0):
         """
         Initialize market roles for all agents in the database
         
@@ -238,6 +277,7 @@ class MarketDatabase:
             agent_graph: Graph containing all agents
             num_sellers: Number of seller agents
             num_buyers: Number of buyer agents
+            initial_seller_reputation: Initial reputation score for all sellers (deprecated, use thumbs-up/thumbs-down instead)
         """
         print("Initializing market roles in the database...")
         conn = sqlite3.connect(self.database_path)
@@ -254,14 +294,22 @@ class MarketDatabase:
         print(f"Found {len(agents_info)} agents to initialize")
         print(f"Actual agent IDs in graph: {sorted(actual_agent_ids)}")
         
+        # Greek letters for seller brands
+        greek_letters = [
+            'Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon', 'Zeta', 'Eta', 'Theta',
+            'Iota', 'Kappa', 'Lambda', 'Mu', 'Nu', 'Xi', 'Omicron', 'Pi',
+            'Rho', 'Sigma', 'Tau', 'Upsilon', 'Phi', 'Chi', 'Psi', 'Omega'
+        ]
+        
         # Set seller roles (first NUM_SELLERS agents)
         for i in range(num_sellers):
             agent_id = i + 1
+            brand_name = greek_letters[i % len(greek_letters)]
             cursor.execute(
-                "UPDATE user SET role = ?, reputation_score = ?, profit_utility_score = ? WHERE agent_id = ?",
-                ('seller', 0, 0.0, agent_id)
+                "UPDATE user SET role = ?, brand_name = ?, thumbs_up_count = ?, thumbs_down_count = ?, profit_utility_score = ? WHERE agent_id = ?",
+                ('seller', brand_name, 0, 0, 0.0, agent_id)
             )
-            print(f"Set agent {agent_id} as seller")
+            print(f"DEBUG: Set agent {agent_id} as seller with brand: {brand_name}, initial thumbs-up: 0, thumbs-down: 0")
         
         # Set buyer roles (next NUM_BUYERS agents)
         for i in range(num_buyers):
@@ -270,22 +318,48 @@ class MarketDatabase:
                 "UPDATE user SET role = ?, profit_utility_score = ? WHERE agent_id = ?",
                 ('buyer', 0.0, agent_id)
             )
-            print(f"Set agent {agent_id} as buyer")
+            print(f"DEBUG: Set agent {agent_id} as buyer")
         
         conn.commit()
         
         # Verify setup results
-        cursor.execute("SELECT COUNT(*) FROM user WHERE role = 'seller'")
-        seller_count = cursor.fetchone()[0]
-        cursor.execute("SELECT COUNT(*) FROM user WHERE role = 'buyer'")
-        buyer_count = cursor.fetchone()[0]
-        
-        print(f"Market roles initialized successfully: {seller_count} sellers, {buyer_count} buyers")
-        conn.close()
+        cursor.execute("SELECT agent_id, role, brand_name, thumbs_up_count, thumbs_down_count FROM user WHERE role = 'seller'")
+        sellers = cursor.fetchall()
+        print(f"DEBUG: Sellers after initialization: {sellers}")
     
-    def compute_next_round_reputation(self, agent_id: int, round_num: int, reputation_lag: int) -> int:
+    def get_user_reputation(self, agent_id: int) -> tuple:
         """
-        Calculate reputation that will be shown in the next round
+        Get the thumbs-up and thumbs-down counts of a user
+        
+        Args:
+            agent_id: Agent identifier
+            
+        Returns:
+            Tuple of (thumbs_up_count, thumbs_down_count)
+        """
+        if not os.path.exists(self.database_path) or not self._table_exists('user'):
+            return (0, 0)
+        
+        conn = sqlite3.connect(self.database_path)
+        cursor = conn.cursor()
+        
+        cursor.execute(
+            "SELECT thumbs_up_count, thumbs_down_count, brand_name FROM user WHERE agent_id = ?",
+            (agent_id,)
+        )
+        result = cursor.fetchone()
+        conn.close()
+        
+        if result:
+            print(f"DEBUG get_user_reputation: agent_id={agent_id}, thumbs_up={result[0]}, thumbs_down={result[1]}, brand_name={result[2]}")
+            return (int(result[0]) if result[0] is not None else 0, 
+                    int(result[1]) if result[1] is not None else 0)
+        print(f"DEBUG get_user_reputation: agent_id={agent_id}, no result found")
+        return (0, 0)
+    
+    def compute_next_round_reputation(self, agent_id: int, round_num: int, reputation_lag: int) -> tuple:
+        """
+        Calculate thumbs-up and thumbs-down counts that will be shown in the next round
         
         Args:
             agent_id: Seller agent ID
@@ -293,10 +367,10 @@ class MarketDatabase:
             reputation_lag: Reputation display lag in rounds
             
         Returns:
-            Reputation score for next round
+            Tuple of (thumbs_up_count, thumbs_down_count) for next round
         """
         if not os.path.exists(self.database_path) or not self._table_exists('transactions'):
-            return 0
+            return (0, 0)
         
         next_round_cutoff = max(0, round_num + 1 - reputation_lag)
         
@@ -304,14 +378,24 @@ class MarketDatabase:
             cursor = conn.cursor()
             cursor.execute(
                 """
-                SELECT COUNT(t.rating) as cnt, COALESCE(SUM(t.rating), 0)
+                SELECT t.rating
                 FROM transactions t
                 WHERE t.rating IS NOT NULL AND t.round_number <= ? AND t.seller_id = ?
                 """,
                 (next_round_cutoff, agent_id)
             )
-            result = cursor.fetchone()
-            return result[1] if result else 0
+            ratings = [row[0] for row in cursor.fetchall()]
+            
+            # Calculate thumbs up and down counts
+            thumbs_up = 0
+            thumbs_down = 0
+            for rating in ratings:
+                if rating > 0:
+                    thumbs_up += rating  # +1 → +1, +2 → +2
+                else:
+                    thumbs_down += abs(rating)  # -1 → +1, -2 → +2
+            
+            return (thumbs_up, thumbs_down)
     
     def cleanup(self):
         """Clean up database file if it exists"""
@@ -333,7 +417,8 @@ if __name__ == "__main__":
     
     # Test getting initial agent state
     seller_state = db.get_agent_state(1, 'seller')
-    assert seller_state['reputation_score'] == 0
+    assert seller_state['thumbs_up_count'] == 0
+    assert seller_state['thumbs_down_count'] == 0
     assert seller_state['total_profit'] == 0
     print(f"✓ Initial seller state: {seller_state}")
     

@@ -811,6 +811,7 @@ class MultiRunAnalyzer:
     
     def _save_deception_statistics(self, deception_stats: Dict[str, Any], out_dir: str):
         """Save deception statistics to JSON file"""
+        os.makedirs(out_dir, exist_ok=True)
         stats_file = os.path.join(out_dir, 'deception_statistics.json')
         
         # Convert to serializable format
@@ -859,7 +860,10 @@ class MultiRunAnalyzer:
         if not self.aggregated_data:
             return
         
-        results_file = os.path.join(self.paths['aggregated_analysis_dir'], 'aggregated_statistics.json')
+        aggregated_dir = self.paths['aggregated_analysis_dir']
+        os.makedirs(aggregated_dir, exist_ok=True)
+        
+        results_file = os.path.join(aggregated_dir, 'aggregated_statistics.json')
         with open(results_file, 'w', encoding='utf-8') as f:
             json.dump(self.aggregated_data, f, indent=2, ensure_ascii=False, default=str)
         
@@ -875,6 +879,10 @@ async def analyze_experiment(experiment_id: str):
     print(f"Start analyzing experiment: {experiment_id}")
     
     analyzer = MultiRunAnalyzer(experiment_id)
+    
+    # Ensure aggregated analysis directory exists
+    aggregated_dir = analyzer.paths['aggregated_analysis_dir']
+    os.makedirs(aggregated_dir, exist_ok=True)
     
     # Load data
     analyzer.load_experiment_data()

@@ -15,12 +15,29 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from oasis_market.simulation import run_single_simulation
 from config import SimulationConfig
 from dotenv import load_dotenv
+from typing import Optional
 
 load_dotenv(override=True)
 
 
+def load_config_from_yaml(yaml_path: Optional[str] = None):
+    """
+    Load configuration from YAML file if provided
+    
+    Args:
+        yaml_path: Path to YAML configuration file (optional)
+    """
+    if yaml_path:
+        print(f"Loading configuration from: {yaml_path}")
+        SimulationConfig.load_from_yaml(yaml_path)
+        print("Configuration loaded successfully.")
+    else:
+        print("Using default configuration from config.py")
+
+
 async def run_experiment(experiment_name: str, market_type: str, 
-                        communication_type: str, run_id: int):
+                        communication_type: str, run_id: int,
+                        communication_channel_type: str = "Fake"):
     """
     Run a single experiment with specified parameters
     
@@ -29,19 +46,27 @@ async def run_experiment(experiment_name: str, market_type: str,
         market_type: Type of market
         communication_type: Type of communication
         run_id: Run identifier
+        communication_channel_type: Type of communication channel ("Fake" or "Real")
     """
     # Create experiment directory
     exp_dir = f"experiments/{experiment_name}"
     os.makedirs(exp_dir, exist_ok=True)
     
     # Generate database path
-    db_filename = f"run_{run_id}_{market_type}_{communication_type}.db"
+    # Simple format: run_i.db (detailed config is saved in config.json)
+    db_filename = f"run_{run_id}.db"
     db_path = os.path.join(exp_dir, db_filename)
     
     print(f"\n--- Running {db_filename} ---")
+    print(f"  Communication Channel Type: {communication_channel_type}")
     
     # Run simulation
-    await run_single_simulation(db_path, market_type, communication_type)
+    await run_single_simulation(
+        db_path, 
+        market_type=market_type, 
+        communication_type=communication_type,
+        communication_channel_type=communication_channel_type
+    )
     
     return db_path
 
@@ -102,7 +127,8 @@ async def run_batch_experiments():
                   f"Market: {market_type}, Communication: {comm_type}, Run: {run_id}")
             
             db_path = await run_experiment(
-                experiment_name, market_type, comm_type, run_id
+                experiment_name, market_type, comm_type, run_id,
+                communication_channel_type="Fake"
             )
             
             results.append({
@@ -127,19 +153,38 @@ async def main():
     Main entry point for batch experiments
     
     Usage:
-        python run_batch_experiments.py [num_runs]
+        python run_batch_experiments.py [num_runs] [--config config.yaml]
         
     Args:
         num_runs: Number of runs per configuration (default: from config)
+        --config: Path to YAML configuration file (optional)
     """
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='Run batch experiments with different configurations')
+    parser.add_argument(
+        'num_runs',
+        nargs='?',
+        type=int,
+        default=None,
+        help='Number of runs per configuration (default: from config)'
+    )
+    parser.add_argument(
+        '--config',
+        dest='config_file',
+        type=str,
+        default=None,
+        help='Path to YAML configuration file (optional, overrides default config.py values)'
+    )
+    
+    args = parser.parse_args()
+    
+    # Load configuration from YAML if provided
+    load_config_from_yaml(args.config_file)
     
     # Override number of runs if specified
-    if len(sys.argv) > 1:
-        try:
-            SimulationConfig.RUNS = int(sys.argv[1])
-        except ValueError:
-            print(f"Error: Invalid number of runs '{sys.argv[1]}'")
-            sys.exit(1)
+    if args.num_runs is not None:
+        SimulationConfig.RUNS = args.num_runs
     
     await run_batch_experiments()
 

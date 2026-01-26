@@ -57,11 +57,12 @@ class SocialAction:
                 self.send_to_group,
                 self.create_group,
                 self.list_product,
+                self.list_products,
                 self.exit_market,
                 self.reenter_market,
-                self.purchase_product_id,
-                self.challenge_warrant,
-                self.rate_transaction,
+                self.purchase_products,
+                self.challenge_warrants,
+                self.rate_transactions,
             ]
         ]
 
@@ -147,46 +148,23 @@ class SocialAction:
         """
         return await self.perform_action(None, ActionType.DO_NOTHING.value)
 
-    async def create_post(self, content: str, structured_info: str = None):
-        r"""Create a new post with the given content and optional structured information.
+    async def create_post(self, content: str):
+        r"""Create a new post with the given content.
 
         This method invokes an asynchronous action to create a new post based
-        on the provided content. The structured_info field serves different purposes
-        for sellers and buyers, but uses a consistent format.
+        on the provided content.
 
         Args:
             content (str): The main content of the post to be created.
-            structured_info (str, optional): Structured information following role-specific format:
-                
-                **For Sellers**: Must be one of three fraud attitude tags:
-                - "[Pro-Fraud]" - Indicates a pro-fraud strategy (willing to deceive buyers)
-                - "[Anti-Fraud]" - Indicates an anti-fraud strategy (committed to honest selling)
-                - "[Neutral]" - Indicates a neutral strategy (flexible approach)
-                
-                **For Buyers**: Transaction feedback in the format:
-                - "Seller_ID: [Fraudulent/Honest] - [brief description]"
-                Example: "Seller_5: Fraudulent - Advertised HQ but delivered LQ"
-                Example: "Seller_3: Honest - Received exactly what was advertised"
-                
-                Format: Keep it concise and structured. For buyers, always start with "Seller_ID:"
-                followed by the assessment and brief description.
 
         Returns:
-            dict: A dictionary with keys 'success' and 'post_id'. On success, may also
-                include 'structured_info' if provided.
+            dict: A dictionary with keys 'success' and 'post_id'.
 
             Example returns:
-            Seller: {'success': True, 'post_id': 50, 'structured_info': '[Pro-Fraud]'}
-            Buyer: {'success': True, 'post_id': 51, 'structured_info': 'Seller_5: Fraudulent - Advertised HQ but delivered LQ'}
-            
-        Note:
-            The structured_info field allows agents to share structured information during
-            communication phases. Sellers express their fraud attitude, while buyers provide
-            transaction feedback to help other buyers make informed decisions.
+            {'success': True, 'post_id': 50}
         """
         post_data = {
-            "content": content,
-            "structured_info": structured_info if structured_info is not None else ""
+            "content": content
         }
         return await self.perform_action(post_data, ActionType.CREATE_POST.value)
 
@@ -784,14 +762,15 @@ class SocialAction:
         return await self.perform_action(self.agent_id,
                                          ActionType.LISTEN_FROM_GROUP.value)
 
-    async def list_product(self, advertised_quality: str, product_quality: str, has_warrant: bool = False):
+    async def list_product(self, advertised_quality: str, product_quality: str, has_warrant: bool = False, price: float = None):
         r"""List a product for sale in the market for the current round.
 
         This method invokes an asynchronous action to list a product for sale
         in the market. The product can have different advertised and actual
-        qualities, and optionally include a truth warrant. Upon successful
-        execution, it returns a dictionary indicating success and the ID of the
-        newly created product listing.
+        qualities, and optionally include a truth warrant. The price is fixed
+        by the market based on advertised quality and cannot be customized.
+        Upon successful execution, it returns a dictionary indicating success
+        and the ID of the newly created product listing.
 
         Args:
             advertised_quality (str): The quality of the product advertised to
@@ -802,6 +781,9 @@ class SocialAction:
                 product. Defaults to False. A truth warrant allows buyers to
                 challenge the product if the advertised quality does not match
                 the actual quality.
+            price (float, optional): DEPRECATED - Price is fixed by the market
+                and this parameter is ignored. Prices are automatically set
+                based on advertised quality (HQ: fixed price, LQ: fixed price).
 
         Returns:
             dict: A dictionary with two key-value pairs. The 'success' key
@@ -817,8 +799,74 @@ class SocialAction:
             "product_quality": product_quality,
             "has_warrant": has_warrant,
         }
+        # Price parameter is ignored - price is fixed by the market
         return await self.perform_action(product_details, 
                                         ActionType.LIST_PRODUCT.value)
+
+    async def list_products(self, products: list):
+        r"""List multiple products for sale in the market for the current round.
+
+        This method allows you to list multiple products at once, each with different
+        combinations of advertised quality and product quality. This is more efficient
+        than calling list_product multiple times.
+
+        Args:
+            products (list): A list of product specifications. Each product is a dict with:
+                - advertised_quality (str): What you tell buyers ('HQ' or 'LQ')
+                - product_quality (str): What you actually produce ('HQ' or 'LQ')
+                - has_warrant (bool, optional): Whether to offer a Truth Warrant (only for reputation_and_warrant market)
+                - quantity (int, optional): Number of products with this specification (default: 1)
+
+        Returns:
+            dict: A dictionary with:
+                - 'success': Boolean indicating if the operation was successful
+                - 'product_ids': List of created product IDs
+                - 'total_products': Total number of products created
+                - 'total_cost': Total cost of created products
+                - 'partial_fulfillment': (optional) Boolean indicating if not all requested products were created
+                - 'failed_specs': (optional) List of specifications that could not be fully created
+                - 'message': (optional) Information message about partial fulfillment
+                - 'error': Error message if success is False
+
+            Example of a successful return (all products created):
+            {
+                "success": True,
+                "product_ids": [123, 124, 125],
+                "total_products": 3,
+                "total_cost": 12.0
+            }
+            
+            Example of partial fulfillment (some products created):
+            {
+                "success": True,
+                "product_ids": [123, 124],
+                "total_products": 2,
+                "total_cost": 8.0,
+                "partial_fulfillment": True,
+                "failed_specs": [
+                    {
+                        "specification": {"advertised_quality": "HQ", "product_quality": "HQ"},
+                        "requested": 5,
+                        "created": 2,
+                        "missing": 3,
+                        "reason": "Insufficient budget"
+                    }
+                ],
+                "message": "Created 2 product(s), but 3 product(s) could not be created due to insufficient budget."
+            }
+
+        Example usage:
+            # List 2 HQ products (advertised as HQ, true quality HQ) and 1 LQ product (advertised as LQ)
+            list_products([
+                {"advertised_quality": "HQ", "product_quality": "HQ", "quantity": 2},
+                {"advertised_quality": "LQ", "product_quality": "LQ", "quantity": 1}
+            ])
+        """
+        products_data = {
+            "products": products
+        }
+        return await self.perform_action(products_data, 
+                                        ActionType.LIST_PRODUCTS.value)
 
     async def exit_market(self):
         r"""Exit the market for the current round.
@@ -890,6 +938,37 @@ class SocialAction:
         """
         return await self.perform_action(product_id, ActionType.PURCHASE_PRODUCT_ID.value)
 
+    async def purchase_products(self, product_ids: list):
+        r"""Purchase multiple products based on their unique product IDs.
+
+        This method allows you to purchase multiple products at once, which is more efficient
+        than calling purchase_product_id multiple times.
+
+        Args:
+            product_ids (list): A list of product IDs to purchase. Each element should be an integer.
+
+        Returns:
+            dict: A dictionary with:
+                - 'success': Boolean indicating if the operation was successful
+                - 'transactions': List of transaction results, each containing transaction_id, product_id, etc.
+                - 'total_transactions': Total number of successful transactions
+                - 'error': Error message if success is False
+
+            Example of a successful return:
+            {
+                "success": True,
+                "transactions": [
+                    {"transaction_id": 456, "product_id": 123, "buyer_utility": 3.0, ...},
+                    {"transaction_id": 457, "product_id": 124, "buyer_utility": 2.0, ...}
+                ],
+                "total_transactions": 2
+            }
+
+        Example usage:
+            purchase_products([123, 124, 125])
+        """
+        return await self.perform_action(product_ids, ActionType.PURCHASE_PRODUCTS.value)
+
     async def challenge_warrant(self, transaction_id: int, rating: int):
         r"""Challenge the warrant of a previously purchased product.
 
@@ -923,6 +1002,42 @@ class SocialAction:
         rating_details = {"transaction_id": transaction_id, "rating": rating}
         return await self.perform_action(rating_details, ActionType.CHALLENGE_WARRANT.value)
 
+    async def challenge_warrants(self, challenges: list):
+        r"""Challenge the warrants of multiple previously purchased products.
+
+        This method allows you to challenge multiple warrants at once, which is more efficient
+        than calling challenge_warrant multiple times.
+
+        Args:
+            challenges (list): A list of challenge specifications. Each challenge is a dict with:
+                - transaction_id (int): The unique identifier of the transaction to challenge
+                - rating (int): The rating to give (range [-2, -1, 0, 1, 2])
+
+        Returns:
+            dict: A dictionary with:
+                - 'success': Boolean indicating if the operation was successful
+                - 'challenges': List of challenge results, each containing challenge_id, transaction_id, etc.
+                - 'total_challenges': Total number of successful challenges
+                - 'error': Error message if success is False
+
+            Example of a successful return:
+            {
+                "success": True,
+                "challenges": [
+                    {"challenge_id": 789, "transaction_id": 456, ...},
+                    {"challenge_id": 790, "transaction_id": 457, ...}
+                ],
+                "total_challenges": 2
+            }
+
+        Example usage:
+            challenge_warrants([
+                {"transaction_id": 456, "rating": -2},
+                {"transaction_id": 457, "rating": -1}
+            ])
+        """
+        return await self.perform_action(challenges, ActionType.CHALLENGE_WARRANTS.value)
+
     async def rate_transaction(self, transaction_id: int, rating: int):
         r"""Rate a completed transaction to influence the seller's reputation.
 
@@ -955,3 +1070,39 @@ class SocialAction:
         """
         rating_details = {"transaction_id": transaction_id, "rating": rating}
         return await self.perform_action(rating_details, ActionType.RATE_TRANSACTION.value)
+
+    async def rate_transactions(self, ratings: list):
+        r"""Rate multiple completed transactions to influence sellers' reputation.
+
+        This method allows you to rate multiple transactions at once, which is more efficient
+        than calling rate_transaction multiple times.
+
+        Args:
+            ratings (list): A list of rating specifications. Each rating is a dict with:
+                - transaction_id (int): The unique identifier of the transaction to rate
+                - rating (int): The rating to give (range [-2, -1, 0, 1, 2])
+
+        Returns:
+            dict: A dictionary with:
+                - 'success': Boolean indicating if the operation was successful
+                - 'ratings': List of rating results, each containing rating_id, transaction_id, etc.
+                - 'total_ratings': Total number of successful ratings
+                - 'error': Error message if success is False
+
+            Example of a successful return:
+            {
+                "success": True,
+                "ratings": [
+                    {"rating_id": 321, "transaction_id": 456, ...},
+                    {"rating_id": 322, "transaction_id": 457, ...}
+                ],
+                "total_ratings": 2
+            }
+
+        Example usage:
+            rate_transactions([
+                {"transaction_id": 456, "rating": 2},
+                {"transaction_id": 457, "rating": 1}
+            ])
+        """
+        return await self.perform_action(ratings, ActionType.RATE_TRANSACTIONS.value)

@@ -37,14 +37,132 @@ class ActionLogger:
             os.remove(self.log_path)
             print(f"Action log cleaned up: {self.log_path}")
     
-    def save_action_records(self, env, round_num: int, phase: str):
+    def save_system_prompts(self, agent_graph):
         """
-        Save env.step() detailed results to JSON file
+        Save all agent system prompts to JSON file (Round 0)
+        
+        Args:
+            agent_graph: AgentGraph containing all agents
+        """
+        # Ensure log directory exists
+        log_dir = os.path.dirname(self.log_path)
+        if log_dir:
+            os.makedirs(log_dir, exist_ok=True)
+        
+        # Load existing records if any
+        all_records = []
+        if os.path.exists(self.log_path):
+            with open(self.log_path, 'r', encoding='utf-8') as f:
+                all_records = json.load(f)
+        
+        # Collect system prompts from all agents
+        system_prompts = {
+            'sellers': {},
+            'buyers': {}
+        }
+        
+        for agent_id, agent in agent_graph.get_agents():
+            role = agent.user_info.profile.get("role")
+            system_message_content = agent.system_message.content if hasattr(agent, 'system_message') and agent.system_message else ""
+            
+            if role == 'seller':
+                system_prompts['sellers'][agent_id] = {
+                    'agent_id': agent_id,
+                    'name': agent.user_info.name,
+                    'description': agent.user_info.description,
+                    'system_prompt': system_message_content
+                }
+            elif role == 'buyer':
+                system_prompts['buyers'][agent_id] = {
+                    'agent_id': agent_id,
+                    'name': agent.user_info.name,
+                    'description': agent.user_info.description,
+                    'system_prompt': system_message_content
+                }
+        
+        # Add system prompts record (Round 0)
+        all_records.append({
+            'round': 0,
+            'phase': 'initialization',
+            'timestamp': datetime.now().isoformat(),
+            'type': 'system_prompts',
+            'system_prompts': system_prompts
+        })
+        
+        # Save all records
+        with open(self.log_path, 'w', encoding='utf-8') as f:
+            json.dump(all_records, f, indent=2, ensure_ascii=False, default=str)
+    
+    def _format_as_one_line(self, obj: Any) -> str:
+        """
+        Format an object as a one-line JSON string
+        
+        Args:
+            obj: Object to format
+            
+        Returns:
+            One-line JSON string
+        """
+        if obj is None:
+            return ""
+        try:
+            return json.dumps(obj, ensure_ascii=False, separators=(',', ':'))
+        except (TypeError, ValueError):
+            return str(obj)
+    
+    def _clean_action_result(self, action_result: Any) -> Dict:
+        """
+        Clean action_result by removing agent_id, _action_name, _action_args fields
+        
+        Args:
+            action_result: Action result dictionary
+            
+        Returns:
+            Cleaned action result dictionary
+        """
+        if not isinstance(action_result, dict):
+            return action_result
+        
+        cleaned = {}
+        for key, value in action_result.items():
+            if key not in ['agent_id', '_action_name', '_action_args']:
+                cleaned[key] = value
+        
+        return cleaned
+    
+    def _get_agent_name(self, agent_id: int, agent_graph) -> str:
+        """
+        Get agent name from agent_graph
+        
+        Args:
+            agent_id: Agent ID
+            agent_graph: AgentGraph containing agents
+            
+        Returns:
+            Agent name or empty string
+        """
+        if agent_graph is None:
+            return ""
+        
+        try:
+            agent = agent_graph.get_agent(agent_id)
+            if agent and hasattr(agent, 'user_info'):
+                return agent.user_info.name or ""
+        except (KeyError, AttributeError):
+            pass
+        
+        return ""
+    
+    def save_action_records(self, env, round_num: int, phase: str, agent_graph=None):
+        """
+        Save env.step() detailed results to JSON file, including prompts sent to agents
+        Organized by round and phase with agent_infos array
         
         Args:
             env: Environment object with action results
             round_num: Current round number
             phase: Current phase name
+            agent_graph: Optional AgentGraph to retrieve agent names and prompt information
         """
         if not hasattr(env, '_last_step_detailed_results') or not env._last_step_detailed_results:
             return
@@ -60,18 +178,63 @@ class ActionLogger:
             with open(self.log_path, 'r', encoding='utf-8') as f:
                 all_records = json.load(f)
         
-        # Add new records
+        # Get prompt information from env if available
+        last_step_prompts = getattr(env, '_last_step_prompts', {})
+        
+        # Build agent_infos array for this round/phase
+        agent_infos = []
+        
         for result in env._last_step_detailed_results:
-            all_records.append({
+            agent_id = result.get('agent_id')
+            if agent_id is None:
+                continue
+            
+            # Get agent name
+            agent_name = self._get_agent_name(agent_id, agent_graph)
+            
+            # Get prompt information for this agent
+            prompt_info = last_step_prompts.get(agent_id, {})
+            
+            # Clean action_result
+            action_result = result.get('action_result')
+            cleaned_action_result = self._clean_action_result(action_result)
+            
+            # Build agent action info
+            agent_action_info = {
+                'action_name': result.get('action_name', ''),
+                'action_args': self._format_as_one_line(result.get('action_args')),
+                'action_results': self._format_as_one_line(cleaned_action_result),
+                'action_reasoning': result.get('reasoning', '')
+            }
+            
+            # Build prompts
+            prompts = {}
+            if prompt_info:
+                prompts = {
+                    'system_message': prompt_info.get('system_message', ''),
+                    'user_message': prompt_info.get('user_message', ''),
+                    'environment_prompt': prompt_info.get('environment_prompt', ''),
+                    'extra_prompt': prompt_info.get('extra_prompt', '')
+                }
+            
+            # Add agent info
+            agent_infos.append({
+                'agent_id': agent_id,
+                'agent_name': agent_name,
+                'agent_action_info': agent_action_info,
+                'prompts': prompts
+            })
+        
+        # Create record for this round/phase
+        if agent_infos:
+            record = {
                 'round': round_num,
                 'phase': phase,
                 'timestamp': datetime.now().isoformat(),
-                'agent_id': result.get('agent_id'),
-                'action_name': result.get('action_name'),
-                'action_args': result.get('action_args'),
-                'action_result': result.get('action_result'),
-                'reasoning': result.get('reasoning', '')
-            })
+                'agent_infos': agent_infos
+            }
+            
+            all_records.append(record)
         
         # Save all records
         with open(self.log_path, 'w', encoding='utf-8') as f:
@@ -104,7 +267,7 @@ class ActionLogger:
         all_records = self.load_action_records()
         return [
             record for record in all_records
-            if record['round'] == round_num and record['phase'] == phase
+            if record.get('round') == round_num and record.get('phase') == phase
         ]
     
     def get_agent_actions(self, agent_id: int) -> List[Dict]:
@@ -115,13 +278,19 @@ class ActionLogger:
             agent_id: Agent identifier
             
         Returns:
-            List of action records for the agent
+            List of action records containing the agent
         """
         all_records = self.load_action_records()
-        return [
-            record for record in all_records
-            if record['agent_id'] == agent_id
-        ]
+        matching_records = []
+        for record in all_records:
+            if record.get('type') == 'system_prompts':
+                continue
+            agent_infos = record.get('agent_infos', [])
+            for agent_info in agent_infos:
+                if agent_info.get('agent_id') == agent_id:
+                    matching_records.append(record)
+                    break
+        return matching_records
 
 
 class SimulationLogger:

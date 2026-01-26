@@ -16,8 +16,8 @@ def ensure_tables(conn: sqlite3.Connection) -> None:
             seed INTEGER,
             round INTEGER,
             seller_id INTEGER,
-            public_reputation_score INTEGER,
-            public_num_ratings INTEGER,
+            public_thumbs_up INTEGER DEFAULT 0,
+            public_thumbs_down INTEGER DEFAULT 0,
             FOREIGN KEY(seller_id) REFERENCES user(user_id)
         );
         """
@@ -33,11 +33,11 @@ def ensure_tables(conn: sqlite3.Connection) -> None:
 
 
 def _get_previous_reputation(conn: sqlite3.Connection, seller_id: int) -> Tuple[int, int]:
-    """Return (score, count) from latest history row if exists, else defaults (1, 0)."""
+    """Return (thumbs_up, thumbs_down) from latest history row if exists, else defaults (0, 0)."""
     cursor = conn.cursor()
     cursor.execute(
         """
-        SELECT public_reputation_score, public_num_ratings
+        SELECT public_thumbs_up, public_thumbs_down
         FROM reputation_history
         WHERE seller_id = ?
         ORDER BY round DESC
@@ -47,8 +47,8 @@ def _get_previous_reputation(conn: sqlite3.Connection, seller_id: int) -> Tuple[
     )
     row = cursor.fetchone()
     if row is None:
-        return 1, 0
-    return int(row[0] or 1), int(row[1] or 0)
+        return 0, 0
+    return int(row[0] or 0), int(row[1] or 0)
 
 
 def _get_run_meta() -> Tuple[int, Optional[int]]:
@@ -61,8 +61,13 @@ def _get_run_meta() -> Tuple[int, Optional[int]]:
 
 def compute_and_update_reputation(conn: sqlite3.Connection, round_number: int, ratings_up_to_round: Optional[int] = None) -> None:
     """
-    Calculate each seller's public reputation: cumulative average of ratings.
-    Consider seller's enter_market time, only count reputation accumulation from that time point.
+    Calculate each seller's public reputation using thumbs-up/thumbs-down counting system.
+    Rating mapping:
+    - rating +1 → thumbs_up +1
+    - rating +2 → thumbs_up +2
+    - rating -1 → thumbs_down +1
+    - rating -2 → thumbs_down +2
+    
     - round_number: round that current snapshot belongs to (used for writing reputation_history.round)
     - ratings_up_to_round: maximum round considered for rating aggregation (used to implement lag display).
       If None, equivalent to using round_number.
@@ -72,50 +77,49 @@ def compute_and_update_reputation(conn: sqlite3.Connection, round_number: int, r
 
     effective_max_round = round_number if ratings_up_to_round is None else max(0, int(ratings_up_to_round))
 
-    # Get all sellers and their enter_market times
-    cursor.execute("SELECT user_id, enter_market_round FROM user WHERE role = 'seller'")
-    sellers_info = {row[0]: row[1] for row in cursor.fetchall()}
+    # Get all sellers
+    cursor.execute("SELECT user_id FROM user WHERE role = 'seller'")
+    seller_ids = [row[0] for row in cursor.fetchall()]
 
     run_id, seed = _get_run_meta()
 
-    for seller_id, enter_market_time in sellers_info.items():
-            # Only count transactions starting from enter_market_time
+    for seller_id in seller_ids:
+        # Get all ratings for this seller up to the effective max round
         cursor.execute(
             """
-            SELECT COUNT(t.rating) as cnt, COALESCE(SUM(t.rating), 0)
+            SELECT t.rating
             FROM transactions t
             WHERE t.seller_id = ? AND t.rating IS NOT NULL 
-            AND t.round_number <= ? AND t.round_number >= ?
+            AND t.round_number <= ?
             """,
-            (seller_id, effective_max_round, enter_market_time),
+            (seller_id, effective_max_round),
         )
         
-        result = cursor.fetchone()
-        if result:
-            num_ratings, sum_ratings = int(result[0]), int(result[1])
-        else:
-            num_ratings, sum_ratings = 0, 0
-
-        if num_ratings > 0:
-            avg_rating = round(sum_ratings)
-        else:
-            # Default initial reputation
-            avg_rating = 0
+        ratings = [row[0] for row in cursor.fetchall()]
+        
+        # Calculate thumbs up and down counts
+        thumbs_up = 0
+        thumbs_down = 0
+        for rating in ratings:
+            if rating > 0:
+                thumbs_up += rating  # +1 → +1, +2 → +2
+            else:
+                thumbs_down += abs(rating)  # -1 → +1, -2 → +2
 
         # Persist snapshot
         cursor.execute(
             """
             INSERT INTO reputation_history (
-                run_id, seed, round, seller_id, public_reputation_score, public_num_ratings
+                run_id, seed, round, seller_id, public_thumbs_up, public_thumbs_down
             ) VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (run_id, seed, round_number, seller_id, int(avg_rating), int(num_ratings)),
+            (run_id, seed, round_number, seller_id, int(thumbs_up), int(thumbs_down)),
         )
 
         # Update user table for live access in prompts
         cursor.execute(
-            "UPDATE user SET reputation_score = ? WHERE user_id = ?",
-            (int(avg_rating), seller_id),
+            "UPDATE user SET thumbs_up_count = ?, thumbs_down_count = ? WHERE user_id = ?",
+            (int(thumbs_up), int(thumbs_down), seller_id),
         )
 
     conn.commit()

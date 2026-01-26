@@ -65,9 +65,15 @@ class SocialEnvironment(Environment):
         # === market-sim: add a flag to distinguish modes ===
         self.is_market_sim = False 
         self.config = config if config else SimulationConfig()
+        self.communication_channel_type = "Fake"  # Fake or Real
 
-    def get_product_listings_for_env(self) -> str:
-        """Query all products on sale from database and format as string."""
+    def get_product_listings_for_env(self, market_type: str = None) -> str:
+        """Query all products on sale from database and format as string.
+        
+        Args:
+            market_type: Market type ('reputation_only' or 'reputation_and_warrant').
+                        If None, warranty info will be shown by default.
+        """
         if not os.path.exists(self.db_path):
             return "No products are currently on sale."
             
@@ -78,7 +84,9 @@ class SocialEnvironment(Environment):
             cursor.execute(
                 """
                 SELECT p.product_id, p.user_id, p.advertised_quality, p.price, p.has_warrant,
-                    COALESCE(u.reputation_score, 0) AS reputation_score
+                    COALESCE(u.brand_name, 'Unknown') AS brand_name,
+                    COALESCE(u.thumbs_up_count, 0) AS thumbs_up_count,
+                    COALESCE(u.thumbs_down_count, 0) AS thumbs_down_count
                 FROM product p
                 LEFT JOIN user u ON u.user_id = p.user_id
                 WHERE p.status = 'on_sale'
@@ -86,13 +94,24 @@ class SocialEnvironment(Environment):
             )
             products = cursor.fetchall()
             if products:
-                listings = "Here is the list of products currently on sale:\n"
+                listings = f"Available Products ({len(products)} total):\n"
                 for p in products:
-                    warrant_info = " (Warranted)" if p[4] else ""
-                    listings += (
-                        f"- Product ID: {p[0]}, Seller ID: {p[1]}, Seller Reputation: {p[5]}, "
-                        f"Advertised Quality: {p[2]}, Price: ${p[3]:.2f}{warrant_info}\n"
-                    )
+                    product_id, seller_id, adv_quality, price, has_warrant, brand_name, thumbs_up, thumbs_down = p
+                    # Only show warranty info if market_type is not 'reputation_only'
+                    if market_type == 'reputation_only':
+                        listings += (
+                            f"  Product {product_id}: {adv_quality} quality, "
+                            f"Price ${price:.2f}, "
+                            f"Brand {brand_name} (👍{thumbs_up} 👎{thumbs_down})\n"
+                        )
+                    else:
+                        warrant_str = "Warranted" if has_warrant else "No Warrant"
+                        listings += (
+                            f"  Product {product_id}: {adv_quality} quality, "
+                            f"Price ${price:.2f}, "
+                            f"Brand {brand_name} (👍{thumbs_up} 👎{thumbs_down}), "
+                            f"{warrant_str}\n"
+                        )
         except sqlite3.Error as e:
             print(f"Database query error (get_product_listings_for_env): {e}")
         finally:
@@ -100,7 +119,12 @@ class SocialEnvironment(Environment):
         return listings
 
     def get_posts_communication_for_env(self) -> str:
-        """Query all posts from database and format as string with structured information."""
+        """Query all posts from database and format as string with structured information.
+        
+        Args:
+            current_user_id: The user_id of the current agent viewing the environment.
+                           Used for filtering posts in Fake communication channel mode.
+        """
         if not os.path.exists(self.db_path):
             return "No posts are currently available."
             
@@ -110,33 +134,22 @@ class SocialEnvironment(Environment):
         try:
             # Query all posts regardless of status, ordered by creation time (newest first)
             # In market simulation, posts don't have 'on_sale' status, so we query all posts
-            # Include structured_info field for enhanced communication
             cursor.execute(
-                "SELECT post_id, content, structured_info, user_id, created_at FROM post WHERE original_post_id IS NULL ORDER BY created_at DESC, post_id DESC LIMIT 50"
+                "SELECT post_id, content, user_id, created_at FROM post WHERE original_post_id IS NULL ORDER BY created_at DESC, post_id DESC LIMIT 50"
             )
             posts = cursor.fetchall()
             if posts:
                 posts_env = "Here is the list of posts currently available:\n\n"
                 for p in posts:
-                    post_id, content, structured_info, user_id, created_at = p
-                    # Format structured_info display based on content
-                    if structured_info:
-                        # Check if it's a seller tag (Pro-Fraud, Anti-Fraud, Neutral) or buyer feedback
-                        if structured_info.startswith('[') and structured_info.endswith(']'):
-                            # Seller tag format
-                            structured_info_str = f" [Fraud Attitude Tag: {structured_info}]"
-                        elif structured_info.startswith('Seller_'):
-                            # Buyer feedback format
-                            structured_info_str = f" [Transaction Feedback: {structured_info}]"
-                        else:
-                            # Generic structured info
-                            structured_info_str = f" [Structured Info: {structured_info}]"
-                    else:
-                        structured_info_str = ""
+                    post_id, content, user_id, created_at = p
+                    
+                    # Filter for Fake Communication Channel: only show current agent's own posts
+                    if self.communication_channel_type == "Fake" and self.action.agent_id is not None:
+                        if user_id != self.action.agent_id:
+                            continue  # Skip posts from other agents
+
                     posts_env += f"- Post ID: {post_id}, Author ID: {user_id}\n"
                     posts_env += f"  Content: {content}\n"
-                    if structured_info_str:
-                        posts_env += f"  {structured_info_str}\n"
                     posts_env += "\n"
         except sqlite3.Error as e:
             print(f"Database query error (get_posts_communication_for_env): {e}")
@@ -223,45 +236,209 @@ class SocialEnvironment(Environment):
             # Seller in listing phase: observe previous phase purchase feedback and current market status
             previous_feedback = self._get_previous_feedback(agent)
             total_profit = getattr(agent, 'total_profit', 0)
+            # Get budget from agent or database
+            budget = getattr(agent, 'current_budget', None)
+            if budget is None:
+                # Try to get from database if not in agent
+                db_path = get_db_path()
+                if db_path and os.path.exists(db_path):
+                    try:
+                        conn = sqlite3.connect(db_path)
+                        cursor = conn.cursor()
+                        cursor.execute("SELECT budget FROM user WHERE agent_id = ?", (agent.social_agent_id,))
+                        result = cursor.fetchone()
+                        default_budget = SimulationConfig.MARKET_PARAMS.get('seller_budget', 60.0)
+                        budget = result[0] if result and result[0] is not None else default_budget
+                        conn.close()
+                    except Exception:
+                        budget = SimulationConfig.MARKET_PARAMS.get('seller_budget', 60.0)
+                else:
+                    budget = SimulationConfig.MARKET_PARAMS.get('seller_budget', 60.0)
+            
+            # Get thumbs-up and thumbs-down counts from agent
+            thumbs_up_count = getattr(agent, 'thumbs_up_count', 0)
+            thumbs_down_count = getattr(agent, 'thumbs_down_count', 0)
             
             return MarketEnv_prompt.SELLER_LISTING_ENV.format(
                 previous_feedback=previous_feedback,
                 current_round=current_round,
                 simulation_rounds=self.config.SIMULATION_ROUNDS,
-                reputation_score=agent.reputation_score,
+                thumbs_up_count=thumbs_up_count,
+                thumbs_down_count=thumbs_down_count,
                 total_profit=total_profit,
+                budget=budget,
             )
             
         elif market_phase == "purchase" and role == "buyer":
-            # Buyer in purchase phase: observe currently purchasable products and seller information
-            available_products = self.get_product_listings_for_env()
-            seller_reputation_info = self._get_seller_reputation_info()
+            # Buyer in purchase phase: observe currently purchasable products
+            # Get market_type from agent profile
+            market_type = agent.user_info.profile.get("market_type", "reputation_and_warrant")
+            available_products = self.get_product_listings_for_env(market_type=market_type)
             
-            return MarketEnv_prompt.BUYER_PURCHASE_ENV.format(
+            # Use dynamic prompt based on market_type
+            purchase_env = MarketEnv_prompt.get_buyer_purchase_env(market_type)
+            return purchase_env.format(
                 current_round=current_round,
                 simulation_rounds=self.config.SIMULATION_ROUNDS,
                 cumulative_utility=agent.cumulative_utility,
                 available_products=available_products,
-                seller_reputation_info=seller_reputation_info
             )
             
         elif market_phase == "rating" and role == "buyer":
             # Buyer in rating phase: observe specific product information after purchase
-            purchase_info = getattr(agent, 'last_purchase_info', {})
+            # Get all purchase transactions (for multiple purchases)
+            all_transactions = getattr(agent, 'all_purchase_transactions', None)
+            if all_transactions is None:
+                # Fallback to last_purchase_info for backward compatibility
+                purchase_info = getattr(agent, 'last_purchase_info', {})
+                all_transactions = [purchase_info] if purchase_info.get('transaction_id') else []
             
-            return MarketEnv_prompt.BUYER_RATING_ENV.format(
-                current_round=current_round,
-                simulation_rounds=self.config.SIMULATION_ROUNDS,
-                transaction_id=purchase_info.get('transaction_id', 'N/A'),
-                product_id=purchase_info.get('product_id', 'N/A'),
-                advertised_quality=purchase_info.get('advertised_quality', 'N/A'),
-                true_quality=purchase_info.get('true_quality', 'N/A'),
-                has_warrant=purchase_info.get('has_warrant', False),
-                purchase_price=purchase_info.get('purchase_price', 0),
-                buyer_utility=purchase_info.get('buyer_utility', 0),
-                seller_id=purchase_info.get('seller_id', 'N/A'),
-                seller_reputation=purchase_info.get('seller_reputation', 0)
+            # If no transactions, return a simple message (should not happen if BuyerRatingPhase is correct)
+            if not all_transactions or not any(t.get('transaction_id') for t in all_transactions):
+                return (
+                    f"# MARKET ENVIRONMENT OBSERVATION\n\n"
+                    f"## Your Status\n"
+                    f"- Round: {current_round}/{self.config.SIMULATION_ROUNDS}\n\n"
+                    f"You did not purchase any products in this round, so there are no transactions to rate or challenge."
+                )
+            
+            # Filter out transactions without valid transaction_id
+            valid_transactions = [t for t in all_transactions if t.get('transaction_id')]
+            if not valid_transactions:
+                return (
+                    f"# MARKET ENVIRONMENT OBSERVATION\n\n"
+                    f"## Your Status\n"
+                    f"- Round: {current_round}/{self.config.SIMULATION_ROUNDS}\n\n"
+                    f"You did not purchase any products in this round, so there are no transactions to rate or challenge."
+                )
+            
+            # Get market_type from agent profile
+            market_type = agent.user_info.profile.get("market_type", "reputation_and_warrant")
+            
+            # Collect all unique seller_ids from transactions
+            unique_seller_ids = list(set(t.get('seller_id') for t in valid_transactions if t.get('seller_id')))
+            
+            # Fetch brand_name and reputation for all sellers in one query
+            seller_info = {}
+            if unique_seller_ids:
+                try:
+                    conn = sqlite3.connect(self.db_path)
+                    cursor = conn.cursor()
+                    placeholders = ','.join('?' * len(unique_seller_ids))
+                    cursor.execute(f"SELECT user_id, brand_name, thumbs_up_count, thumbs_down_count FROM user WHERE user_id IN ({placeholders})", unique_seller_ids)
+                    for row in cursor.fetchall():
+                        seller_info[row[0]] = {
+                            'brand_name': row[1] if row[1] else 'Unknown',
+                            'thumbs_up': row[2] if row[2] else 0,
+                            'thumbs_down': row[3] if row[3] else 0
+                        }
+                    conn.close()
+                    print(f"DEBUG: Fetched seller_info for {len(seller_info)} sellers: {seller_info}")
+                except Exception as e:
+                    print(f"Error fetching seller info: {e}")
+            else:
+                print(f"DEBUG: No valid seller_ids found in transactions. Unique seller_ids: {unique_seller_ids}")
+            
+            # Format transactions information for display with brand_name
+            transactions_text = "\n".join([
+                f"  - Transaction ID: {t.get('transaction_id', 'N/A')}, "
+                f"Product ID: {t.get('product_id', 'N/A')}, "
+                f"Brand: {seller_info.get(t.get('seller_id'), {}).get('brand_name', 'Unknown')}, "
+                f"Advertised: {t.get('advertised_quality', 'N/A')}, "
+                f"True Quality: {t.get('true_quality', 'N/A')}, "
+                f"Price: ${t.get('purchase_price', 0):.2f}, "
+                f"Utility: {t.get('buyer_utility', 0):.2f}"
+                + (f", Has Warrant: {t.get('has_warrant', False)}" if market_type != 'reputation_only' else "")
+                for t in valid_transactions
+            ])
+            
+            # Use dynamic prompt based on market_type
+            rating_env = MarketEnv_prompt.get_buyer_rating_env(market_type)
+            rating_prompt = rating_env.format(
+                transactions_text=transactions_text
             )
+            return rating_prompt
+        
+        elif market_phase == "challenge" and role == "buyer":
+            # Buyer in challenge phase: observe specific product information after purchase (only for warranted products)
+            # Get all purchase transactions (for multiple purchases)
+            all_transactions = getattr(agent, 'all_purchase_transactions', None)
+            if all_transactions is None:
+                # Fallback to last_purchase_info for backward compatibility
+                purchase_info = getattr(agent, 'last_purchase_info', {})
+                all_transactions = [purchase_info] if purchase_info.get('transaction_id') else []
+            
+            # If no transactions, return a simple message
+            if not all_transactions or not any(t.get("transaction_id") for t in all_transactions):
+                return (
+                    f"# MARKET ENVIRONMENT OBSERVATION\n\n"
+                    f"## Your Status\n"
+                    f"- Round: {current_round}/{self.config.SIMULATION_ROUNDS}\n\n"
+                    f"You did not purchase any products in this round, so there are no transactions to challenge."
+                )
+            
+            # Filter out transactions without valid transaction_id and only include warranted products
+            valid_transactions = [
+                t for t in all_transactions 
+                if t.get('transaction_id') and t.get('has_warrant', False)
+            ]
+            if not valid_transactions:
+                return (
+                    f"# MARKET ENVIRONMENT OBSERVATION\n\n"
+                    f"## Your Status\n"
+                    f"- Round: {current_round}/{self.config.SIMULATION_ROUNDS}\n\n"
+                    f"You have no warranted products to challenge in this round."
+                )
+            
+            # Get market_type from agent profile
+            market_type = agent.user_info.profile.get("market_type", "reputation_and_warrant")
+            
+            # Collect all unique seller_ids from transactions
+            unique_seller_ids = list(set(t.get('seller_id') for t in valid_transactions if t.get('seller_id')))
+            
+            # Fetch brand_name and reputation for all sellers in one query
+            seller_info = {}
+            if unique_seller_ids:
+                try:
+                    conn = sqlite3.connect(self.db_path)
+                    cursor = conn.cursor()
+                    placeholders = ','.join('?' * len(unique_seller_ids))
+                    cursor.execute(f"SELECT user_id, brand_name, thumbs_up_count, thumbs_down_count FROM user WHERE user_id IN ({placeholders})", unique_seller_ids)
+                    for row in cursor.fetchall():
+                        seller_info[row[0]] = {
+                            'brand_name': row[1] if row[1] else 'Unknown',
+                            'thumbs_up': row[2] if row[2] else 0,
+                            'thumbs_down': row[3] if row[3] else 0
+                        }
+                    conn.close()
+                except Exception as e:
+                    print(f"Error fetching seller info: {e}")
+            
+            # Format transactions information for display with brand_name (only warranted products)
+            transactions_text = "\n".join([
+                f"  - Transaction ID: {t.get('transaction_id', 'N/A')}, "
+                f"Product ID: {t.get('product_id', 'N/A')}, "
+                f"Brand: {seller_info.get(t.get('seller_id'), {}).get('brand_name', 'Unknown')}, "
+                f"Advertised: {t.get('advertised_quality', 'N/A')}, "
+                f"True Quality: {t.get('true_quality', 'N/A')}, "
+                f"Price: ${t.get('purchase_price', 0):.2f}, "
+                f"Utility: {t.get('buyer_utility', 0):.2f}, "
+                f"Has Warrant: {t.get('has_warrant', False)}"
+                for t in valid_transactions
+            ])
+            
+            # Use challenge-specific prompt
+            challenge_prompt = (
+                f"# MARKET ENVIRONMENT OBSERVATION\n\n"
+                f"## Your Warranted Purchases in This Round:\n"
+                f"{transactions_text}\n\n"
+                f"Based on your purchase experiences and the product details, decide whether to challenge any warranted products.\n"
+                f"**Instructions:**\n"
+                f"- You can challenge warranted products where you received lower quality than advertised using `challenge_warrants()`\n"
+                f"- Challenging costs $1 but rewards you if the seller was fraudulent (e.g., $8 for HQ claims)\n"
+                f"- Only challenge if you received lower quality than advertised!\n"
+            )
+            return challenge_prompt
             
         else:
             # Other cases return basic environment information

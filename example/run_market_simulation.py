@@ -14,8 +14,24 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from oasis_market.simulation import run_single_simulation
 from config import SimulationConfig
+from typing import Optional
 
 load_dotenv(override=True)
+
+
+def load_config_from_yaml(yaml_path: Optional[str] = None):
+    """
+    Load configuration from YAML file if provided
+    
+    Args:
+        yaml_path: Path to YAML configuration file (optional)
+    """
+    if yaml_path:
+        print(f"Loading configuration from: {yaml_path}")
+        SimulationConfig.load_from_yaml(yaml_path)
+        print("Configuration loaded successfully.")
+    else:
+        print("Using default configuration from config.py")
 
 
 def parse_arguments():
@@ -61,6 +77,22 @@ Examples:
         help='Communication type: none, seller, buyer, or both (default: none)'
     )
     
+    parser.add_argument(
+        '-cc', '--communication-channel-type',
+        dest='communication_channel_type',
+        choices=['Fake', 'Real'],
+        default='Real',
+        help='Communication channel type: Fake or Real (default: Fake)'
+    )
+    
+    parser.add_argument(
+        '--config',
+        dest='config_file',
+        type=str,
+        default=None,
+        help='Path to YAML configuration file (optional, overrides default config.py values)'
+    )
+    
     return parser.parse_args()
 
 
@@ -71,6 +103,9 @@ async def main():
     # Parse command line arguments
     args = parse_arguments()
     
+    # Load configuration from YAML if provided
+    load_config_from_yaml(args.config_file)
+    
     # Print configuration
     print("=" * 60)
     print("Market Simulation Configuration")
@@ -78,6 +113,8 @@ async def main():
     print(f"Database: {args.db_path}")
     print(f"Market Type: {args.market_type or SimulationConfig.MARKET_TYPE}")
     print(f"Communication: {args.communication_type}")
+    print(f"Communication Channel Type: {args.communication_channel_type}")
+    print("=" * 60)
     print(f"Sellers: {SimulationConfig.NUM_SELLERS}")
     print(f"Buyers: {SimulationConfig.NUM_BUYERS}")
     print(f"Rounds: {SimulationConfig.SIMULATION_ROUNDS}")
@@ -87,8 +124,10 @@ async def main():
     await run_single_simulation(
         args.db_path,
         market_type=args.market_type,
-        communication_type=args.communication_type
+        communication_type=args.communication_type,
+        communication_channel_type=args.communication_channel_type
     )
+    
 
 
 if __name__ == "__main__":

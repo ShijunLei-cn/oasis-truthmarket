@@ -33,8 +33,8 @@ class AgentManager:
     
     @staticmethod
     def prepare_seller_state(agent, agent_id: int, round_num: int, 
-                           history_log: List[Dict], db_manager, 
-                           config) -> Tuple[Dict, str]:
+        history_log: List[Dict], db_manager, 
+        config, market_type: str = "reputation_and_warrant") -> Tuple[Dict, str]:
         """
         Prepare seller agent state for a round
         
@@ -45,6 +45,7 @@ class AgentManager:
             history_log: Historical performance log
             db_manager: Database manager instance
             config: Simulation configuration
+            market_type: Market type ('reputation_only' or 'reputation_and_warrant')
             
         Returns:
             Tuple of (state_dict, history_string)
@@ -52,18 +53,26 @@ class AgentManager:
         # Get agent state from database
         state = db_manager.get_agent_state(agent_id, 'seller', round_num=round_num)
         
+        # Get market_type from agent profile if not provided
+        if market_type == "reputation_and_warrant" and hasattr(agent, 'user_info'):
+            market_type = agent.user_info.profile.get("market_type", "reputation_and_warrant")
+        
         # Format history for display
-        visible_history_string = format_seller_history(history_log)
+        visible_history_string = format_seller_history(history_log, market_type=market_type)
         
         # Update agent attributes
-        agent.reputation_score = state['reputation_score']
+        agent.thumbs_up_count = state['thumbs_up_count']
+        agent.thumbs_down_count = state['thumbs_down_count']
         agent.history_summary = visible_history_string
+        # Store budget in agent for potential use
+        if 'budget' in state:
+            agent.current_budget = state['budget']
         
         return state, visible_history_string
     
     @staticmethod
     def prepare_buyer_state(agent, agent_id: int, round_num: int, 
-                          db_manager) -> Dict:
+        db_manager) -> Dict:
         """
         Prepare buyer agent state for a round
         
@@ -101,19 +110,28 @@ class AgentManager:
             total_profit: Total profit so far
             next_reputation: Reputation for next round
         """
-        sellers_history[agent_id].append({
+        history_entry = {
             "round": round_num,
-            "true_quality": round_summary["true_quality"],
-            "advertised_quality": round_summary["advertised_quality"],
-            "warrant": round_summary["warrant"],
-            "is_sold": round_summary["is_sold"],
-            "sold_numbers": round_summary["sold_numbers"],
-            "cost": round_summary["cost"],
-            "price": round_summary["price"],
+            "true_quality": round_summary.get("true_quality"),
+            "advertised_quality": round_summary.get("advertised_quality"),
+            "warrant": round_summary.get("warrant", False),
+            "is_sold": round_summary.get("is_sold", 0),
+            "sold_numbers": round_summary.get("sold_numbers", 0),
+            "cost": round_summary.get("cost", 0),
+            "price": round_summary.get("price", 0),
             "profit": round_profit,
             "reputation": next_reputation,
             "total_profit": total_profit
-        })
+        }
+        
+        # Add detailed product groups information if available
+        if "product_groups" in round_summary:
+            history_entry["product_groups"] = round_summary["product_groups"]
+            history_entry["total_products_listed"] = round_summary.get("total_products_listed", 0)
+            history_entry["total_cost"] = round_summary.get("total_cost", 0)
+            history_entry["total_revenue"] = round_summary.get("total_revenue", 0)
+        
+        sellers_history[agent_id].append(history_entry)
     
     @staticmethod
     def store_purchase_info(agent, purchase_info: Dict) -> None:
@@ -133,7 +151,8 @@ class AgentManager:
             'buyer_utility': purchase_info.get("buyer_utility"),
             'purchase_price': purchase_info.get("purchase_price", 0),
             'seller_id': purchase_info.get("seller_id", 'N/A'),
-            'seller_reputation': purchase_info.get("seller_reputation", 0)
+            'seller_thumbs_up': purchase_info.get("seller_thumbs_up", 0),
+            'seller_thumbs_down': purchase_info.get("seller_thumbs_down", 0)
         }
 
 
@@ -185,12 +204,15 @@ if __name__ == "__main__":
         "buyer_utility": 0,
         "purchase_price": 5.0,
         "seller_id": 1,
-        "seller_reputation": 3
+        "seller_thumbs_up": 5,
+        "seller_thumbs_down": 2
     }
     
     AgentManager.store_purchase_info(agent, purchase_info)
     assert agent.last_purchase_info["transaction_id"] == 1
     assert agent.last_purchase_info["true_quality"] == "LQ"
+    assert agent.last_purchase_info["seller_thumbs_up"] == 5
+    assert agent.last_purchase_info["seller_thumbs_down"] == 2
     print(f"✓ Purchase info stored: {agent.last_purchase_info}")
     
     print("\nAll agent management tests passed!")

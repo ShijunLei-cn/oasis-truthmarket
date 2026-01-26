@@ -77,7 +77,14 @@ class SocialAgent(ChatAgent):
         self.env = SocialEnvironment(SocialAction(agent_id, self.channel), db_path=db_path)
         
         # Agent state attributes
-        self.initial_budget = 10  # Seller and Buyer initial budget in simulation
+        # Set initial budget based on role: seller=5, buyer=10
+        role = user_info.profile.get("role") if user_info.profile else None
+        if role == "seller":
+            self.initial_budget = 5.0
+        elif role == "buyer":
+            self.initial_budget = 10.0
+        else:
+            self.initial_budget = 10.0  # Default for unknown roles
         self.reputation_score = 0    # Seller reputation
         self.cumulative_utility = 0  # Buyer cumulative utility
         self.history_summary = "This is the first round. You have no past performance data."
@@ -170,10 +177,7 @@ class SocialAgent(ChatAgent):
         user_msg_content += (
             "\n## Notice:\n"
             """
-            You can execute your action in either of the following ways:
-            
-            1. **Preferred method**: Use tool_call to directly call the available tools.
-            2. **Alternative method**: If tool_call is not available, output your action as JSON:
+            Output your action as JSON in the following format:
             
             <THOUGHT>
             1. Analyze the current situation and requirements.
@@ -194,6 +198,10 @@ class SocialAgent(ChatAgent):
             **IMPORTANT**: The JSON in <ACTION> must be valid JSON format. Do NOT add any comments (// or /* */) inside the JSON. All explanations should be in the <THOUGHT> section, not in the JSON itself.
             """
         )
+
+        # Store prompt information for logging
+        self._last_user_message_content = user_msg_content
+        self._last_env_prompt = env_prompt
 
         user_msg = BaseMessage.make_user_message(
             role_name="User",
@@ -314,6 +322,10 @@ class SocialAgent(ChatAgent):
             **IMPORTANT**: The JSON in <ACTION> must be valid JSON format. Do NOT add any comments (// or /* */) inside the JSON. All explanations should be in the <THOUGHT> section, not in the JSON itself.
             """
         )
+        
+        # Store prompt information for logging
+        self._last_user_message_content = user_msg_content
+        self._last_env_prompt = env_prompt
 
         user_msg = BaseMessage.make_user_message(
             role_name="User",
@@ -453,7 +465,7 @@ class SocialAgent(ChatAgent):
             "role":
             self.system_message.role_name,
             "content":
-            self.system_message.content.split("# RESPONSE FORMAT")[0],
+            self.system_message.content.split("# RESPONSE METHOD")[0],
         }] + openai_messages + [{
             "role": "user",
             "content": self.test_prompt
@@ -492,7 +504,7 @@ class SocialAgent(ChatAgent):
             "role":
             self.system_message.role_name,
             "content":
-            self.system_message.content.split("# RESPONSE FORMAT")[0],
+            self.system_message.content.split("# RESPONSE METHOD")[0],
         }] + openai_messages + [{
             "role": "user",
             "content": interview_prompt
