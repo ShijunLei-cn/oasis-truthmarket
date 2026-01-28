@@ -1,0 +1,30 @@
+# Ablation Study: Wide Cost Gap (HQ=6, LQ=1)
+experiment:
+  runs: 3
+  num_sellers: 5
+  num_buyers: 5
+  simulation_rounds: 10
+
+market_params:
+  hq_cost: 6.0
+  lq_cost: 1.0
+  hq_price: 8.0
+  lq_price: 3.0
+  hq_utility: 12.0
+  lq_utility: 4.0
+  hq_warrant_escrow: 8.0
+  lq_warrant_escrow: 2.0
+  challenge_cost: 1.0
+  seller_budget: 18.0
+  buyer_budget: 60.0
+
+market_rules:
+  reputation_lag: null
+  market_type: reputation_only
+  communication_type: none
+  communication_channel_type: Fake
+
+model:
+  platform: openai
+  type: gpt-4o-mini
+  temperature: 0.0
