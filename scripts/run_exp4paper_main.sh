@@ -7,11 +7,11 @@ echo "Paper Experiments: Comprehensive Run"
 echo "=========================================="
 
 # Default configuration file (can be overridden via CONFIG_FILE environment variable)
-CONFIG_FILE="${CONFIG_FILE:-configs/rq2_experiment_0_gpt_4o.yaml}"
+CONFIG_FILE="${CONFIG_FILE:-configs/rq2_experiment_largescale_gpt_4o_mini.yaml}"
 
 # Model configuration (can be overridden via environment variables)
 MODEL_PLATFORM="${MODEL_PLATFORM:-}"
-MODEL_TYPE="${MODEL_TYPE:-"gpt-4o"}"
+MODEL_TYPE="${MODEL_TYPE:-"gpt-4o-mini"}"
 
 # Build model arguments if provided
 MODEL_ARGS=""
@@ -29,10 +29,10 @@ if [ -n "$MODEL_ARGS" ]; then
 fi
 
 
-RUNS=1
+RUNS=5
 ROUNDS=10
-SELLERS=5
-BUYERS=5
+SELLERS=50
+BUYERS=50
 PROBE_INTERVAL=1
 
 # ==================== RQ1: Cognitive Probing ====================
@@ -51,7 +51,7 @@ python ./example/run_rq1_experiment.py \
     --sellers ${SELLERS} \
     --buyers ${BUYERS} \
     --market-type reputation_only \
-    --output-dir experiments/${MODEL_TYPE}/paper/rq1/r_wo \
+    --output-dir experiments/${MODEL_TYPE}/paper_largescale/rq1/r_wo \
     --probe-interval ${PROBE_INTERVAL} \
     --config "${CONFIG_FILE}" \
     --probe-interval 1
@@ -65,7 +65,7 @@ python ./example/run_rq1_experiment.py \
     --sellers ${SELLERS} \
     --buyers ${BUYERS} \
     --market-type reputation_and_warrant \
-    --output-dir experiments/${MODEL_TYPE}/paper/rq1/rw_wo \
+    --output-dir experiments/${MODEL_TYPE}/paper_largescale/rq1/rw_wo \
     --probe-interval ${PROBE_INTERVAL} \
     --config "${CONFIG_FILE}" \
     --probe-interval 1
@@ -76,29 +76,29 @@ python ./example/run_rq1_experiment.py \
 # echo "RQ2: Market Mechanism Comparison (No Communication)"
 # echo "=========================================="
 
-# # Reputation only market (no communication)
-# echo ""
-# echo "Running Reputation-Only Market experiments..."
-# python ./example/run_single_config_experiment.py \
-#     --experiment-id ${MODEL_TYPE}/paper/rq2/r_wo \
-#     --market-type reputation_only \
-#     --communication none \
-#     --communication-channel-type Fake \
-#     --runs ${RUNS} \
-#     --config "${CONFIG_FILE}" \
-#     ${MODEL_ARGS}
+# Reputation only market (no communication)
+echo ""
+echo "Running Reputation-Only Market experiments..."
+python ./example/run_single_config_experiment.py \
+    --experiment-id ${MODEL_TYPE}/paper_largescale/rq2/r_wo \
+    --market-type reputation_only \
+    --communication none \
+    --communication-channel-type Fake \
+    --runs ${RUNS} \
+    --config "${CONFIG_FILE}" \
+    ${MODEL_ARGS}
 
-# # Reputation and warrant market (no communication)
-# echo ""
-# echo "Running Reputation+Warrant Market experiments..."
-# python ./example/run_single_config_experiment.py \
-#     --experiment-id ${MODEL_TYPE}/paper/rq2/rw_wo \
-#     --market-type reputation_and_warrant \
-#     --communication none \
-#     --communication-channel-type Fake \
-#     --runs ${RUNS} \
-#     --config "${CONFIG_FILE}" \
-#     ${MODEL_ARGS}
+# Reputation and warrant market (no communication)
+echo ""
+echo "Running Reputation+Warrant Market experiments..."
+python ./example/run_single_config_experiment.py \
+    --experiment-id ${MODEL_TYPE}/paper_largescale/rq2/rw_wo \
+    --market-type reputation_and_warrant \
+    --communication none \
+    --communication-channel-type Fake \
+    --runs ${RUNS} \
+    --config "${CONFIG_FILE}" \
+    ${MODEL_ARGS}
 
 # # ==================== RQ3: Seller Communication ====================
 # echo ""
@@ -106,53 +106,53 @@ python ./example/run_rq1_experiment.py \
 # echo "RQ3: Group-Level Deception Dynamics (Seller Communication)"
 # echo "=========================================="
 
-# # Reputation only market - Fake channel
-# echo ""
-# echo "Running Reputation-Only + Seller Communication + Fake Channel..."
-# python ./example/run_single_config_experiment.py \
-#     --experiment-id ${MODEL_TYPE}/paper/rq3/r_wsc_F \
-#     --market-type reputation_only \
-#     --communication seller \
-#     --communication-channel-type Fake \
-#     --runs ${RUNS} \
-#     --config "${CONFIG_FILE}" \
-#     ${MODEL_ARGS}
+# Reputation only market - Fake channel
+echo ""
+echo "Running Reputation-Only + Seller Communication + Fake Channel..."
+python ./example/run_single_config_experiment.py \
+    --experiment-id ${MODEL_TYPE}/paper_largescale/rq3/r_wsc_F \
+    --market-type reputation_only \
+    --communication seller \
+    --communication-channel-type Fake \
+    --runs ${RUNS} \
+    --config "${CONFIG_FILE}" \
+    ${MODEL_ARGS}
 
-# # Reputation only market - Real channel
-# echo ""
-# echo "Running Reputation-Only + Seller Communication + Real Channel..."
-# python ./example/run_single_config_experiment.py \
-#     --experiment-id ${MODEL_TYPE}/paper/rq3/r_wsc_R \
-#     --market-type reputation_only \
-#     --communication seller \
-#     --communication-channel-type Real \
-#     --runs ${RUNS} \
-#     --config "${CONFIG_FILE}" \
-#     ${MODEL_ARGS}
+# Reputation only market - Real channel
+echo ""
+echo "Running Reputation-Only + Seller Communication + Real Channel..."
+python ./example/run_single_config_experiment.py \
+    --experiment-id ${MODEL_TYPE}/paper_largescale/rq3/r_wsc_R \
+    --market-type reputation_only \
+    --communication seller \
+    --communication-channel-type Real \
+    --runs ${RUNS} \
+    --config "${CONFIG_FILE}" \
+    ${MODEL_ARGS}
 
-# # Reputation and warrant market - Fake channel
-# echo ""
-# echo "Running Reputation+Warrant + Seller Communication + Fake Channel..."
-# python ./example/run_single_config_experiment.py \
-#     --experiment-id ${MODEL_TYPE}/paper/rq3/rw_wsc_F \
-#     --market-type reputation_and_warrant \
-#     --communication seller \
-#     --communication-channel-type Fake \
-#     --runs ${RUNS} \
-#     --config "${CONFIG_FILE}" \
-#     ${MODEL_ARGS}
+# Reputation and warrant market - Fake channel
+echo ""
+echo "Running Reputation+Warrant + Seller Communication + Fake Channel..."
+python ./example/run_single_config_experiment.py \
+    --experiment-id ${MODEL_TYPE}/paper_largescale/rq3/rw_wsc_F \
+    --market-type reputation_and_warrant \
+    --communication seller \
+    --communication-channel-type Fake \
+    --runs ${RUNS} \
+    --config "${CONFIG_FILE}" \
+    ${MODEL_ARGS}
 
-# # Reputation and warrant market - Real channel
-# echo ""
-# echo "Running Reputation+Warrant + Seller Communication + Real Channel..."
-# python ./example/run_single_config_experiment.py \
-#     --experiment-id ${MODEL_TYPE}/paper/rq3/rw_wsc_R \
-#     --market-type reputation_and_warrant \
-#     --communication seller \
-#     --communication-channel-type Real \
-#     --runs ${RUNS} \
-#     --config "${CONFIG_FILE}" \
-#     ${MODEL_ARGS}
+# Reputation and warrant market - Real channel
+echo ""
+echo "Running Reputation+Warrant + Seller Communication + Real Channel..."
+python ./example/run_single_config_experiment.py \
+    --experiment-id ${MODEL_TYPE}/paper_largescale/rq3/rw_wsc_R \
+    --market-type reputation_and_warrant \
+    --communication seller \
+    --communication-channel-type Real \
+    --runs ${RUNS} \
+    --config "${CONFIG_FILE}" \
+    ${MODEL_ARGS}
 
 # # ==================== RQ4: Buyer Communication ====================
 # echo ""
@@ -160,53 +160,53 @@ python ./example/run_rq1_experiment.py \
 # echo "RQ4: Buyer Adaptation Mechanisms (Buyer Communication)"
 # echo "=========================================="
 
-# # Reputation only market - Fake channel
-# echo ""
-# echo "Running Reputation-Only + Buyer Communication + Fake Channel..."
-# python ./example/run_single_config_experiment.py \
-#     --experiment-id ${MODEL_TYPE}/paper/rq4/r_wbc_F \
-#     --market-type reputation_only \
-#     --communication buyer \
-#     --communication-channel-type Fake \
-#     --runs ${RUNS} \
-#     --config "${CONFIG_FILE}" \
-#     ${MODEL_ARGS}
+# Reputation only market - Fake channel
+echo ""
+echo "Running Reputation-Only + Buyer Communication + Fake Channel..."
+python ./example/run_single_config_experiment.py \
+    --experiment-id ${MODEL_TYPE}/paper_largescale/rq4/r_wbc_F \
+    --market-type reputation_only \
+    --communication buyer \
+    --communication-channel-type Fake \
+    --runs ${RUNS} \
+    --config "${CONFIG_FILE}" \
+    ${MODEL_ARGS}
 
-# # Reputation only market - Real channel
-# echo ""
-# echo "Running Reputation-Only + Buyer Communication + Real Channel..."
-# python ./example/run_single_config_experiment.py \
-#     --experiment-id ${MODEL_TYPE}/paper/rq4/r_wbc_R \
-#     --market-type reputation_only \
-#     --communication buyer \
-#     --communication-channel-type Real \
-#     --runs ${RUNS} \
-#     --config "${CONFIG_FILE}" \
-#     ${MODEL_ARGS}
+# Reputation only market - Real channel
+echo ""
+echo "Running Reputation-Only + Buyer Communication + Real Channel..."
+python ./example/run_single_config_experiment.py \
+    --experiment-id ${MODEL_TYPE}/paper_largescale/rq4/r_wbc_R \
+    --market-type reputation_only \
+    --communication buyer \
+    --communication-channel-type Real \
+    --runs ${RUNS} \
+    --config "${CONFIG_FILE}" \
+    ${MODEL_ARGS}
 
-# # Reputation and warrant market - Fake channel
-# echo ""
-# echo "Running Reputation+Warrant + Buyer Communication + Fake Channel..."
-# python ./example/run_single_config_experiment.py \
-#     --experiment-id ${MODEL_TYPE}/paper/rq4/rw_wbc_F \
-#     --market-type reputation_and_warrant \
-#     --communication buyer \
-#     --communication-channel-type Fake \
-#     --runs ${RUNS} \
-#     --config "${CONFIG_FILE}" \
-#     ${MODEL_ARGS}
+# Reputation and warrant market - Fake channel
+echo ""
+echo "Running Reputation+Warrant + Buyer Communication + Fake Channel..."
+python ./example/run_single_config_experiment.py \
+    --experiment-id ${MODEL_TYPE}/paper_largescale/rq4/rw_wbc_F \
+    --market-type reputation_and_warrant \
+    --communication buyer \
+    --communication-channel-type Fake \
+    --runs ${RUNS} \
+    --config "${CONFIG_FILE}" \
+    ${MODEL_ARGS}
 
-# # Reputation and warrant market - Real channel
-# echo ""
-# echo "Running Reputation+Warrant + Buyer Communication + Real Channel..."
-# python ./example/run_single_config_experiment.py \
-#     --experiment-id ${MODEL_TYPE}/paper/rq4/rw_wbc_R \
-#     --market-type reputation_and_warrant \
-#     --communication buyer \
-#     --communication-channel-type Real \
-#     --runs ${RUNS} \
-#     --config "${CONFIG_FILE}" \
-#     ${MODEL_ARGS}
+# Reputation and warrant market - Real channel
+echo ""
+echo "Running Reputation+Warrant + Buyer Communication + Real Channel..."
+python ./example/run_single_config_experiment.py \
+    --experiment-id ${MODEL_TYPE}/paper_largescale/rq4/rw_wbc_R \
+    --market-type reputation_and_warrant \
+    --communication buyer \
+    --communication-channel-type Real \
+    --runs ${RUNS} \
+    --config "${CONFIG_FILE}" \
+    ${MODEL_ARGS}
 
 
 # python ./example/run_single_config_experiment.py \
