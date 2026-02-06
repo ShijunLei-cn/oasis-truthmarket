@@ -5,7 +5,7 @@
 set -e
 
 # Default experiment prefix (matches run_exp4paper.sh)
-EXPERIMENT_PREFIX="${EXPERIMENT_PREFIX:-gpt-4o-mini/paper_largescale}"
+EXPERIMENT_PREFIX="${EXPERIMENT_PREFIX:-gpt-4o-mini/paper}"
 
 # Ensure PYTHONPATH includes the project root
 export PYTHONPATH=$PYTHONPATH:$(pwd)
@@ -51,37 +51,102 @@ fi
 # Generate RQ2 tables
 echo ""
 echo "Generating RQ2 tables..."
-RQ2_POLICY_DIR="experiments/${EXPERIMENT_PREFIX}/rq2/policy_making"
-RQ2_PRESSURE_DIR="experiments/${EXPERIMENT_PREFIX}/rq2/pressure_quick_profits"
-RQ2_PSYCH_DIR="experiments/${EXPERIMENT_PREFIX}/rq2/psychological_attack"
+RQ2_R_DIR="experiments/${EXPERIMENT_PREFIX}/rq2/r_wo"
+RQ2_RW_DIR="experiments/${EXPERIMENT_PREFIX}/rq2/rw_wo"
 
-if [ -d "$RQ2_POLICY_DIR" ] && [ -d "$RQ2_PRESSURE_DIR" ] && [ -d "$RQ2_PSYCH_DIR" ]; then
+if [ -d "$RQ2_R_DIR" ] && [ -d "$RQ2_RW_DIR" ]; then
     echo "  Generating RQ2 tables..."
     mkdir -p "$TABLE_OUTPUT_DIR/rq2"
-    python3 visualization/scripts/generate_rq2_paper_tables.py \
-        --experiment-dirs "$RQ2_POLICY_DIR" "$RQ2_PRESSURE_DIR" "$RQ2_PSYCH_DIR" \
-        --output-dir "$TABLE_OUTPUT_DIR/rq2"
+    # Use basic comparison table generator (no probes required)
+    python3 visualization/scripts/generate_basic_comparison_tables.py \
+        --r-market-dir "$RQ2_R_DIR" \
+        --rw-market-dir "$RQ2_RW_DIR" \
+        --output-dir "$TABLE_OUTPUT_DIR/rq2" \
+        --table-prefix "rq2"
     echo "  ✓ RQ2 tables generated"
 else
     echo "  ⚠ RQ2 data directories not found, skipping RQ2 tables"
+    echo "  Expected: $RQ2_R_DIR and $RQ2_RW_DIR"
 fi
 
 # Generate RQ3 tables
 echo ""
 echo "Generating RQ3 tables..."
-RQ3_REP_COMM="experiments/${EXPERIMENT_PREFIX}/rq3/rep_comm"
-RQ3_RW_COMM="experiments/${EXPERIMENT_PREFIX}/rq3/rep_warrant_comm"
+# RQ3 has multiple seller communication conditions
+RQ3_BASE_DIR="experiments/${EXPERIMENT_PREFIX}/rq3"
 
-if [ -d "$RQ3_REP_COMM" ] && [ -d "$RQ3_RW_COMM" ]; then
-    echo "  Generating RQ3 tables..."
-    mkdir -p "$TABLE_OUTPUT_DIR/rq3"
-    python3 visualization/scripts/generate_rq3_paper_tables.py \
-        --rep-comm-dir "$RQ3_REP_COMM" \
-        --rw-comm-dir "$RQ3_RW_COMM" \
-        --output-dir "$TABLE_OUTPUT_DIR/rq3"
-    echo "  ✓ RQ3 tables generated"
+# Check if RQ3 directory exists and has subdirectories
+if [ -d "$RQ3_BASE_DIR" ]; then
+    echo "  Found RQ3 experiment directory"
+
+    # List available conditions
+    echo "  Available RQ3 conditions:"
+    for dir in "$RQ3_BASE_DIR"/*; do
+        if [ -d "$dir" ]; then
+            echo "    - $(basename "$dir")"
+        fi
+    done
+
+    # Generate tables for specific conditions or all conditions
+    # For baseline: r_wsc_R vs rw_wsc_R
+    RQ3_R_BASE="$RQ3_BASE_DIR/r_wsc_R"
+    RQ3_RW_BASE="$RQ3_BASE_DIR/rw_wsc_R"
+
+    if [ -d "$RQ3_R_BASE" ] && [ -d "$RQ3_RW_BASE" ]; then
+        echo "  Generating RQ3 baseline tables (Rational sellers)..."
+        mkdir -p "$TABLE_OUTPUT_DIR/rq3"
+        # Use basic comparison table generator
+        python3 visualization/scripts/generate_basic_comparison_tables.py \
+            --r-market-dir "$RQ3_R_BASE" \
+            --rw-market-dir "$RQ3_RW_BASE" \
+            --output-dir "$TABLE_OUTPUT_DIR/rq3" \
+            --table-prefix "rq3"
+        echo "  ✓ RQ3 tables generated"
+    else
+        echo "  ⚠ RQ3 baseline directories not found"
+        echo "  Expected: $RQ3_R_BASE and $RQ3_RW_BASE"
+    fi
 else
     echo "  ⚠ RQ3 data directories not found, skipping RQ3 tables"
+fi
+
+# Generate RQ4 tables
+echo ""
+echo "Generating RQ4 tables..."
+# RQ4 has buyer-seller communication conditions
+RQ4_BASE_DIR="experiments/${EXPERIMENT_PREFIX}/rq4"
+
+if [ -d "$RQ4_BASE_DIR" ]; then
+    echo "  Found RQ4 experiment directory"
+
+    # List available conditions
+    echo "  Available RQ4 conditions:"
+    for dir in "$RQ4_BASE_DIR"/*; do
+        if [ -d "$dir" ]; then
+            echo "    - $(basename "$dir")"
+        fi
+    done
+
+    # For baseline: r_wbc_R vs rw_wbc_R (Rational buyers)
+    RQ4_R_BASE="$RQ4_BASE_DIR/r_wbc_R"
+    RQ4_RW_BASE="$RQ4_BASE_DIR/rw_wbc_R"
+
+    if [ -d "$RQ4_R_BASE" ] && [ -d "$RQ4_RW_BASE" ]; then
+        echo "  Generating RQ4 baseline tables (Rational buyers)..."
+        mkdir -p "$TABLE_OUTPUT_DIR/rq4"
+        # Use basic comparison table generator
+        python3 visualization/scripts/generate_basic_comparison_tables.py \
+            --r-market-dir "$RQ4_R_BASE" \
+            --rw-market-dir "$RQ4_RW_BASE" \
+            --output-dir "$TABLE_OUTPUT_DIR/rq4" \
+            --table-prefix "rq4"
+        echo "  ✓ RQ4 tables generated"
+    else
+        echo "  ⚠ RQ4 baseline directories not found"
+        echo "  Expected: $RQ4_R_BASE and $RQ4_RW_BASE"
+    fi
+else
+    echo "  ⚠ RQ4 data directories not found, skipping RQ4 tables"
 fi
 
 # Copy tables to paper sections directory
@@ -119,16 +184,19 @@ echo "Generating round evolution comparison figure..."
 FIG_OUTPUT_DIR="visualization/figs/${EXPERIMENT_PREFIX}"
 mkdir -p "$FIG_OUTPUT_DIR"
 
-# This would generate the figure used in the paper
-# Currently uses placeholder - update with actual figure generation
-if [ -f "visualization/scripts/generate_paper_figures.py" ]; then
+# Generate figures for RQ1
+RQ1_R_MARKET="experiments/${EXPERIMENT_PREFIX}/rq1/r_wo"
+RQ1_RW_MARKET="experiments/${EXPERIMENT_PREFIX}/rq1/rw_wo"
+
+if [ -d "$RQ1_R_MARKET" ] && [ -d "$RQ1_RW_MARKET" ]; then
+    echo "  Generating RQ1 comparison figures..."
     python3 visualization/scripts/generate_paper_figures.py \
-        --output-dir "$FIG_OUTPUT_DIR" \
-        --paper-format
-    echo "  ✓ Paper figures generated"
+        --r-dir "$RQ1_R_MARKET" \
+        --rw-dir "$RQ1_RW_MARKET" \
+        --output-dir "$FIG_OUTPUT_DIR"
+    echo "  ✓ RQ1 figures generated"
 else
-    echo "  ⚠ Figure generation script not found"
-    echo "  Manual figure generation required"
+    echo "  ⚠ RQ1 directories not found for figure generation"
 fi
 
 # Copy figures to paper directory
@@ -153,6 +221,7 @@ echo "Tables generated:"
 [ -d "$TABLE_OUTPUT_DIR/rq1" ] && echo "  - RQ1: $TABLE_OUTPUT_DIR/rq1/"
 [ -d "$TABLE_OUTPUT_DIR/rq2" ] && echo "  - RQ2: $TABLE_OUTPUT_DIR/rq2/"
 [ -d "$TABLE_OUTPUT_DIR/rq3" ] && echo "  - RQ3: $TABLE_OUTPUT_DIR/rq3/"
+[ -d "$TABLE_OUTPUT_DIR/rq4" ] && echo "  - RQ4: $TABLE_OUTPUT_DIR/rq4/"
 echo ""
 echo "Figures generated:"
 [ -d "$FIG_OUTPUT_DIR" ] && echo "  - $FIG_OUTPUT_DIR/"
