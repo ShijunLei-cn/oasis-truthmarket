@@ -6,7 +6,7 @@
 set -e
 
 # Default experiment prefix (matches run_exp4paper.sh)
-EXPERIMENT_PREFIX="${EXPERIMENT_PREFIX:-gpt-4o-mini/paper}"
+EXPERIMENT_PREFIX="${EXPERIMENT_PREFIX:-gpt-4o-mini/paper_largescale}"
 
 # Ensure PYTHONPATH includes the project root
 export PYTHONPATH=$PYTHONPATH:$(pwd)
@@ -69,8 +69,8 @@ echo "=========================================="
 echo "RQ2: Market Mechanism Comparison Visualization"
 echo "=========================================="
 
-RQ2_R_EXP_ID="${EXPERIMENT_PREFIX}/rq2/r_wo"
-RQ2_RW_EXP_ID="${EXPERIMENT_PREFIX}/rq2/rw_wo"
+RQ2_R_EXP_ID="${EXPERIMENT_PREFIX}/rq1/r_wo"
+RQ2_RW_EXP_ID="${EXPERIMENT_PREFIX}/rq1/rw_wo"
 
 # Check if RQ2 experiments exist
 if [ -d "experiments/$RQ2_R_EXP_ID" ] || [ -d "experiments/$RQ2_RW_EXP_ID" ]; then

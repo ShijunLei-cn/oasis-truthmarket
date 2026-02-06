@@ -9,7 +9,7 @@ echo "RQ3 Experiment: Group-Level Deception Dynamics"
 echo "=========================================="
 
 # Configuration file path (optional - if not provided, uses default config.py)
-CONFIG_FILE="${CONFIG_FILE:-configs/rq3_experiment_0.yaml}"
+CONFIG_FILE="${CONFIG_FILE:-configs/rq2_experiment_largescale_gpt_4o_mini.yaml}"
 
 # Reputation only market - Fake channel
 echo ""

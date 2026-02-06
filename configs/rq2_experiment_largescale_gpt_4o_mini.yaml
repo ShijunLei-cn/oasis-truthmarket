@@ -2,9 +2,9 @@
 # Configuration file for RQ2 experiments comparing Reputation-Only vs Reputation+Warrant markets
 
 experiment:
-  runs: 5
-  num_sellers: 5
-  num_buyers: 5
+  runs: 3
+  num_sellers: 50
+  num_buyers: 50
   simulation_rounds: 10
 
 market_params:

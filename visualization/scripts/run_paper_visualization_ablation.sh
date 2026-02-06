@@ -6,7 +6,7 @@
 set -e
 
 # Default experiment prefix (matches run_exp4paper.sh)
-EXPERIMENT_PREFIX="${EXPERIMENT_PREFIX:-gpt-4o-mini/paper}"
+EXPERIMENT_PREFIX="${EXPERIMENT_PREFIX:-gpt-4o-mini/paper_largescale}"
 
 # Ensure PYTHONPATH includes the project root
 export PYTHONPATH=$PYTHONPATH:$(pwd)
@@ -26,15 +26,19 @@ echo "=========================================="
 
 RQ3_R_R_EXP_ID="${EXPERIMENT_PREFIX}/rq3/r_wsc_R_policy_making"
 RQ3_RW_R_EXP_ID="${EXPERIMENT_PREFIX}/rq3/rw_wsc_R_policy_making"
+RQ3_R_F_EXP_ID="${EXPERIMENT_PREFIX}/rq3/r_wsc_F_policy_making"
+RQ3_RW_F_EXP_ID="${EXPERIMENT_PREFIX}/rq3/rw_wsc_F_policy_making"
 
 # Check if RQ3 experiments exist
-if [ -d "experiments/$RQ3_R_R_EXP_ID" ] || [ -d "experiments/$RQ3_RW_R_EXP_ID" ]; then
+if [ -d "experiments/$RQ3_R_R_EXP_ID" ] || [ -d "experiments/$RQ3_RW_R_EXP_ID" ] || [ -d "experiments/$RQ3_R_F_EXP_ID" ] || [ -d "experiments/$RQ3_RW_F_EXP_ID" ]; then
     echo "Generating RQ3 visualizations..."
     echo "  R_R: $RQ3_R_R_EXP_ID"
     echo "  RW_R: $RQ3_RW_R_EXP_ID"
+    echo "  R_F: $RQ3_R_F_EXP_ID"
+    echo "  RW_F: $RQ3_RW_F_EXP_ID"
     
     # Run multi-run analysis for all RQ3 experiments
-    for exp_id in "$RQ3_R_R_EXP_ID" "$RQ3_RW_R_EXP_ID"; do
+    for exp_id in "$RQ3_R_R_EXP_ID" "$RQ3_RW_R_EXP_ID" "$RQ3_R_F_EXP_ID" "$RQ3_RW_F_EXP_ID"; do
         if [ -d "experiments/$exp_id" ]; then
             echo "  Running multi-run analysis for $exp_id..."
             python analysis/multi_run_analysis.py --experiment_id "$exp_id" || echo "  Warning: Analysis failed for $exp_id"
@@ -42,11 +46,13 @@ if [ -d "experiments/$RQ3_R_R_EXP_ID" ] || [ -d "experiments/$RQ3_RW_R_EXP_ID" ]
     done
     
     # Generate visualizations (only need R_R and RW_R for ablation study)
-    if [ -d "experiments/$RQ3_R_R_EXP_ID" ] || [ -d "experiments/$RQ3_RW_R_EXP_ID" ]; then
+    if [ -d "experiments/$RQ3_R_R_EXP_ID" ] || [ -d "experiments/$RQ3_RW_R_EXP_ID" ] || [ -d "experiments/$RQ3_R_F_EXP_ID" ] || [ -d "experiments/$RQ3_RW_F_EXP_ID" ]; then
         echo "  Generating comparison visualizations..."
         python visualization/scripts/rq3_visualization.py \
             --r-r "$RQ3_R_R_EXP_ID" \
-            --rw-r "$RQ3_RW_R_EXP_ID" || echo "  Warning: RQ3 visualization failed"
+            --rw-r "$RQ3_RW_R_EXP_ID" \
+            --r-f "$RQ3_R_F_EXP_ID" \
+            --rw-f "$RQ3_RW_F_EXP_ID" || echo "  Warning: RQ3 visualization failed"
     else
         echo "  Warning: At least one experiment required for RQ3 visualization"
         echo "  Missing experiments will be skipped"
@@ -60,13 +66,17 @@ fi
 
 RQ3_R_R_EXP_ID="${EXPERIMENT_PREFIX}/rq3/r_wsc_R_pressure_quickprofits"
 RQ3_RW_R_EXP_ID="${EXPERIMENT_PREFIX}/rq3/rw_wsc_R_pressure_quickprofits"
-if [ -d "experiments/$RQ3_R_R_EXP_ID" ] || [ -d "experiments/$RQ3_RW_R_EXP_ID" ]; then
+RQ3_R_F_EXP_ID="${EXPERIMENT_PREFIX}/rq3/r_wsc_F_pressure_quickprofits"
+RQ3_RW_F_EXP_ID="${EXPERIMENT_PREFIX}/rq3/rw_wsc_F_pressure_quickprofits"
+if [ -d "experiments/$RQ3_R_R_EXP_ID" ] || [ -d "experiments/$RQ3_RW_R_EXP_ID" ] || [ -d "experiments/$RQ3_R_F_EXP_ID" ] || [ -d "experiments/$RQ3_RW_F_EXP_ID" ]; then
     echo "Generating RQ3 visualizations..."
     echo "  R_R: $RQ3_R_R_EXP_ID"
     echo "  RW_R: $RQ3_RW_R_EXP_ID"
+    echo "  R_F: $RQ3_R_F_EXP_ID"
+    echo "  RW_F: $RQ3_RW_F_EXP_ID"
     
     # Run multi-run analysis for all RQ3 experiments
-    for exp_id in "$RQ3_R_R_EXP_ID" "$RQ3_RW_R_EXP_ID"; do
+    for exp_id in "$RQ3_R_R_EXP_ID" "$RQ3_RW_R_EXP_ID" "$RQ3_R_F_EXP_ID" "$RQ3_RW_F_EXP_ID"; do
         if [ -d "experiments/$exp_id" ]; then
             echo "  Running multi-run analysis for $exp_id..."
             python analysis/multi_run_analysis.py --experiment_id "$exp_id" || echo "  Warning: Analysis failed for $exp_id"
@@ -74,11 +84,13 @@ if [ -d "experiments/$RQ3_R_R_EXP_ID" ] || [ -d "experiments/$RQ3_RW_R_EXP_ID" ]
     done
     
     # Generate visualizations (only need R_R and RW_R for ablation study)
-    if [ -d "experiments/$RQ3_R_R_EXP_ID" ] || [ -d "experiments/$RQ3_RW_R_EXP_ID" ]; then
+    if [ -d "experiments/$RQ3_R_R_EXP_ID" ] || [ -d "experiments/$RQ3_RW_R_EXP_ID" ] || [ -d "experiments/$RQ3_R_F_EXP_ID" ] || [ -d "experiments/$RQ3_RW_F_EXP_ID" ]; then
         echo "  Generating comparison visualizations..."
         python visualization/scripts/rq3_visualization.py \
             --r-r "$RQ3_R_R_EXP_ID" \
-            --rw-r "$RQ3_RW_R_EXP_ID" || echo "  Warning: RQ3 visualization failed"
+            --rw-r "$RQ3_RW_R_EXP_ID" \
+            --r-f "$RQ3_R_F_EXP_ID" \
+            --rw-f "$RQ3_RW_F_EXP_ID" || echo "  Warning: RQ3 visualization failed"
     else
         echo "  Warning: At least one experiment required for RQ3 visualization"
         echo "  Missing experiments will be skipped"
@@ -92,14 +104,17 @@ fi
 
 RQ3_R_R_EXP_ID="${EXPERIMENT_PREFIX}/rq3/r_wsc_R_psychological-based-attack"
 RQ3_RW_R_EXP_ID="${EXPERIMENT_PREFIX}/rq3/rw_wsc_R_psychological-based-attack"
-
-if [ -d "experiments/$RQ3_R_R_EXP_ID" ] || [ -d "experiments/$RQ3_RW_R_EXP_ID" ]; then
+RQ3_R_F_EXP_ID="${EXPERIMENT_PREFIX}/rq3/r_wsc_F_psychological-based-attack"
+RQ3_RW_F_EXP_ID="${EXPERIMENT_PREFIX}/rq3/rw_wsc_F_psychological-based-attack"
+if [ -d "experiments/$RQ3_R_R_EXP_ID" ] || [ -d "experiments/$RQ3_RW_R_EXP_ID" ] || [ -d "experiments/$RQ3_R_F_EXP_ID" ] || [ -d "experiments/$RQ3_RW_F_EXP_ID" ]; then
     echo "Generating RQ3 visualizations..."
     echo "  R_R: $RQ3_R_R_EXP_ID"
     echo "  RW_R: $RQ3_RW_R_EXP_ID"
+    echo "  R_F: $RQ3_R_F_EXP_ID"
+    echo "  RW_F: $RQ3_RW_F_EXP_ID"
     
     # Run multi-run analysis for all RQ3 experiments
-    for exp_id in "$RQ3_R_R_EXP_ID" "$RQ3_RW_R_EXP_ID"; do
+    for exp_id in "$RQ3_R_R_EXP_ID" "$RQ3_RW_R_EXP_ID" "$RQ3_R_F_EXP_ID" "$RQ3_RW_F_EXP_ID"; do
         if [ -d "experiments/$exp_id" ]; then
             echo "  Running multi-run analysis for $exp_id..."
             python analysis/multi_run_analysis.py --experiment_id "$exp_id" || echo "  Warning: Analysis failed for $exp_id"
@@ -107,11 +122,13 @@ if [ -d "experiments/$RQ3_R_R_EXP_ID" ] || [ -d "experiments/$RQ3_RW_R_EXP_ID" ]
     done
     
     # Generate visualizations (only need R_R and RW_R for ablation study)
-    if [ -d "experiments/$RQ3_R_R_EXP_ID" ] || [ -d "experiments/$RQ3_RW_R_EXP_ID" ]; then
+    if [ -d "experiments/$RQ3_R_R_EXP_ID" ] || [ -d "experiments/$RQ3_RW_R_EXP_ID" ] || [ -d "experiments/$RQ3_R_F_EXP_ID" ] || [ -d "experiments/$RQ3_RW_F_EXP_ID" ]; then
         echo "  Generating comparison visualizations..."
         python visualization/scripts/rq3_visualization.py \
             --r-r "$RQ3_R_R_EXP_ID" \
-            --rw-r "$RQ3_RW_R_EXP_ID" || echo "  Warning: RQ3 visualization failed"
+            --rw-r "$RQ3_RW_R_EXP_ID" \
+            --r-f "$RQ3_R_F_EXP_ID" \
+            --rw-f "$RQ3_RW_F_EXP_ID" || echo "  Warning: RQ3 visualization failed"
     else
         echo "  Warning: At least one experiment required for RQ3 visualization"
         echo "  Missing experiments will be skipped"

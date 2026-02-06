@@ -3,8 +3,8 @@
 
 experiment:
   runs: 5
-  num_sellers: 5
-  num_buyers: 5
+  num_sellers: 50
+  num_buyers: 50
   simulation_rounds: 10
 
 market_params:

@@ -29,118 +29,118 @@ if [ -n "$MODEL_ARGS" ]; then
 fi
 
 
-RUNS=5
-ROUNDS=10
-SELLERS=50
-BUYERS=50
-PROBE_INTERVAL=1
+# RUNS=5
+# ROUNDS=10
+# SELLERS=50
+# BUYERS=50
+# PROBE_INTERVAL=1
 
-# ==================== RQ1: Cognitive Probing ====================
-echo ""
-echo "=========================================="
-echo "RQ1: Cognitive Probing for Reputation Manipulation"
-echo "=========================================="
-
-
-# Reputation only market
-echo ""
-echo "Running Reputation-Only Market experiments..."
-python ./example/run_rq1_experiment.py \
-    --runs ${RUNS} \
-    --rounds ${ROUNDS} \
-    --sellers ${SELLERS} \
-    --buyers ${BUYERS} \
-    --market-type reputation_only \
-    --output-dir experiments/${MODEL_TYPE}/paper_largescale/rq1/r_wo \
-    --probe-interval ${PROBE_INTERVAL} \
-    --config "${CONFIG_FILE}" \
-    --probe-interval 1
-
-# Reputation and warrant market
-echo ""
-echo "Running Reputation+Warrant Market experiments..."
-python ./example/run_rq1_experiment.py \
-    --runs ${RUNS} \
-    --rounds ${ROUNDS} \
-    --sellers ${SELLERS} \
-    --buyers ${BUYERS} \
-    --market-type reputation_and_warrant \
-    --output-dir experiments/${MODEL_TYPE}/paper_largescale/rq1/rw_wo \
-    --probe-interval ${PROBE_INTERVAL} \
-    --config "${CONFIG_FILE}" \
-    --probe-interval 1
-
-# # ==================== RQ2: Market Mechanism Comparison ====================
+# # ==================== RQ1: Cognitive Probing ====================
 # echo ""
 # echo "=========================================="
-# echo "RQ2: Market Mechanism Comparison (No Communication)"
+# echo "RQ1: Cognitive Probing for Reputation Manipulation"
 # echo "=========================================="
 
-# Reputation only market (no communication)
-echo ""
-echo "Running Reputation-Only Market experiments..."
-python ./example/run_single_config_experiment.py \
-    --experiment-id ${MODEL_TYPE}/paper_largescale/rq2/r_wo \
-    --market-type reputation_only \
-    --communication none \
-    --communication-channel-type Fake \
-    --runs ${RUNS} \
-    --config "${CONFIG_FILE}" \
-    ${MODEL_ARGS}
 
-# Reputation and warrant market (no communication)
-echo ""
-echo "Running Reputation+Warrant Market experiments..."
-python ./example/run_single_config_experiment.py \
-    --experiment-id ${MODEL_TYPE}/paper_largescale/rq2/rw_wo \
-    --market-type reputation_and_warrant \
-    --communication none \
-    --communication-channel-type Fake \
-    --runs ${RUNS} \
-    --config "${CONFIG_FILE}" \
-    ${MODEL_ARGS}
-
-# # ==================== RQ3: Seller Communication ====================
+# # Reputation only market
 # echo ""
-# echo "=========================================="
-# echo "RQ3: Group-Level Deception Dynamics (Seller Communication)"
-# echo "=========================================="
+# echo "Running Reputation-Only Market experiments..."
+# python ./example/run_rq1_experiment.py \
+#     --runs ${RUNS} \
+#     --rounds ${ROUNDS} \
+#     --sellers ${SELLERS} \
+#     --buyers ${BUYERS} \
+#     --market-type reputation_only \
+#     --output-dir experiments/${MODEL_TYPE}/paper_largescale/rq1/r_wo \
+#     --probe-interval ${PROBE_INTERVAL} \
+#     --config "${CONFIG_FILE}" \
+#     --probe-interval 1
 
-# Reputation only market - Fake channel
-echo ""
-echo "Running Reputation-Only + Seller Communication + Fake Channel..."
-python ./example/run_single_config_experiment.py \
-    --experiment-id ${MODEL_TYPE}/paper_largescale/rq3/r_wsc_F \
-    --market-type reputation_only \
-    --communication seller \
-    --communication-channel-type Fake \
-    --runs ${RUNS} \
-    --config "${CONFIG_FILE}" \
-    ${MODEL_ARGS}
+# # Reputation and warrant market
+# echo ""
+# echo "Running Reputation+Warrant Market experiments..."
+# python ./example/run_rq1_experiment.py \
+#     --runs ${RUNS} \
+#     --rounds ${ROUNDS} \
+#     --sellers ${SELLERS} \
+#     --buyers ${BUYERS} \
+#     --market-type reputation_and_warrant \
+#     --output-dir experiments/${MODEL_TYPE}/paper_largescale/rq1/rw_wo \
+#     --probe-interval ${PROBE_INTERVAL} \
+#     --config "${CONFIG_FILE}" \
+#     --probe-interval 1
 
-# Reputation only market - Real channel
-echo ""
-echo "Running Reputation-Only + Seller Communication + Real Channel..."
-python ./example/run_single_config_experiment.py \
-    --experiment-id ${MODEL_TYPE}/paper_largescale/rq3/r_wsc_R \
-    --market-type reputation_only \
-    --communication seller \
-    --communication-channel-type Real \
-    --runs ${RUNS} \
-    --config "${CONFIG_FILE}" \
-    ${MODEL_ARGS}
+# # # ==================== RQ2: Market Mechanism Comparison ====================
+# # echo ""
+# # echo "=========================================="
+# # echo "RQ2: Market Mechanism Comparison (No Communication)"
+# # echo "=========================================="
 
-# Reputation and warrant market - Fake channel
-echo ""
-echo "Running Reputation+Warrant + Seller Communication + Fake Channel..."
-python ./example/run_single_config_experiment.py \
-    --experiment-id ${MODEL_TYPE}/paper_largescale/rq3/rw_wsc_F \
-    --market-type reputation_and_warrant \
-    --communication seller \
-    --communication-channel-type Fake \
-    --runs ${RUNS} \
-    --config "${CONFIG_FILE}" \
-    ${MODEL_ARGS}
+# # Reputation only market (no communication)
+# echo ""
+# echo "Running Reputation-Only Market experiments..."
+# python ./example/run_single_config_experiment.py \
+#     --experiment-id ${MODEL_TYPE}/paper_largescale/rq2/r_wo \
+#     --market-type reputation_only \
+#     --communication none \
+#     --communication-channel-type Fake \
+#     --runs ${RUNS} \
+#     --config "${CONFIG_FILE}" \
+#     ${MODEL_ARGS}
+
+# # Reputation and warrant market (no communication)
+# echo ""
+# echo "Running Reputation+Warrant Market experiments..."
+# python ./example/run_single_config_experiment.py \
+#     --experiment-id ${MODEL_TYPE}/paper_largescale/rq2/rw_wo \
+#     --market-type reputation_and_warrant \
+#     --communication none \
+#     --communication-channel-type Fake \
+#     --runs ${RUNS} \
+#     --config "${CONFIG_FILE}" \
+#     ${MODEL_ARGS}
+
+# # # ==================== RQ3: Seller Communication ====================
+# # echo ""
+# # echo "=========================================="
+# # echo "RQ3: Group-Level Deception Dynamics (Seller Communication)"
+# # echo "=========================================="
+
+# # Reputation only market - Fake channel
+# echo ""
+# echo "Running Reputation-Only + Seller Communication + Fake Channel..."
+# python ./example/run_single_config_experiment.py \
+#     --experiment-id ${MODEL_TYPE}/paper_largescale/rq3/r_wsc_F \
+#     --market-type reputation_only \
+#     --communication seller \
+#     --communication-channel-type Fake \
+#     --runs ${RUNS} \
+#     --config "${CONFIG_FILE}" \
+#     ${MODEL_ARGS}
+
+# # Reputation only market - Real channel
+# echo ""
+# echo "Running Reputation-Only + Seller Communication + Real Channel..."
+# python ./example/run_single_config_experiment.py \
+#     --experiment-id ${MODEL_TYPE}/paper_largescale/rq3/r_wsc_R \
+#     --market-type reputation_only \
+#     --communication seller \
+#     --communication-channel-type Real \
+#     --runs ${RUNS} \
+#     --config "${CONFIG_FILE}" \
+#     ${MODEL_ARGS}
+
+# # Reputation and warrant market - Fake channel
+# echo ""
+# echo "Running Reputation+Warrant + Seller Communication + Fake Channel..."
+# python ./example/run_single_config_experiment.py \
+#     --experiment-id ${MODEL_TYPE}/paper_largescale/rq3/rw_wsc_F \
+#     --market-type reputation_and_warrant \
+#     --communication seller \
+#     --communication-channel-type Fake \
+#     --runs ${RUNS} \
+#     --config "${CONFIG_FILE}" \
+#     ${MODEL_ARGS}
 
 # Reputation and warrant market - Real channel
 echo ""
