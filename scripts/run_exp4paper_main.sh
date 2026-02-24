@@ -29,11 +29,11 @@ if [ -n "$MODEL_ARGS" ]; then
 fi
 
 
-# RUNS=5
-# ROUNDS=10
-# SELLERS=50
-# BUYERS=50
-# PROBE_INTERVAL=1
+RUNS=5
+ROUNDS=10
+SELLERS=50
+BUYERS=50
+PROBE_INTERVAL=1
 
 # # ==================== RQ1: Cognitive Probing ====================
 # echo ""
