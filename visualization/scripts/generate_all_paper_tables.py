@@ -91,6 +91,8 @@ def main():
             str(Path(__file__).parent / "generate_rq3_paper_tables.py"),
             "--rep-comm-dir", args.rq3[0],
             "--rw-comm-dir", args.rq3[1],
+            "--rep-no-comm-dir", args.rq3[0].replace("_R", "_F"),
+            "--rw-no-comm-dir", args.rq3[1].replace("_R", "_F"),
             "--output-dir", str(output_dir / "rq3")
         ]
 

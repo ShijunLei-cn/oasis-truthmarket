@@ -39,25 +39,29 @@ def load_experiment_results(experiment_dir: str) -> pd.DataFrame:
     )
 
 
-def calculate_communication_statistics(rep_df: pd.DataFrame, rw_df: pd.DataFrame) -> Dict[str, Any]:
+def calculate_communication_statistics(replicas: Dict[str, pd.DataFrame]) -> Dict[str, Any]:
     """Calculate statistics for communication experiments."""
     return {
-        'rep_comm': aggregate_by_run(rep_df, market_run_stats_with_deceptions),
-        'rep_warrant_comm': aggregate_by_run(rw_df, market_run_stats_with_deceptions)
+        label: aggregate_by_run(df, market_run_stats_with_deceptions)
+        for label, df in replicas.items()
+        if not df.empty
     }
 
 
-def calculate_communication_quality(rep_df: pd.DataFrame, rw_df: pd.DataFrame) -> Dict[str, Any]:
+def calculate_communication_quality(replicas: Dict[str, pd.DataFrame]) -> Dict[str, Any]:
     """Calculate product quality statistics for communication experiments."""
     return {
-        'rep_comm': aggregate_by_run(rep_df, product_quality_run_stats),
-        'rep_warrant_comm': aggregate_by_run(rw_df, product_quality_run_stats)
+        label: aggregate_by_run(df, product_quality_run_stats)
+        for label, df in replicas.items()
+        if not df.empty
     }
 
 
 def generate_rq3_tables(
     rep_comm_dir: str,
     rw_comm_dir: str,
+    rep_no_comm_dir: str,
+    rw_no_comm_dir: str,
     output_dir: str
 ):
     """Generate all RQ3 paper tables."""
@@ -69,17 +73,21 @@ def generate_rq3_tables(
     # Load data
     print("\n📊 Loading experimental data...")
 
-    df_rep_comm = load_experiment_results(rep_comm_dir)
-    df_rw_comm = load_experiment_results(rw_comm_dir)
+    df_map = {
+        "Rep": load_experiment_results(rep_no_comm_dir),
+        "Rep, Comm": load_experiment_results(rep_comm_dir),
+        "Rep+Warrant": load_experiment_results(rw_no_comm_dir),
+        "Rep+Warrant, Comm": load_experiment_results(rw_comm_dir),
+    }
 
-    if df_rep_comm.empty or df_rw_comm.empty:
+    if all(df.empty for df in df_map.values()):
         print("ERROR: Required data not found")
         return
 
     # Calculate statistics
     print("\n📈 Calculating statistics...")
-    comm_stats = calculate_communication_statistics(df_rep_comm, df_rw_comm)
-    quality_stats = calculate_communication_quality(df_rep_comm, df_rw_comm)
+    comm_stats = calculate_communication_statistics(df_map)
+    quality_stats = calculate_communication_quality(df_map)
 
     # Create output directory
     output_path = Path(output_dir)
@@ -90,15 +98,13 @@ def generate_rq3_tables(
 
     # 1. Summary Statistics with Deceptions and Reputation (tab:rq3_summary_stats)
     create_buyer_comm_table(
-        comm_stats['rep_comm'],
-        comm_stats['rep_warrant_comm'],
+        comm_stats,
         output_path / "rq3_summary_stats.tex"
     )
 
     # 2. Product Quality Statistics (tab:rq3_product_quality)
     create_buyer_comm_quality_table(
-        quality_stats['rep_comm'],
-        quality_stats['rep_warrant_comm'],
+        quality_stats,
         output_path / "rq3_product_quality.tex"
     )
 
@@ -114,6 +120,10 @@ def main():
                        help="Reputation + Communication experiment directory")
     parser.add_argument("--rw-comm-dir", type=str, required=True,
                        help="Reputation + Warranty + Communication experiment directory")
+    parser.add_argument("--rep-no-comm-dir", type=str, required=True,
+                       help="Reputation only (no communication) experiment directory")
+    parser.add_argument("--rw-no-comm-dir", type=str, required=True,
+                       help="Reputation + Warranty (no communication) experiment directory")
     parser.add_argument("--output-dir", type=str, default="visualization/table/rq3",
                        help="Output directory for tables")
 
@@ -122,6 +132,8 @@ def main():
     generate_rq3_tables(
         args.rep_comm_dir,
         args.rw_comm_dir,
+        args.rep_no_comm_dir,
+        args.rw_no_comm_dir,
         args.output_dir
     )
 

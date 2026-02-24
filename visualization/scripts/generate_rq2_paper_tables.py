@@ -22,7 +22,8 @@ from paper_table_generator import (
     create_profit_decomposition_table,
     generate_latex_table,
     save_latex_table,
-    format_number
+    format_number,
+    _bold_if_max
 )
 from paper_data_utils import (
     aggregate_by_run,
@@ -200,11 +201,30 @@ def create_rq2_product_quality_table(
 
     rows = []
     condition_order = ["Rep", "Rep, Comm", "Rep+Warrant", "Rep+Warrant, Comm"]
+    keys = [
+        'hq_authentic_on_sale',
+        'hq_authentic_sold',
+        'lq_authentic_on_sale',
+        'lq_authentic_sold',
+        'hq_counterfeit_on_sale',
+        'hq_counterfeit_sold'
+    ]
 
     for constraint_name, conditions in quality_results.items():
         # Add constraint header
         constraint_display = constraint_name.replace('_', '-')
         rows.append([f"\\textbf{{{constraint_display}}}", "", "", "", "", "", "", ""])
+
+        # Compute maxima/minima per metric within this constraint
+        max_vals = {key: float("-inf") for key in keys}
+        min_vals = {key: float("inf") for key in keys}
+        for cond in condition_order:
+            if cond not in conditions:
+                continue
+            stats = conditions[cond]
+            for key in keys:
+                max_vals[key] = max(max_vals[key], stats.get(key, float("-inf")))
+                min_vals[key] = min(min_vals[key], stats.get(key, float("inf")))
 
         for condition_name in condition_order:
             if condition_name not in conditions:
@@ -220,6 +240,12 @@ def create_rq2_product_quality_table(
                 format_number(stats.get('hq_counterfeit_on_sale', 0), stats.get('hq_counterfeit_on_sale_std', 0)),
                 format_number(stats.get('hq_counterfeit_sold', 0), stats.get('hq_counterfeit_sold_std', 0))
             ]
+            for idx, key in enumerate(keys, start=2):
+                row[idx] = _bold_if_max(
+                    row[idx],
+                    stats.get(key, float("-inf")) == max_vals[key],
+                    enable=max_vals[key] != min_vals[key]
+                )
             rows.append(row)
 
         # Add separator line
@@ -229,7 +255,7 @@ def create_rq2_product_quality_table(
     table_code = generate_latex_table(
         caption="Product Quality Statistics by Constraints",
         label="rq2_product_quality",
-        headers=["Constraints", "Condition", "On sale", "Sold", "On sale", "Sold", "On sale", "Sold"],
+        headers=["Constraints", "Condition", "", "", "", "", "", ""],
         rows=rows,
         table_type="table*",
         position="t",

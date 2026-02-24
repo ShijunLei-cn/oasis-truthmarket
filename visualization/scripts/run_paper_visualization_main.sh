@@ -99,18 +99,23 @@ echo "Generating RQ3 tables..."
 # Match existing directory naming: r_wbc_R / rw_wbc_R
 RQ3_REP_COMM_DIR="experiments/${EXPERIMENT_PREFIX}/rq3/r_wbc_R"
 RQ3_RW_COMM_DIR="experiments/${EXPERIMENT_PREFIX}/rq3/rw_wbc_R"
+RQ3_REP_NO_COMM_DIR="experiments/${EXPERIMENT_PREFIX}/rq3/r_wbc_F"
+RQ3_RW_NO_COMM_DIR="experiments/${EXPERIMENT_PREFIX}/rq3/rw_wbc_F"
 
-if [ -d "$RQ3_REP_COMM_DIR" ] && [ -d "$RQ3_RW_COMM_DIR" ]; then
+if [ -d "$RQ3_REP_COMM_DIR" ] && [ -d "$RQ3_RW_COMM_DIR" ] && \
+   [ -d "$RQ3_REP_NO_COMM_DIR" ] && [ -d "$RQ3_RW_NO_COMM_DIR" ]; then
     echo "  Generating RQ3 tables (Summary with Deceptions, Product Quality)..."
     mkdir -p "$TABLE_OUTPUT_DIR/rq3"
     python3 visualization/scripts/generate_rq3_paper_tables.py \
         --rep-comm-dir "$RQ3_REP_COMM_DIR" \
         --rw-comm-dir "$RQ3_RW_COMM_DIR" \
+        --rep-no-comm-dir "$RQ3_REP_NO_COMM_DIR" \
+        --rw-no-comm-dir "$RQ3_RW_NO_COMM_DIR" \
         --output-dir "$TABLE_OUTPUT_DIR/rq3"
     echo "  ✓ RQ3 tables generated"
 else
     echo "  ⚠ RQ3 data directories not found, skipping RQ3 tables"
-    echo "  Expected: $RQ3_REP_COMM_DIR and $RQ3_RW_COMM_DIR"
+    echo "  Expected: $RQ3_REP_COMM_DIR, $RQ3_RW_COMM_DIR, $RQ3_REP_NO_COMM_DIR, $RQ3_RW_NO_COMM_DIR"
 fi
 
 
