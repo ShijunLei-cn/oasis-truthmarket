@@ -17,43 +17,17 @@ from typing import Dict, List, Any
 # Add parent directory to path
 sys.path.append(str(Path(__file__).parent))
 from paper_table_generator import format_number, save_latex_table
+from paper_data_utils import aggregate_by_run, load_results
 
 
 def load_market_results(experiment_dir: str) -> pd.DataFrame:
     """Load market results from the experiment directory."""
-    path = Path(experiment_dir)
-    all_results = []
-
-    if not path.exists():
-        print(f"ERROR: Experiment directory does not exist: {experiment_dir}")
-        return pd.DataFrame()
-
-    result_files = list(path.glob("run_*_results.json"))
-    if not result_files:
-        print(f"ERROR: No result files found in {experiment_dir}")
-        return pd.DataFrame()
-
-    print(f"  Found {len(result_files)} result files")
-    for file in result_files:
-        try:
-            with open(file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                if not data:
-                    print(f"    Warning: {file.name} is empty")
-                    continue
-                run_id = file.stem.replace("_results", "").replace("run_", "")
-                for item in data:
-                    item["run_id"] = run_id
-                all_results.extend(data)
-                print(f"    Loaded {len(data)} results from {file.name}")
-        except Exception as e:
-            print(f"    ERROR loading {file.name}: {e}")
-
-    if not all_results:
-        print("ERROR: No results loaded")
-        return pd.DataFrame()
-
-    return pd.DataFrame(all_results)
+    return load_results(
+        experiment_dir,
+        pattern="run_*_results.json",
+        run_id_suffix="_results",
+        description="market result"
+    )
 
 
 def calculate_market_statistics(df: pd.DataFrame, condition_name: str) -> Dict[str, Any]:
@@ -61,25 +35,17 @@ def calculate_market_statistics(df: pd.DataFrame, condition_name: str) -> Dict[s
     if df.empty:
         return {"condition": condition_name, "error": "No results found"}
 
-    # Group by run_id and calculate statistics for each run
-    run_stats = []
-    for run_id in df['run_id'].unique():
-        run_data = df[df['run_id'] == run_id]
-
-        # Calculate totals for this run
+    def _run_stats(run_data: pd.DataFrame) -> Dict[str, float]:
         total_transactions = run_data['transactions'].sum()
         total_seller_profit = run_data['seller_profit'].sum()
         total_buyer_utility = run_data['buyer_utility'].sum()
-
-        # Calculate average reputation (weighted by products)
         avg_reputation = run_data.groupby('seller_id')['reputation'].last().mean()
 
-        # Count honest vs dishonest products
         total_products = len(run_data)
         honest_products = run_data['is_honest'].sum()
         dishonest_products = total_products - honest_products
 
-        run_stats.append({
+        return {
             'transactions': total_transactions,
             'seller_profit': total_seller_profit,
             'buyer_utility': total_buyer_utility,
@@ -87,27 +53,14 @@ def calculate_market_statistics(df: pd.DataFrame, condition_name: str) -> Dict[s
             'honest_products': honest_products,
             'dishonest_products': dishonest_products,
             'total_products': total_products
-        })
+        }
 
-    # Convert to DataFrame for easier calculation
-    stats_df = pd.DataFrame(run_stats)
+    stats = aggregate_by_run(df, _run_stats)
+    if not stats:
+        return {"condition": condition_name, "error": "No results found"}
 
-    # Calculate mean and std
-    return {
-        'condition': condition_name,
-        'transactions': float(stats_df['transactions'].mean()),
-        'transactions_std': float(stats_df['transactions'].std()),
-        'seller_profit': float(stats_df['seller_profit'].mean()),
-        'seller_profit_std': float(stats_df['seller_profit'].std()),
-        'buyer_utility': float(stats_df['buyer_utility'].mean()),
-        'buyer_utility_std': float(stats_df['buyer_utility'].std()),
-        'reputation': float(stats_df['reputation'].mean()),
-        'reputation_std': float(stats_df['reputation'].std()),
-        'honest_products': float(stats_df['honest_products'].mean()),
-        'honest_products_std': float(stats_df['honest_products'].std()),
-        'dishonest_products': float(stats_df['dishonest_products'].mean()),
-        'dishonest_products_std': float(stats_df['dishonest_products'].std())
-    }
+    stats['condition'] = condition_name
+    return stats
 
 
 def create_basic_comparison_table(

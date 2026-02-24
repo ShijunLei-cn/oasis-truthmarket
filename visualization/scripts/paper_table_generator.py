@@ -275,12 +275,16 @@ def create_market_outcomes_table(
     """Create the Market Outcomes and Reputation Statistics by Constraints table (tab:rq2_initial_posts)."""
 
     rows = []
+    condition_order = ["Rep", "Rep, Comm", "Rep+Warrant", "Rep+Warrant, Comm"]
 
     # Process each constraint type
     for constraint_name, conditions in constraint_results.items():
         rows.append([f"\\textbf{{{constraint_name.replace('_', '-')}}}", "", "", "", "", ""])
 
-        for condition_name, stats in conditions.items():
+        for condition_name in condition_order:
+            if condition_name not in conditions:
+                continue
+            stats = conditions[condition_name]
             row = [
                 "",
                 condition_name,
@@ -314,11 +318,15 @@ def create_profit_decomposition_table(
     """Create the Profit Decomposition by Constraints table (tab:rq2_profit_decomposition)."""
 
     rows = []
+    condition_order = ["Rep", "Rep, Comm", "Rep+Warrant", "Rep+Warrant, Comm"]
 
     for constraint_name, conditions in constraint_results.items():
         rows.append([f"\\textbf{{{constraint_name.replace('_', '-')}}}", "", "", "", "", ""])
 
-        for condition_name, stats in conditions.items():
+        for condition_name in condition_order:
+            if condition_name not in conditions:
+                continue
+            stats = conditions[condition_name]
             honest_profit = stats.get('honest_profit', 0)
             dishonest_profit = stats.get('dishonest_profit', 0)
             total_profit = honest_profit + dishonest_profit

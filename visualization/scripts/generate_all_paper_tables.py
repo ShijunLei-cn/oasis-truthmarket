@@ -71,7 +71,7 @@ def main():
 
         cmd = [
             sys.executable,
-            str(Path(__file__).parent / "generate_rq2_paper_tables_complete.py"),
+            str(Path(__file__).parent / "generate_rq2_paper_tables.py"),
             "--experiment-dirs"
         ] + args.rq2 + [
             "--output-dir", str(output_dir / "rq2")
@@ -88,7 +88,7 @@ def main():
 
         cmd = [
             sys.executable,
-            str(Path(__file__).parent / "generate_rq3_paper_tables_complete.py"),
+            str(Path(__file__).parent / "generate_rq3_paper_tables.py"),
             "--rep-comm-dir", args.rq3[0],
             "--rw-comm-dir", args.rq3[1],
             "--output-dir", str(output_dir / "rq3")

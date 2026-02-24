@@ -21,145 +21,37 @@ from paper_table_generator import (
     create_buyer_comm_quality_table,
     format_number
 )
+from paper_data_utils import (
+    aggregate_by_run,
+    load_results,
+    market_run_stats_with_deceptions,
+    product_quality_run_stats,
+)
 
 
 def load_experiment_results(experiment_dir: str) -> pd.DataFrame:
     """Load experimental results from the experiment directory."""
-    path = Path(experiment_dir)
-    all_results = []
-
-    if not path.exists():
-        print(f"ERROR: Experiment directory does not exist: {experiment_dir}")
-        return pd.DataFrame()
-
-    # Find all run_*_results.json files
-    result_files = list(path.glob("run_*_results.json"))
-    if not result_files:
-        print(f"ERROR: No result files found in {experiment_dir}")
-        return pd.DataFrame()
-
-    print(f"Found {len(result_files)} result files")
-    for file in result_files:
-        try:
-            with open(file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                if not data:
-                    print(f"  Warning: {file.name} is empty")
-                    continue
-                # Add run identifier
-                run_id = file.stem.replace("_results", "").replace("run_", "")
-                for item in data:
-                    item["run_id"] = run_id
-                all_results.extend(data)
-                print(f"  Loaded {len(data)} results from {file.name}")
-        except Exception as e:
-            print(f"  ERROR loading {file.name}: {e}")
-
-    if not all_results:
-        print("ERROR: No results loaded")
-        return pd.DataFrame()
-
-    return pd.DataFrame(all_results)
+    return load_results(
+        experiment_dir,
+        pattern="run_*_results.json",
+        run_id_suffix="_results",
+        description="communication result"
+    )
 
 
-def calculate_communication_statistics(df: pd.DataFrame) -> Dict[str, Any]:
+def calculate_communication_statistics(rep_df: pd.DataFrame, rw_df: pd.DataFrame) -> Dict[str, Any]:
     """Calculate statistics for communication experiments."""
-    if df.empty:
-        return {}
-
-    # Separate Rep+Comm and Rep+Warrant+Comm conditions
-    rep_comm_data = df[df['run_id'].str.contains('rep_comm', case=False, na=False)]
-    rw_comm_data = df[df['run_id'].str.contains('rep.*warrant.*comm', case=False, na=False)]
-
-    def calculate_condition_stats(condition_df: pd.DataFrame) -> Dict[str, Any]:
-        """Calculate statistics for a specific condition."""
-        if condition_df.empty:
-            return {}
-
-        run_stats = []
-        for run_id in condition_df['run_id'].unique():
-            run_data = condition_df[condition_df['run_id'] == run_id]
-
-            stats = {
-                'transactions': run_data['transactions'].sum(),
-                'seller_profit': run_data['seller_profit'].sum(),
-                'buyer_utility': run_data['buyer_utility'].sum(),
-                'reputation': run_data['reputation'].mean(),
-                'deceptions': (run_data['is_honest'] == False).sum()
-            }
-
-            run_stats.append(stats)
-
-        # Convert to DataFrame for aggregation
-        stats_df = pd.DataFrame(run_stats)
-
-        if stats_df.empty:
-            return {}
-
-        return {
-            'transactions': float(stats_df['transactions'].mean()),
-            'transactions_std': float(stats_df['transactions'].std()),
-            'seller_profit': float(stats_df['seller_profit'].mean()),
-            'seller_profit_std': float(stats_df['seller_profit'].std()),
-            'buyer_utility': float(stats_df['buyer_utility'].mean()),
-            'buyer_utility_std': float(stats_df['buyer_utility'].std()),
-            'reputation': float(stats_df['reputation'].mean()),
-            'reputation_std': float(stats_df['reputation'].std()),
-            'deceptions': float(stats_df['deceptions'].mean()),
-            'deceptions_std': float(stats_df['deceptions'].std())
-        }
-
     return {
-        'rep_comm': calculate_condition_stats(rep_comm_data),
-        'rep_warrant_comm': calculate_condition_stats(rw_comm_data)
+        'rep_comm': aggregate_by_run(rep_df, market_run_stats_with_deceptions),
+        'rep_warrant_comm': aggregate_by_run(rw_df, market_run_stats_with_deceptions)
     }
 
 
-def calculate_communication_quality(df: pd.DataFrame) -> Dict[str, Any]:
+def calculate_communication_quality(rep_df: pd.DataFrame, rw_df: pd.DataFrame) -> Dict[str, Any]:
     """Calculate product quality statistics for communication experiments."""
-    if df.empty:
-        return {}
-
-    # Separate conditions
-    rep_comm_data = df[df['run_id'].str.contains('rep_comm', case=False, na=False)]
-    rw_comm_data = df[df['run_id'].str.contains('rep.*warrant.*comm', case=False, na=False)]
-
-    def calculate_quality_stats(condition_df: pd.DataFrame) -> Dict[str, Any]:
-        """Calculate product quality statistics for a condition."""
-        if condition_df.empty:
-            return {}
-
-        run_quality_stats = []
-        for run_id in condition_df['run_id'].unique():
-            run_data = condition_df[condition_df['run_id'] == run_id]
-
-            quality_stats = {
-                'hq_authentic_on_sale': len(run_data[(run_data['quality'] == 'HQ') & (run_data['is_authentic'] == True)]),
-                'hq_authentic_sold': len(run_data[(run_data['quality'] == 'HQ') & (run_data['is_authentic'] == True) & (run_data['sold'] == True)]),
-                'lq_authentic_on_sale': len(run_data[(run_data['quality'] == 'LQ') & (run_data['is_authentic'] == True)]),
-                'lq_authentic_sold': len(run_data[(run_data['quality'] == 'LQ') & (run_data['is_authentic'] == True) & (run_data['sold'] == True)]),
-                'hq_counterfeit_on_sale': len(run_data[(run_data['quality'] == 'HQ') & (run_data['is_authentic'] == False)]),
-                'hq_counterfeit_sold': len(run_data[(run_data['quality'] == 'HQ') & (run_data['is_authentic'] == False) & (run_data['sold'] == True)])
-            }
-
-            run_quality_stats.append(quality_stats)
-
-        # Aggregate across runs
-        quality_df = pd.DataFrame(run_quality_stats)
-
-        if quality_df.empty:
-            return {}
-
-        aggregated = {}
-        for col in quality_df.columns:
-            aggregated[col] = float(quality_df[col].mean())
-            aggregated[f'{col}_std'] = float(quality_df[col].std())
-
-        return aggregated
-
     return {
-        'rep_comm': calculate_quality_stats(rep_comm_data),
-        'rep_warrant_comm': calculate_quality_stats(rw_comm_data)
+        'rep_comm': aggregate_by_run(rep_df, product_quality_run_stats),
+        'rep_warrant_comm': aggregate_by_run(rw_df, product_quality_run_stats)
     }
 
 
@@ -186,8 +78,8 @@ def generate_rq3_tables(
 
     # Calculate statistics
     print("\n📈 Calculating statistics...")
-    comm_stats = calculate_communication_statistics(pd.concat([df_rep_comm, df_rw_comm], ignore_index=True))
-    quality_stats = calculate_communication_quality(pd.concat([df_rep_comm, df_rw_comm], ignore_index=True))
+    comm_stats = calculate_communication_statistics(df_rep_comm, df_rw_comm)
+    quality_stats = calculate_communication_quality(df_rep_comm, df_rw_comm)
 
     # Create output directory
     output_path = Path(output_dir)

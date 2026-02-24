@@ -128,8 +128,8 @@ def test_script_execution():
 
     scripts_to_test = [
         "generate_rq1_paper_tables.py",
-        "generate_rq2_paper_tables_complete.py",
-        "generate_rq3_paper_tables_complete.py",
+        "generate_rq2_paper_tables.py",
+        "generate_rq3_paper_tables.py",
         "generate_all_paper_tables.py"
     ]
 
@@ -175,8 +175,8 @@ def test_main_runner():
         content = f.read()
 
         required_elements = [
-            "generate_rq2_paper_tables_complete.py",
-            "generate_rq3_paper_tables_complete.py",
+            "generate_rq2_paper_tables.py",
+            "generate_rq3_paper_tables.py",
             "EXPERIMENT_PREFIX",
             "rq1",
             "rq2",

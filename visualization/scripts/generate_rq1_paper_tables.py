@@ -26,128 +26,37 @@ from paper_table_generator import (
     create_product_quality_table,
     format_number
 )
+from paper_data_utils import (
+    aggregate_by_run,
+    load_results,
+    market_run_stats,
+    product_quality_run_stats,
+)
 
 
 def load_market_results(experiment_dir: str) -> pd.DataFrame:
     """Load market results from the experiment directory."""
-    path = Path(experiment_dir)
-    all_results = []
-
-    if not path.exists():
-        print(f"ERROR: Experiment directory does not exist: {experiment_dir}")
-        return pd.DataFrame()
-
-    # Find all run_*_results.json files
-    result_files = list(path.glob("run_*_results.json"))
-    if not result_files:
-        print(f"ERROR: No result files found in {experiment_dir}")
-        return pd.DataFrame()
-
-    print(f"Found {len(result_files)} result files")
-    for file in result_files:
-        try:
-            with open(file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                if not data:
-                    print(f"  Warning: {file.name} is empty")
-                    continue
-                # Add run identifier
-                run_id = file.stem.replace("_results", "").replace("run_", "")
-                for item in data:
-                    item["run_id"] = run_id
-                all_results.extend(data)
-                print(f"  Loaded {len(data)} results from {file.name}")
-        except Exception as e:
-            print(f"  ERROR loading {file.name}: {e}")
-
-    if not all_results:
-        print("ERROR: No results loaded")
-        return pd.DataFrame()
-
-    return pd.DataFrame(all_results)
+    return load_results(
+        experiment_dir,
+        pattern="run_*_results.json",
+        run_id_suffix="_results",
+        description="market result"
+    )
 
 
 def load_probe_results(experiment_dir: str) -> pd.DataFrame:
     """Load cognitive probe results from the experiment directory."""
-    path = Path(experiment_dir)
-    all_results = []
-
-    if not path.exists():
-        print(f"ERROR: Experiment directory does not exist: {experiment_dir}")
-        return pd.DataFrame()
-
-    # Find all run_*_cognitive_probes.json files
-    probe_files = list(path.glob("run_*_cognitive_probes.json"))
-    if not probe_files:
-        print(f"ERROR: No cognitive probe result files found in {experiment_dir}")
-        return pd.DataFrame()
-
-    print(f"Found {len(probe_files)} cognitive probe files")
-    for file in probe_files:
-        try:
-            with open(file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                if not data:
-                    print(f"  Warning: {file.name} is empty")
-                    continue
-                # Add run identifier
-                run_id = file.stem.replace("_cognitive_probes", "").replace("run_", "")
-                for item in data:
-                    item["run_id"] = run_id
-                all_results.extend(data)
-                print(f"  Loaded {len(data)} probes from {file.name}")
-        except Exception as e:
-            print(f"  ERROR loading {file.name}: {e}")
-
-    if not all_results:
-        print("ERROR: No probes loaded")
-        return pd.DataFrame()
-
-    return pd.DataFrame(all_results)
+    return load_results(
+        experiment_dir,
+        pattern="run_*_cognitive_probes.json",
+        run_id_suffix="_cognitive_probes",
+        description="cognitive probe result"
+    )
 
 
 def calculate_market_statistics(df: pd.DataFrame) -> Dict[str, Any]:
     """Calculate aggregate statistics from market results."""
-    if df.empty:
-        return {"error": "No results found"}
-
-    stats = {}
-
-    # Group by run_id and calculate statistics for each run
-    run_stats = []
-    for run_id in df['run_id'].unique():
-        run_data = df[df['run_id'] == run_id]
-
-        # Calculate totals for this run
-        total_transactions = run_data['transactions'].sum()
-        total_seller_profit = run_data['seller_profit'].sum()
-        total_buyer_utility = run_data['buyer_utility'].sum()
-        avg_reputation = run_data['reputation'].mean()
-
-        run_stats.append({
-            'transactions': total_transactions,
-            'seller_profit': total_seller_profit,
-            'buyer_utility': total_buyer_utility,
-            'reputation': avg_reputation
-        })
-
-    # Convert to DataFrame for easier calculation
-    stats_df = pd.DataFrame(run_stats)
-
-    # Calculate mean and std
-    stats['transactions'] = float(stats_df['transactions'].mean())
-    stats['transactions_std'] = float(stats_df['transactions'].std())
-
-    stats['seller_profit'] = float(stats_df['seller_profit'].mean())
-    stats['seller_profit_std'] = float(stats_df['seller_profit'].std())
-
-    stats['buyer_utility'] = float(stats_df['buyer_utility'].mean())
-    stats['buyer_utility_std'] = float(stats_df['buyer_utility'].std())
-
-    stats['reputation'] = float(stats_df['reputation'].mean())
-    stats['reputation_std'] = float(stats_df['reputation'].std())
-
-    return stats
+    return aggregate_by_run(df, market_run_stats)
 
 
 def calculate_manipulation_detection(df: pd.DataFrame) -> Dict[str, float]:
@@ -180,43 +89,7 @@ def calculate_manipulation_detection(df: pd.DataFrame) -> Dict[str, float]:
 
 def calculate_product_quality(df: pd.DataFrame) -> Dict[str, Any]:
     """Calculate product quality statistics."""
-    if df.empty:
-        return {}
-
-    # Calculate totals for each run
-    run_stats = []
-    for run_id in df['run_id'].unique():
-        run_data = df[df['run_id'] == run_id]
-
-        # Aggregate by product quality
-        hq_authentic_on_sale = len(run_data[(run_data['quality'] == 'HQ') & (run_data['is_authentic'] == True)])
-        hq_authentic_sold = len(run_data[(run_data['quality'] == 'HQ') & (run_data['is_authentic'] == True) & (run_data['sold'] == True)])
-
-        lq_authentic_on_sale = len(run_data[(run_data['quality'] == 'LQ') & (run_data['is_authentic'] == True)])
-        lq_authentic_sold = len(run_data[(run_data['quality'] == 'LQ') & (run_data['is_authentic'] == True) & (run_data['sold'] == True)])
-
-        hq_counterfeit_on_sale = len(run_data[(run_data['quality'] == 'HQ') & (run_data['is_authentic'] == False)])
-        hq_counterfeit_sold = len(run_data[(run_data['quality'] == 'HQ') & (run_data['is_authentic'] == False) & (run_data['sold'] == True)])
-
-        run_stats.append({
-            'hq_authentic_on_sale': hq_authentic_on_sale,
-            'hq_authentic_sold': hq_authentic_sold,
-            'lq_authentic_on_sale': lq_authentic_on_sale,
-            'lq_authentic_sold': lq_authentic_sold,
-            'hq_counterfeit_on_sale': hq_counterfeit_on_sale,
-            'hq_counterfeit_sold': hq_counterfeit_sold
-        })
-
-    # Convert to DataFrame for easier calculation
-    quality_df = pd.DataFrame(run_stats)
-
-    # Calculate mean and std for each metric
-    stats = {}
-    for col in quality_df.columns:
-        stats[col] = float(quality_df[col].mean())
-        stats[f'{col}_std'] = float(quality_df[col].std())
-
-    return stats
+    return aggregate_by_run(df, product_quality_run_stats)
 
 
 def generate_rq1_tables(

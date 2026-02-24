@@ -29,10 +29,11 @@ mkdir -p "$TABLE_OUTPUT_DIR"
 # Generate RQ1 tables
 echo ""
 echo "Generating RQ1 tables..."
+# Market results and probe results live in different directories
 RQ1_R_MARKET="experiments/${EXPERIMENT_PREFIX}/rq1/r_wo"
-RQ1_R_PROBE="experiments/${EXPERIMENT_PREFIX}/rq1/r_wo"
+RQ1_R_PROBE="experiments/${EXPERIMENT_PREFIX}/rq1_probe/r_wo"
 RQ1_RW_MARKET="experiments/${EXPERIMENT_PREFIX}/rq1/rw_wo"
-RQ1_RW_PROBE="experiments/${EXPERIMENT_PREFIX}/rq1/rw_wo"
+RQ1_RW_PROBE="experiments/${EXPERIMENT_PREFIX}/rq1_probe/rw_wo"
 
 if [ -d "$RQ1_R_MARKET" ] && [ -d "$RQ1_R_PROBE" ] && [ -d "$RQ1_RW_MARKET" ] && [ -d "$RQ1_RW_PROBE" ]; then
     echo "  Generating RQ1 tables..."
@@ -52,24 +53,38 @@ fi
 echo ""
 echo "Generating RQ2 tables..."
 # RQ2 has constraint-based experiments (policy, pressure, psychological)
-RQ2_POLICY_R_DIR="experiments/${EXPERIMENT_PREFIX}/rq2/policy_r_wo"
-RQ2_POLICY_RW_DIR="experiments/${EXPERIMENT_PREFIX}/rq2/policy_rw_wo"
-RQ2_PRESSURE_R_DIR="experiments/${EXPERIMENT_PREFIX}/rq2/pressure_r_wo"
-RQ2_PRESSURE_RW_DIR="experiments/${EXPERIMENT_PREFIX}/rq2/pressure_rw_wo"
-RQ2_PSYCH_R_DIR="experiments/${EXPERIMENT_PREFIX}/rq2/psychological_r_wo"
-RQ2_PSYCH_RW_DIR="experiments/${EXPERIMENT_PREFIX}/rq2/psychological_rw_wo"
+# Match existing directory naming: r_wsc_* / rw_wsc_*, *_R has communication, *_F no communication
+RQ2_POLICY_R_DIR="experiments/${EXPERIMENT_PREFIX}/rq2/r_wsc_R_policy_making"
+RQ2_POLICY_R_NO_COMM_DIR="experiments/${EXPERIMENT_PREFIX}/rq2/r_wsc_F_policy_making"
+RQ2_POLICY_RW_DIR="experiments/${EXPERIMENT_PREFIX}/rq2/rw_wsc_R_policy_making"
+RQ2_POLICY_RW_NO_COMM_DIR="experiments/${EXPERIMENT_PREFIX}/rq2/rw_wsc_F_policy_making"
+
+RQ2_PRESSURE_R_DIR="experiments/${EXPERIMENT_PREFIX}/rq2/r_wsc_R_pressure_quickprofits"
+RQ2_PRESSURE_R_NO_COMM_DIR="experiments/${EXPERIMENT_PREFIX}/rq2/r_wsc_F_pressure_quickprofits"
+RQ2_PRESSURE_RW_DIR="experiments/${EXPERIMENT_PREFIX}/rq2/rw_wsc_R_pressure_quickprofits"
+RQ2_PRESSURE_RW_NO_COMM_DIR="experiments/${EXPERIMENT_PREFIX}/rq2/rw_wsc_F_pressure_quickprofits"
+
+RQ2_PSYCH_R_DIR="experiments/${EXPERIMENT_PREFIX}/rq2/r_wsc_R_psychological-based-attack"
+RQ2_PSYCH_R_NO_COMM_DIR="experiments/${EXPERIMENT_PREFIX}/rq2/r_wsc_F_psychological-based-attack"
+RQ2_PSYCH_RW_DIR="experiments/${EXPERIMENT_PREFIX}/rq2/rw_wsc_R_psychological-based-attack"
+RQ2_PSYCH_RW_NO_COMM_DIR="experiments/${EXPERIMENT_PREFIX}/rq2/rw_wsc_F_psychological-based-attack"
 
 # Check if all RQ2 directories exist
-if [ -d "$RQ2_POLICY_R_DIR" ] && [ -d "$RQ2_POLICY_RW_DIR" ] && \
-   [ -d "$RQ2_PRESSURE_R_DIR" ] && [ -d "$RQ2_PRESSURE_RW_DIR" ] && \
-   [ -d "$RQ2_PSYCH_R_DIR" ] && [ -d "$RQ2_PSYCH_RW_DIR" ]; then
-    echo "  Generating RQ2 complete tables (Market Outcomes, Product Quality, Profit Decomposition)..."
+if [ -d "$RQ2_POLICY_R_DIR" ] && [ -d "$RQ2_POLICY_R_NO_COMM_DIR" ] && \
+   [ -d "$RQ2_POLICY_RW_DIR" ] && [ -d "$RQ2_POLICY_RW_NO_COMM_DIR" ] && \
+   [ -d "$RQ2_PRESSURE_R_DIR" ] && [ -d "$RQ2_PRESSURE_R_NO_COMM_DIR" ] && \
+   [ -d "$RQ2_PRESSURE_RW_DIR" ] && [ -d "$RQ2_PRESSURE_RW_NO_COMM_DIR" ] && \
+   [ -d "$RQ2_PSYCH_R_DIR" ] && [ -d "$RQ2_PSYCH_R_NO_COMM_DIR" ] && \
+   [ -d "$RQ2_PSYCH_RW_DIR" ] && [ -d "$RQ2_PSYCH_RW_NO_COMM_DIR" ]; then
+    echo "  Generating RQ2 tables (Market Outcomes, Product Quality, Profit Decomposition)..."
     mkdir -p "$TABLE_OUTPUT_DIR/rq2"
-    # Use complete RQ2 table generator
-    python3 visualization/scripts/generate_rq2_paper_tables_complete.py \
+    python3 visualization/scripts/generate_rq2_paper_tables.py \
         --experiment-dirs "$RQ2_POLICY_R_DIR" "$RQ2_POLICY_RW_DIR" \
+                           "$RQ2_POLICY_R_NO_COMM_DIR" "$RQ2_POLICY_RW_NO_COMM_DIR" \
                            "$RQ2_PRESSURE_R_DIR" "$RQ2_PRESSURE_RW_DIR" \
+                           "$RQ2_PRESSURE_R_NO_COMM_DIR" "$RQ2_PRESSURE_RW_NO_COMM_DIR" \
                            "$RQ2_PSYCH_R_DIR" "$RQ2_PSYCH_RW_DIR" \
+                           "$RQ2_PSYCH_R_NO_COMM_DIR" "$RQ2_PSYCH_RW_NO_COMM_DIR" \
         --output-dir "$TABLE_OUTPUT_DIR/rq2"
     echo "  ✓ RQ2 tables generated"
 else
@@ -81,14 +96,14 @@ fi
 echo ""
 echo "Generating RQ3 tables..."
 # RQ3 has communication experiments (Rep+Comm vs Rep+Warrant+Comm)
-RQ3_REP_COMM_DIR="experiments/${EXPERIMENT_PREFIX}/rq3/r_wsc_R"
-RQ3_RW_COMM_DIR="experiments/${EXPERIMENT_PREFIX}/rq3/rw_wsc_R"
+# Match existing directory naming: r_wbc_R / rw_wbc_R
+RQ3_REP_COMM_DIR="experiments/${EXPERIMENT_PREFIX}/rq3/r_wbc_R"
+RQ3_RW_COMM_DIR="experiments/${EXPERIMENT_PREFIX}/rq3/rw_wbc_R"
 
 if [ -d "$RQ3_REP_COMM_DIR" ] && [ -d "$RQ3_RW_COMM_DIR" ]; then
-    echo "  Generating RQ3 complete tables (Summary with Deceptions, Product Quality)..."
+    echo "  Generating RQ3 tables (Summary with Deceptions, Product Quality)..."
     mkdir -p "$TABLE_OUTPUT_DIR/rq3"
-    # Use complete RQ3 table generator
-    python3 visualization/scripts/generate_rq3_paper_tables_complete.py \
+    python3 visualization/scripts/generate_rq3_paper_tables.py \
         --rep-comm-dir "$RQ3_REP_COMM_DIR" \
         --rw-comm-dir "$RQ3_RW_COMM_DIR" \
         --output-dir "$TABLE_OUTPUT_DIR/rq3"
