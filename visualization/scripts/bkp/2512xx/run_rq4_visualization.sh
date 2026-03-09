@@ -50,9 +50,9 @@ fi
 # echo "=========================================="
 
 
-EXP_PREFIX="gpt-4o-mini/paper/rq4"
+EXP_PREFIX="gpt-4o-mini/paper_largescale/rq4"
 
-python visualization/scripts/rq4_visualization.py \
+python visualization/scripts/bkp/rq4_visualization.py \
     --r-f "$EXP_PREFIX/$R_F_EXP_ID" \
     --r-r "$EXP_PREFIX/$R_R_EXP_ID" \
     --rw-f "$EXP_PREFIX/$RW_F_EXP_ID" \

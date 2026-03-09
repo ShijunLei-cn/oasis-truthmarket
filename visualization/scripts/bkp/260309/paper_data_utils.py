@@ -125,11 +125,38 @@ def market_run_stats_with_breakdown(run_df: pd.DataFrame) -> Dict[str, float]:
 
 def product_quality_run_stats(run_df: pd.DataFrame) -> Dict[str, float]:
     """Count products by quality/authenticity."""
+    if run_df.empty:
+        return {}
+
+    # Column names differ across exported JSON and direct DB pulls; pick the first
+    # available option for each required field.
+    quality_col = next((col for col in ["quality", "true_quality", "actual_quality"] if col in run_df.columns), None)
+    adv_col = next((col for col in ["advertised_quality"] if col in run_df.columns), None)
+    sold_col = next((col for col in ["sold", "is_sold"] if col in run_df.columns), None)
+
+    if quality_col is None or adv_col is None:
+        return {}
+
+    df = run_df.copy()
+    df[quality_col] = df[quality_col].astype(str).str.upper().str.strip()
+    df[adv_col] = df[adv_col].astype(str).str.upper().str.strip()
+    sold_mask = df[sold_col] == True if sold_col is not None else pd.Series(False, index=df.index)  # noqa: E712
+
+    hq_advertised = df[adv_col] == "HQ"
+    lq_advertised = df[adv_col] == "LQ"
+    hq_actual = df[quality_col] == "HQ"
+    lq_actual = df[quality_col] == "LQ"
+
+    hq_auth_mask = hq_advertised & hq_actual
+    lq_auth_mask = lq_advertised & lq_actual
+    # Counterfeit HQ := advertised as HQ but delivered LQ (fraudulent listing)
+    hq_counterfeit_mask = hq_advertised & lq_actual
+
     return {
-        "hq_authentic_on_sale": len(run_df[(run_df["quality"] == "HQ") & (run_df["is_authentic"] == True)]),  # noqa: E712
-        "hq_authentic_sold": len(run_df[(run_df["quality"] == "HQ") & (run_df["is_authentic"] == True) & (run_df["sold"] == True)]),  # noqa: E712
-        "lq_authentic_on_sale": len(run_df[(run_df["quality"] == "LQ") & (run_df["is_authentic"] == True)]),  # noqa: E712
-        "lq_authentic_sold": len(run_df[(run_df["quality"] == "LQ") & (run_df["is_authentic"] == True) & (run_df["sold"] == True)]),  # noqa: E712
-        "hq_counterfeit_on_sale": len(run_df[(run_df["quality"] == "HQ") & (run_df["is_authentic"] == False)]),  # noqa: E712
-        "hq_counterfeit_sold": len(run_df[(run_df["quality"] == "HQ") & (run_df["is_authentic"] == False) & (run_df["sold"] == True)]),  # noqa: E712
+        "hq_authentic_on_sale": int(hq_auth_mask.sum()),
+        "hq_authentic_sold": int((hq_auth_mask & sold_mask).sum()),
+        "lq_authentic_on_sale": int(lq_auth_mask.sum()),
+        "lq_authentic_sold": int((lq_auth_mask & sold_mask).sum()),
+        "hq_counterfeit_on_sale": int(hq_counterfeit_mask.sum()),
+        "hq_counterfeit_sold": int((hq_counterfeit_mask & sold_mask).sum()),
     }

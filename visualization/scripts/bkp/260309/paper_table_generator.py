@@ -21,8 +21,10 @@ import json
 
 def format_number(value: float, std: float, precision: int = 1) -> str:
     """Format a number with its standard deviation."""
-    if pd.isna(value) or pd.isna(std):
+    if pd.isna(value):
         return "N/A"
+    if pd.isna(std):
+        std = 0.0
     return f"{value:.{precision}f}±{std:.{precision}f}"
 
 

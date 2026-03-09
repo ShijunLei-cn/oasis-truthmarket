@@ -223,8 +223,8 @@ Examples:
         '--runs',
         dest='num_runs',
         type=int,
-        default=1,
-        help=f'Number of runs (default: {SimulationConfig.RUNS} from config)'
+        default=None,
+        help='Number of runs (default: value from loaded config)'
     )
     
     parser.add_argument(
@@ -265,6 +265,9 @@ Examples:
     
     # Load configuration from YAML if provided
     load_config_from_yaml(args.config_file)
+
+    # Respect YAML-configured runs unless explicitly overridden
+    resolved_runs = args.num_runs if args.num_runs is not None else SimulationConfig.RUNS
     
     # Run batch experiment
     asyncio.run(run_batch_experiment(
@@ -272,18 +275,10 @@ Examples:
         args.market_type,
         args.communication_type,
         args.communication_channel_type,
-        args.num_runs,
+        resolved_runs,
         args.posts4seller
     ))
 
 
 if __name__ == "__main__":
     main()
-    # asyncio.run(run_experiment(
-    #     "gpt-4o/paper/rq2/rw_wo",
-    #     "reputation_and_warrant",
-    #     None,
-    #     5,
-    #     "Fake"
-    # ))
-
