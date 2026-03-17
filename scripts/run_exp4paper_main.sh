@@ -222,7 +222,8 @@ python ./example/run_single_config_experiment.py \
     --market-type reputation_only \
     --communication buyer \
     --communication-channel-type Fake \
-    --config "${CONFIG_FILE}" 
+    --config "${CONFIG_FILE}" \
+    --Posts4Seller pressure_quickprofits 
 
 echo ""
 echo "Running Reputation-Only + Buyer Communication + Real Channel..."
@@ -231,7 +232,8 @@ python ./example/run_single_config_experiment.py \
     --market-type reputation_only \
     --communication buyer \
     --communication-channel-type Real \
-    --config "${CONFIG_FILE}" 
+    --config "${CONFIG_FILE}" \
+    --Posts4Seller pressure_quickprofits 
 
 echo ""
 echo "Running Reputation+Warrant + Buyer Communication + Fake Channel..."
@@ -240,7 +242,8 @@ python ./example/run_single_config_experiment.py \
     --market-type reputation_and_warrant \
     --communication buyer \
     --communication-channel-type Fake \
-    --config "${CONFIG_FILE}" 
+    --config "${CONFIG_FILE}" \
+    --Posts4Seller pressure_quickprofits 
 
 echo ""
 echo "Running Reputation+Warrant + Buyer Communication + Real Channel..."
@@ -249,7 +252,8 @@ python ./example/run_single_config_experiment.py \
     --market-type reputation_and_warrant \
     --communication buyer \
     --communication-channel-type Real \
-    --config "${CONFIG_FILE}" 
+    --config "${CONFIG_FILE}" \
+    --Posts4Seller pressure_quickprofits 
 
 echo ""
 echo "=========================================="
