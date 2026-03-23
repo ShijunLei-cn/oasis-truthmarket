@@ -39,7 +39,8 @@ def load_config_from_yaml(yaml_path: Optional[str] = None):
 
 async def run_experiment(experiment_id: str, market_type: str, 
                         communication_type: str, run_id: int,
-                        communication_channel_type: str = "Fake"):
+                        communication_channel_type: str = "Fake",
+                        posts4seller: str = ""):
     """
     Run a single experiment with specified parameters
     
@@ -49,6 +50,7 @@ async def run_experiment(experiment_id: str, market_type: str,
         communication_type: Type of communication
         run_id: Run identifier
         communication_channel_type: Type of communication channel ("Fake" or "Real")
+        posts4seller: Type of initial posts for sellers ('policy_making', 'pressure_quickprofits', 'psychological-based-attack')
     """
     # Create experiment directory
     exp_dir = f"experiments/{experiment_id}"
@@ -63,13 +65,16 @@ async def run_experiment(experiment_id: str, market_type: str,
     print(f"  Market Type: {market_type}")
     print(f"  Communication Type: {communication_type}")
     print(f"  Communication Channel Type: {communication_channel_type}")
+    if posts4seller:
+        print(f"  Posts4Seller Type: {posts4seller}")
     
     # Run simulation
     await run_single_simulation(
         db_path, 
         market_type=market_type, 
         communication_type=communication_type,
-        communication_channel_type=communication_channel_type
+        communication_channel_type=communication_channel_type,
+        posts4seller=posts4seller if posts4seller else None
     )
     
     return db_path
@@ -78,7 +83,8 @@ async def run_experiment(experiment_id: str, market_type: str,
 async def run_batch_experiment(experiment_id: str, market_type: str,
                                communication_type: str, 
                                communication_channel_type: str = "Fake",
-                               num_runs: int = None):
+                               num_runs: int = None,
+                               posts4seller: str = ""):
     """
     Run batch experiments with specified configuration
     
@@ -88,6 +94,7 @@ async def run_batch_experiment(experiment_id: str, market_type: str,
         communication_type: Type of communication
         communication_channel_type: Type of communication channel ("Fake" or "Real")
         num_runs: Number of runs (default: from config)
+        posts4seller: Type of initial posts for sellers ('policy_making', 'pressure_quickprofits', 'psychological-based-attack')
     """
     if num_runs is None:
         num_runs = SimulationConfig.RUNS
@@ -103,6 +110,7 @@ async def run_batch_experiment(experiment_id: str, market_type: str,
         "market_type": market_type,
         "communication_type": communication_type,
         "communication_channel_type": communication_channel_type,
+        "posts4seller": posts4seller,
         "runs": num_runs,
         "simulation_config": SimulationConfig.to_dict()
     }
@@ -116,6 +124,8 @@ async def run_batch_experiment(experiment_id: str, market_type: str,
     print(f"Market Type: {market_type}")
     print(f"Communication Type: {communication_type}")
     print(f"Communication Channel Type: {communication_channel_type}")
+    if posts4seller:
+        print(f"Posts4Seller Type: {posts4seller}")
     print(f"Number of Runs: {num_runs}")
     print("=" * 60)
     
@@ -127,7 +137,7 @@ async def run_batch_experiment(experiment_id: str, market_type: str,
         
         db_path = await run_experiment(
             experiment_id, market_type, communication_type, 
-            run_id, communication_channel_type
+            run_id, communication_channel_type, posts4seller
         )
         
         results.append({
@@ -135,6 +145,7 @@ async def run_batch_experiment(experiment_id: str, market_type: str,
             "market_type": market_type,
             "communication_type": communication_type,
             "communication_channel_type": communication_channel_type,
+            "posts4seller": posts4seller,
             "database": db_path
         })
     
@@ -224,6 +235,23 @@ Examples:
         help='Path to YAML configuration file (optional, overrides default config.py values)'
     )
     
+
+    parser.add_argument(
+        '--Posts4Seller',
+        dest='posts4seller',
+        choices=['policy_making', 'pressure_quickprofits', 'psychological-based-attack'],
+        default='',
+        help='Initial posts type for sellers: policy_making (government policy scenario), pressure_quickprofits (company pressure scenario), or psychological-based-attack (dark psychology scenario)'
+    )
+
+    parser.add_argument(
+        '--Enhanced_seller_actions',
+        dest='enhanced_seller_actions',
+        choices=['reenter_support', 'free_price_support'], 
+        default='',
+        help='Enhanced seller actions type'
+    )
+
     args = parser.parse_args()
     
     # Set model platform and type BEFORE loading config (so they can override config values)
@@ -247,17 +275,10 @@ Examples:
         args.market_type,
         args.communication_type,
         args.communication_channel_type,
-        resolved_runs
+        resolved_runs,
+        args.posts4seller
     ))
 
 
 if __name__ == "__main__":
     main()
-    # asyncio.run(run_experiment(
-    #     "gpt-4o/paper/rq2/rw_wo",
-    #     "reputation_and_warrant",
-    #     None,
-    #     5,
-    #     "Fake"
-    # ))
-

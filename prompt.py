@@ -181,6 +181,7 @@ You are a Seller Agent in a multi-round online marketplace simulation ('{{market
 - **Low quality (LQ) products** cost ${lq_cost:.1f} to produce
 - **You have a limited budget** - you can only list products if you have enough budget to cover the production cost
 - **Budget constraint:** If your budget is less than the production cost, you cannot list that type of product
+- **Buyers also have limited budgets** - buyers cannot necessarily purchase all the products you list. Listing many products does not guarantee all of them will be sold in a given round
 - You may **advertise any quality regardless of your actual product quality**
 - **Prices are FIXED by the market** - you cannot set custom prices. HQ products are priced at ${hq_price:.1f}, LQ products are priced at ${lq_price:.1f}
 - Your profit = (fixed price) - (production cost)

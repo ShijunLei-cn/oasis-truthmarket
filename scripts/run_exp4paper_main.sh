@@ -17,195 +17,195 @@ echo "Model type: ${MODEL_TYPE}"
 # If needed, pass alternative configs via CONFIG_FILE.
 
 
-# ==================== RQ1_probe: Cognitive Probing ====================
-echo ""
-echo "=========================================="
-echo "RQ1_probe: Cognitive Probing for Reputation Manipulation"
-echo "=========================================="
+# # ==================== RQ1_probe: Cognitive Probing ====================
+# echo ""
+# echo "=========================================="
+# echo "RQ1_probe: Cognitive Probing for Reputation Manipulation"
+# echo "=========================================="
 
-# Reputation only market
-echo ""
-echo "Running Reputation-Only Market experiments..."
-python ./example/run_rq1_experiment.py \
-    --market-type reputation_only \
-    --output-dir experiments/${MODEL_TYPE}/paper/rq1/r_wo \
-    --config "${CONFIG_FILE}"
+# # Reputation only market
+# echo ""
+# echo "Running Reputation-Only Market experiments..."
+# python ./example/run_rq1_experiment.py \
+#     --market-type reputation_only \
+#     --output-dir experiments/${MODEL_TYPE}/paper/rq1/r_wo \
+#     --config "${CONFIG_FILE}"
 
-# Reputation and warrant market
-echo ""
-echo "Running Reputation+Warrant Market experiments..."
-python ./example/run_rq1_experiment.py \
-    --market-type reputation_and_warrant \
-    --output-dir experiments/${MODEL_TYPE}/paper/rq1/rw_wo \
-    --config "${CONFIG_FILE}"
+# # Reputation and warrant market
+# echo ""
+# echo "Running Reputation+Warrant Market experiments..."
+# python ./example/run_rq1_experiment.py \
+#     --market-type reputation_and_warrant \
+#     --output-dir experiments/${MODEL_TYPE}/paper/rq1/rw_wo \
+#     --config "${CONFIG_FILE}"
 
-# ==================== RQ2: Seller Communication ====================
-echo ""
-echo "=========================================="
-echo "RQ2: Group-Level Deception Dynamics (Seller Communication)"
-echo "=========================================="
+# # ==================== RQ2: Seller Communication ====================
+# echo ""
+# echo "=========================================="
+# echo "RQ2: Group-Level Deception Dynamics (Seller Communication)"
+# echo "=========================================="
 
-# Baseline no-communication
-echo ""
-echo "Running Reputation-Only Market (no communication)..."
-python ./example/run_single_config_experiment.py \
-    --experiment-id ${MODEL_TYPE}/paper/rq1/r_wo \
-    --market-type reputation_only \
-    --communication none \
-    --communication-channel-type Fake \
-    --config "${CONFIG_FILE}"
+# # Baseline no-communication
+# echo ""
+# echo "Running Reputation-Only Market (no communication)..."
+# python ./example/run_single_config_experiment.py \
+#     --experiment-id ${MODEL_TYPE}/paper/rq1/r_wo \
+#     --market-type reputation_only \
+#     --communication none \
+#     --communication-channel-type Fake \
+#     --config "${CONFIG_FILE}"
 
-echo ""
-echo "Running Reputation+Warrant Market (no communication)..."
-python ./example/run_single_config_experiment.py \
-    --experiment-id ${MODEL_TYPE}/paper/rq1/rw_wo \
-    --market-type reputation_and_warrant \
-    --communication none \
-    --communication-channel-type Fake \
-    --config "${CONFIG_FILE}"
-
-
-# Reputation only market - Real channel
-echo ""
-echo "Running Reputation-Only + Seller Communication + Real Channel..."
-python ./example/run_single_config_ablation_experiment.py \
-    --experiment-id ${MODEL_TYPE}/paper/rq2/r_wsc_R_policy_making \
-    --market-type reputation_only \
-    --communication seller \
-    --communication-channel-type Real \
-    --config "${CONFIG_FILE}" \
-    --Posts4Seller policy_making
-
-# Reputation and warrant market - Real channel
-echo ""
-echo "Running Reputation+Warrant + Seller Communication + Real Channel..."
-python ./example/run_single_config_ablation_experiment.py \
-    --experiment-id ${MODEL_TYPE}/paper/rq2/rw_wsc_R_policy_making \
-    --market-type reputation_and_warrant \
-    --communication seller \
-    --communication-channel-type Real \
-    --config "${CONFIG_FILE}" \
-    --Posts4Seller policy_making
+# echo ""
+# echo "Running Reputation+Warrant Market (no communication)..."
+# python ./example/run_single_config_experiment.py \
+#     --experiment-id ${MODEL_TYPE}/paper/rq1/rw_wo \
+#     --market-type reputation_and_warrant \
+#     --communication none \
+#     --communication-channel-type Fake \
+#     --config "${CONFIG_FILE}"
 
 
-# Reputation only market - Real channel
-echo ""
-echo "Running Reputation-Only + Seller Communication + Real Channel..."
-python ./example/run_single_config_ablation_experiment.py \
-    --experiment-id ${MODEL_TYPE}/paper/rq2/r_wsc_R_pressure_quickprofits \
-    --market-type reputation_only \
-    --communication seller \
-    --communication-channel-type Real \
-    --config "${CONFIG_FILE}" \
-    --Posts4Seller pressure_quickprofits
+# # Reputation only market - Real channel
+# echo ""
+# echo "Running Reputation-Only + Seller Communication + Real Channel..."
+# python ./example/run_single_config_experiment.py \
+#     --experiment-id ${MODEL_TYPE}/paper/rq2/r_wsc_R_policy_making \
+#     --market-type reputation_only \
+#     --communication seller \
+#     --communication-channel-type Real \
+#     --config "${CONFIG_FILE}" \
+#     --Posts4Seller policy_making
+
+# # Reputation and warrant market - Real channel
+# echo ""
+# echo "Running Reputation+Warrant + Seller Communication + Real Channel..."
+# python ./example/run_single_config_experiment.py \
+#     --experiment-id ${MODEL_TYPE}/paper/rq2/rw_wsc_R_policy_making \
+#     --market-type reputation_and_warrant \
+#     --communication seller \
+#     --communication-channel-type Real \
+#     --config "${CONFIG_FILE}" \
+#     --Posts4Seller policy_making
 
 
-# Reputation and warrant market - Real channel
-echo ""
-echo "Running Reputation+Warrant + Seller Communication + Real Channel..."
-python ./example/run_single_config_ablation_experiment.py \
-    --experiment-id ${MODEL_TYPE}/paper/rq2/rw_wsc_R_pressure_quickprofits \
-    --market-type reputation_and_warrant \
-    --communication seller \
-    --communication-channel-type Real \
-    --config "${CONFIG_FILE}" \
-    --Posts4Seller pressure_quickprofits
+# # Reputation only market - Real channel
+# echo ""
+# echo "Running Reputation-Only + Seller Communication + Real Channel..."
+# python ./example/run_single_config_experiment.py \
+#     --experiment-id ${MODEL_TYPE}/paper/rq2/r_wsc_R_pressure_quickprofits \
+#     --market-type reputation_only \
+#     --communication seller \
+#     --communication-channel-type Real \
+#     --config "${CONFIG_FILE}" \
+#     --Posts4Seller pressure_quickprofits
 
 
-# Reputation only market - Real channel
-echo ""
-echo "Running Reputation-Only + Seller Communication + Real Channel..."
-python ./example/run_single_config_ablation_experiment.py \
-    --experiment-id ${MODEL_TYPE}/paper/rq2/r_wsc_R_psychological-based-attack \
-    --market-type reputation_only \
-    --communication seller \
-    --communication-channel-type Real \
-    --config "${CONFIG_FILE}" \
-    --Posts4Seller psychological-based-attack
+# # Reputation and warrant market - Real channel
+# echo ""
+# echo "Running Reputation+Warrant + Seller Communication + Real Channel..."
+# python ./example/run_single_config_experiment.py \
+#     --experiment-id ${MODEL_TYPE}/paper/rq2/rw_wsc_R_pressure_quickprofits \
+#     --market-type reputation_and_warrant \
+#     --communication seller \
+#     --communication-channel-type Real \
+#     --config "${CONFIG_FILE}" \
+#     --Posts4Seller pressure_quickprofits
 
 
-# Reputation and warrant market - Real channel
-echo ""
-echo "Running Reputation+Warrant + Seller Communication + Real Channel..."
-python ./example/run_single_config_ablation_experiment.py \
-    --experiment-id ${MODEL_TYPE}/paper/rq2/rw_wsc_R_psychological-based-attack \
-    --market-type reputation_and_warrant \
-    --communication seller \
-    --communication-channel-type Real \
-    --config "${CONFIG_FILE}" \
-    --Posts4Seller psychological-based-attack
+# # Reputation only market - Real channel
+# echo ""
+# echo "Running Reputation-Only + Seller Communication + Real Channel..."
+# python ./example/run_single_config_experiment.py \
+#     --experiment-id ${MODEL_TYPE}/paper/rq2/r_wsc_R_psychological-based-attack \
+#     --market-type reputation_only \
+#     --communication seller \
+#     --communication-channel-type Real \
+#     --config "${CONFIG_FILE}" \
+#     --Posts4Seller psychological-based-attack
+
+
+# # Reputation and warrant market - Real channel
+# echo ""
+# echo "Running Reputation+Warrant + Seller Communication + Real Channel..."
+# python ./example/run_single_config_experiment.py \
+#     --experiment-id ${MODEL_TYPE}/paper/rq2/rw_wsc_R_psychological-based-attack \
+#     --market-type reputation_and_warrant \
+#     --communication seller \
+#     --communication-channel-type Real \
+#     --config "${CONFIG_FILE}" \
+#     --Posts4Seller psychological-based-attack
 
 
 
 
-echo ""
-echo "Running Reputation-Only + Seller Communication + Fake Channel..."
-python ./example/run_single_config_ablation_experiment.py \
-    --experiment-id ${MODEL_TYPE}/paper/rq2/r_wsc_F_policy_making \
-    --market-type reputation_only \
-    --communication seller \
-    --communication-channel-type Fake \
-    --config "${CONFIG_FILE}" \
-    --Posts4Seller policy_making 
+# echo ""
+# echo "Running Reputation-Only + Seller Communication + Fake Channel..."
+# python ./example/run_single_config_experiment.py \
+#     --experiment-id ${MODEL_TYPE}/paper/rq2/r_wsc_F_policy_making \
+#     --market-type reputation_only \
+#     --communication seller \
+#     --communication-channel-type Fake \
+#     --config "${CONFIG_FILE}" \
+#     --Posts4Seller policy_making 
 
-# Reputation and warrant market - Fake channel
-echo ""
-echo "Running Reputation+Warrant + Seller Communication + Fake Channel..."
-python ./example/run_single_config_ablation_experiment.py \
-    --experiment-id ${MODEL_TYPE}/paper/rq2/rw_wsc_F_policy_making \
-    --market-type reputation_and_warrant \
-    --communication seller \
-    --communication-channel-type Fake \
-    --config "${CONFIG_FILE}" \
-    --Posts4Seller policy_making 
-
-
-# Reputation only market - Fake channel
-echo ""
-echo "Running Reputation-Only + Seller Communication + Fake Channel..."
-python ./example/run_single_config_ablation_experiment.py \
-    --experiment-id ${MODEL_TYPE}/paper/rq2/r_wsc_F_pressure_quickprofits \
-    --market-type reputation_only \
-    --communication seller \
-    --communication-channel-type Fake \
-    --config "${CONFIG_FILE}" \
-    --Posts4Seller pressure_quickprofits 
+# # Reputation and warrant market - Fake channel
+# echo ""
+# echo "Running Reputation+Warrant + Seller Communication + Fake Channel..."
+# python ./example/run_single_config_experiment.py \
+#     --experiment-id ${MODEL_TYPE}/paper/rq2/rw_wsc_F_policy_making \
+#     --market-type reputation_and_warrant \
+#     --communication seller \
+#     --communication-channel-type Fake \
+#     --config "${CONFIG_FILE}" \
+#     --Posts4Seller policy_making 
 
 
-# Reputation and warrant market - Fake channel
-echo ""
-echo "Running Reputation+Warrant + Seller Communication + Fake Channel..."
-python ./example/run_single_config_ablation_experiment.py \
-    --experiment-id ${MODEL_TYPE}/paper/rq2/rw_wsc_F_pressure_quickprofits \
-    --market-type reputation_and_warrant \
-    --communication seller \
-    --communication-channel-type Fake \
-    --config "${CONFIG_FILE}" \
-    --Posts4Seller pressure_quickprofits 
+# # Reputation only market - Fake channel
+# echo ""
+# echo "Running Reputation-Only + Seller Communication + Fake Channel..."
+# python ./example/run_single_config_experiment.py \
+#     --experiment-id ${MODEL_TYPE}/paper/rq2/r_wsc_F_pressure_quickprofits \
+#     --market-type reputation_only \
+#     --communication seller \
+#     --communication-channel-type Fake \
+#     --config "${CONFIG_FILE}" \
+#     --Posts4Seller pressure_quickprofits 
 
 
-# Reputation only market - Fake channel
-echo ""
-echo "Running Reputation-Only + Seller Communication + Fake Channel..."
-python ./example/run_single_config_ablation_experiment.py \
-    --experiment-id ${MODEL_TYPE}/paper/rq2/r_wsc_F_psychological-based-attack \
-    --market-type reputation_only \
-    --communication seller \
-    --communication-channel-type Fake \
-    --config "${CONFIG_FILE}" \
-    --Posts4Seller psychological-based-attack 
+# # Reputation and warrant market - Fake channel
+# echo ""
+# echo "Running Reputation+Warrant + Seller Communication + Fake Channel..."
+# python ./example/run_single_config_experiment.py \
+#     --experiment-id ${MODEL_TYPE}/paper/rq2/rw_wsc_F_pressure_quickprofits \
+#     --market-type reputation_and_warrant \
+#     --communication seller \
+#     --communication-channel-type Fake \
+#     --config "${CONFIG_FILE}" \
+#     --Posts4Seller pressure_quickprofits 
 
 
-# Reputation and warrant market - Fake channel
-echo ""
-echo "Running Reputation+Warrant + Seller Communication + Fake Channel..."
-python ./example/run_single_config_ablation_experiment.py \
-    --experiment-id ${MODEL_TYPE}/paper/rq2/rw_wsc_F_psychological-based-attack \
-    --market-type reputation_and_warrant \
-    --communication seller \
-    --communication-channel-type Fake \
-    --config "${CONFIG_FILE}" \
-    --Posts4Seller psychological-based-attack 
+# # Reputation only market - Fake channel
+# echo ""
+# echo "Running Reputation-Only + Seller Communication + Fake Channel..."
+# python ./example/run_single_config_experiment.py \
+#     --experiment-id ${MODEL_TYPE}/paper/rq2/r_wsc_F_psychological-based-attack \
+#     --market-type reputation_only \
+#     --communication seller \
+#     --communication-channel-type Fake \
+#     --config "${CONFIG_FILE}" \
+#     --Posts4Seller psychological-based-attack 
+
+
+# # Reputation and warrant market - Fake channel
+# echo ""
+# echo "Running Reputation+Warrant + Seller Communication + Fake Channel..."
+# python ./example/run_single_config_experiment.py \
+#     --experiment-id ${MODEL_TYPE}/paper/rq2/rw_wsc_F_psychological-based-attack \
+#     --market-type reputation_and_warrant \
+#     --communication seller \
+#     --communication-channel-type Fake \
+#     --config "${CONFIG_FILE}" \
+#     --Posts4Seller psychological-based-attack 
 
 
 
@@ -220,7 +220,7 @@ echo "Running Reputation-Only + Buyer Communication + Fake Channel..."
 python ./example/run_single_config_experiment.py \
     --experiment-id ${MODEL_TYPE}/paper/rq3/r_wbc_F \
     --market-type reputation_only \
-    --communication buyer \
+    --communication both \
     --communication-channel-type Fake \
     --config "${CONFIG_FILE}" \
     --Posts4Seller pressure_quickprofits 
@@ -230,7 +230,7 @@ echo "Running Reputation-Only + Buyer Communication + Real Channel..."
 python ./example/run_single_config_experiment.py \
     --experiment-id ${MODEL_TYPE}/paper/rq3/r_wbc_R \
     --market-type reputation_only \
-    --communication buyer \
+    --communication both \
     --communication-channel-type Real \
     --config "${CONFIG_FILE}" \
     --Posts4Seller pressure_quickprofits 
@@ -240,7 +240,7 @@ echo "Running Reputation+Warrant + Buyer Communication + Fake Channel..."
 python ./example/run_single_config_experiment.py \
     --experiment-id ${MODEL_TYPE}/paper/rq3/rw_wbc_F \
     --market-type reputation_and_warrant \
-    --communication buyer \
+    --communication both \
     --communication-channel-type Fake \
     --config "${CONFIG_FILE}" \
     --Posts4Seller pressure_quickprofits 
@@ -250,7 +250,7 @@ echo "Running Reputation+Warrant + Buyer Communication + Real Channel..."
 python ./example/run_single_config_experiment.py \
     --experiment-id ${MODEL_TYPE}/paper/rq3/rw_wbc_R \
     --market-type reputation_and_warrant \
-    --communication buyer \
+    --communication both \
     --communication-channel-type Real \
     --config "${CONFIG_FILE}" \
     --Posts4Seller pressure_quickprofits 
