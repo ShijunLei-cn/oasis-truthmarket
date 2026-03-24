@@ -42,10 +42,17 @@ python3 visualization/scripts/generate_rq3_figures.py \
     --base-dir   "${EXPERIMENT_PREFIX}/rq3" \
     --output-dir "${OUTPUT_BASE}/rq3"
 
+# ── Statistical Significance Report ─────────────────────────
+echo ""
+echo "── Statistical Significance Report ───────────────────"
+python3 visualization/scripts/generate_paper_stats_report.py \
+    --base-dir   "${EXPERIMENT_PREFIX}" \
+    --output-dir "${OUTPUT_BASE}/stats"
+
 # ── Summary ──────────────────────────────────────────────────
 echo ""
 echo "=========================================="
-echo "All figures generated!"
+echo "All figures and statistics generated!"
 echo "=========================================="
 echo ""
 echo "Main paper figures:"
@@ -59,3 +66,8 @@ echo "Appendix figures:"
 echo "  ${OUTPUT_BASE}/rq1/rq1_product_mix_appendix.png"
 echo "  ${OUTPUT_BASE}/rq2/rq2_product_mix_appendix.png"
 echo "  ${OUTPUT_BASE}/rq3/rq3_round_adaptation_appendix.png"
+echo ""
+echo "Statistical reports:"
+echo "  ${OUTPUT_BASE}/stats/stats_report.txt   (human-readable p-values)"
+echo "  ${OUTPUT_BASE}/stats/stats_report.tex   (LaTeX table for appendix)"
+echo "  ${OUTPUT_BASE}/stats/stats_report.csv   (CSV for manual inspection)"

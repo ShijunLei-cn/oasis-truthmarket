@@ -485,11 +485,11 @@ Utility = (Product Quality Utility) - (Purchase Price)
 - Buy LQ advertised as LQ at price ${lq_price:.1f}: Utility = ${lq_utility:.1f} - ${lq_price:.1f} = ${lq_utility - lq_price:.1f}
 - Buy HQ advertised as LQ at price ${lq_price:.1f}: Utility = ${hq_utility:.1f} - ${lq_price:.1f} = ${hq_utility - lq_price:.1f} (great deal!)
 
-**Important:** 
-- The price is set by the seller (they can set any price they want)
+**Important:**
+- **Prices are FIXED by the market**: HQ products cost ${hq_price:.1f}, LQ products cost ${lq_price:.1f}. Sellers cannot change these prices.
 - You only see the **advertised quality** and **price** before purchasing
 - You discover the **true quality** only after purchase
-- If you pay for HQ but receive LQ, you get cheated (utility = ${lq_utility:.1f} - price, which could be negative if price > ${lq_utility:.1f})
+- If you pay for HQ but receive LQ, you get cheated (utility = ${lq_utility:.1f} - ${hq_price:.1f} = ${lq_utility - hq_price:.1f})
 """
         ).strip(),
         "reputation_and_warrant": (
@@ -522,8 +522,8 @@ Utility = (Product Quality Utility) - (Purchase Price)
 - Buy LQ advertised as LQ at price ${lq_price:.1f}, with warrant, challenge: 
   Utility = ${lq_utility:.1f} - ${lq_price:.1f} - ${challenge_cost:.1f} = ${lq_utility - lq_price - challenge_cost:.1f} (challenge fails because product matches advertisement)
 
-**Important:** 
-- The price is set by the seller (they can set any price they want)
+**Important:**
+- **Prices are FIXED by the market**: HQ products cost ${hq_price:.1f}, LQ products cost ${lq_price:.1f}. Sellers cannot change these prices.
 - You can only challenge products with a **warrant** (has_warrant = True)
 - You only see the **advertised quality**, **price**, and **warrant status** before purchasing
 - You discover the **true quality** only after purchase
@@ -562,7 +562,7 @@ You are a Buyer Agent in a multi-round online marketplace simulation ('{{market_
   - High quality (HQ) products: ${hq_utility:.1f} utility
   - Low quality (LQ) products: ${lq_utility:.1f} utility
 - **Your Utility Formula:** Utility = (Product Quality Utility) - (Purchase Price)
-- **The price is set by sellers** - they can set any price they want (default: HQ ${hq_price:.1f}, LQ ${lq_price:.1f})
+- **Prices are FIXED by the market** - HQ products are always ${hq_price:.1f}, LQ products are always ${lq_price:.1f}. Sellers cannot set custom prices.
 - **You only see advertised quality and price before purchasing** - you discover true quality after purchase
 
 ## Reputation & Warranties
@@ -575,7 +575,7 @@ You are a Buyer Agent in a multi-round online marketplace simulation ('{{market_
 # PRICING & UTILITY CALCULATION
 {{payoff_matrix}}
 
-**Remember:** The payoff matrix shows the calculation formula. The actual utility depends on the price set by sellers, which can vary!
+**Remember:** Prices are fixed by the market. Use the payoff matrix above to calculate your exact expected utility before purchasing.
 
 # TASK: YOUR DECISION WORKFLOW FOR THIS ROUND
 Based on all the information above, decide which product you should purchase to maximize your cumulative utility. (You should only purchase once per round!)

@@ -209,51 +209,50 @@ echo "Model type: ${MODEL_TYPE}"
 
 
 
-# ==================== RQ3: Buyer Communication ====================
+# ==================== RQ3: Buyer Communication (Adversarial Setting) ====================
 echo ""
 echo "=========================================="
-echo "RQ3: Buyer Adaptation Mechanisms (Buyer Communication)"
+echo "RQ3: Buyer Collective Defense Against Seller Coordination"
 echo "=========================================="
+#
+# ADVERSARIAL RQ3 DESIGN (clean causal isolation):
+#
+#   Baseline (Seller comm active, NO buyer comm):
+#     → Reuse existing RQ2 Real-channel conditions:
+#         rq2/r_wsc_R_pressure_quickprofits   (Rep, seller-only comm, Real, PQP)
+#         rq2/rw_wsc_R_pressure_quickprofits  (RW,  seller-only comm, Real, PQP)
+#
+#   Treatment (Both seller + buyer comm, Real channel):
+#     → New conditions below:
+#         rq3/r_both_R_pqp    (Rep, both comm, Real, PQP)
+#         rq3/rw_both_R_pqp   (RW,  both comm, Real, PQP)
+#
+#   Research Question:
+#     "When sellers are already coordinating deception under Pressure-Quick-Profits,
+#      does adding buyer-to-buyer communication enable collective defense?"
+#
+#   The ONLY difference between baseline and treatment is whether BUYERS can communicate.
+#   Seller communication and constraints are identical across all 4 conditions.
 
 echo ""
-echo "Running Reputation-Only + Buyer Communication + Fake Channel..."
+echo "Running Rep + Both Comm + Real + Pressure-Quick-Profits (RQ3 Treatment)..."
 python ./example/run_single_config_experiment.py \
-    --experiment-id ${MODEL_TYPE}/paper/rq3/r_wbc_F \
-    --market-type reputation_only \
-    --communication both \
-    --communication-channel-type Fake \
-    --config "${CONFIG_FILE}" \
-    --Posts4Seller pressure_quickprofits 
-
-echo ""
-echo "Running Reputation-Only + Buyer Communication + Real Channel..."
-python ./example/run_single_config_experiment.py \
-    --experiment-id ${MODEL_TYPE}/paper/rq3/r_wbc_R \
+    --experiment-id ${MODEL_TYPE}/paper/rq3/r_both_R_pqp \
     --market-type reputation_only \
     --communication both \
     --communication-channel-type Real \
     --config "${CONFIG_FILE}" \
-    --Posts4Seller pressure_quickprofits 
+    --Posts4Seller pressure_quickprofits
 
 echo ""
-echo "Running Reputation+Warrant + Buyer Communication + Fake Channel..."
+echo "Running Rep+Warrant + Both Comm + Real + Pressure-Quick-Profits (RQ3 Treatment)..."
 python ./example/run_single_config_experiment.py \
-    --experiment-id ${MODEL_TYPE}/paper/rq3/rw_wbc_F \
-    --market-type reputation_and_warrant \
-    --communication both \
-    --communication-channel-type Fake \
-    --config "${CONFIG_FILE}" \
-    --Posts4Seller pressure_quickprofits 
-
-echo ""
-echo "Running Reputation+Warrant + Buyer Communication + Real Channel..."
-python ./example/run_single_config_experiment.py \
-    --experiment-id ${MODEL_TYPE}/paper/rq3/rw_wbc_R \
+    --experiment-id ${MODEL_TYPE}/paper/rq3/rw_both_R_pqp \
     --market-type reputation_and_warrant \
     --communication both \
     --communication-channel-type Real \
     --config "${CONFIG_FILE}" \
-    --Posts4Seller pressure_quickprofits 
+    --Posts4Seller pressure_quickprofits
 
 echo ""
 echo "=========================================="
