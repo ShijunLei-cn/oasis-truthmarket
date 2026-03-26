@@ -54,18 +54,20 @@ from fig_utils import (
 
 setup_style()
 
-# ── Directory mapping ─────────────────────────────────────────────────────────
+# ── Directory mapping — Adversarial design ────────────────────────────────────
+# Baseline = RQ2 seller-only Real+PQP conditions (seller coordination active)
+# Treatment = RQ3 both-comm Real+PQP (adds buyer communication on top)
 DIRS: Dict[str, str] = {
-    "Rep":                "r_wbc_F",
-    "Rep, Comm":          "r_wbc_R",
-    "Rep+Warrant":        "rw_wbc_F",
-    "Rep+Warrant, Comm":  "rw_wbc_R",
+    "Rep":                "../rq2/r_wsc_R_pressure_quickprofits",
+    "Rep, +BComm":        "r_both_R_pqp",
+    "Rep+Warrant":        "../rq2/rw_wsc_R_pressure_quickprofits",
+    "Rep+Warrant, +BComm": "rw_both_R_pqp",
 }
 
 # ── Paired groups: (no-comm label, comm label, mechanism name) ────────────────
 PAIRS: List[Tuple[str, str, str]] = [
-    ("Rep",         "Rep, Comm",         "Rep Only"),
-    ("Rep+Warrant", "Rep+Warrant, Comm", "Rep+Warrant"),
+    ("Rep",         "Rep, +BComm",         "Rep Only"),
+    ("Rep+Warrant", "Rep+Warrant, +BComm", "Rep+Warrant"),
 ]
 
 # Consistent with RQ1/RQ2 color conventions:
@@ -110,7 +112,7 @@ def fig7_market_outcomes(base_dir: str, output_dir: Path) -> None:
     fig, axes = plt.subplots(2, 2, figsize=(9, 7.2),
                               gridspec_kw={"hspace": 0.55, "wspace": 0.38})
     fig.suptitle(
-        "Buyer Communication Boosts Market Utility in Both Mechanisms",
+        "Adversarial Design: Buyer Communication vs Coordinated Seller Deception",
         fontsize=11, fontweight="bold",
     )
     fig.subplots_adjust(top=0.91, bottom=0.14)
@@ -219,15 +221,15 @@ def fig7_market_outcomes(base_dir: str, output_dir: Path) -> None:
     # ── Global legend ─────────────────────────────────────────────────────
     legend_handles = [
         mpatches.Patch(facecolor=COLORS["good_mid"],  edgecolor="#555",
-                       label="Rep – Base (no buyer comm)"),
+                       label="Rep – Seller-Only (baseline)"),
         mpatches.Patch(facecolor=COLORS["good_mid"],  edgecolor="#555",
                        hatch=HATCH_COMM,
-                       label="Rep – +Buyer Comm"),
+                       label="Rep – Both (adversarial treatment)"),
         mpatches.Patch(facecolor=COLORS["good_dark"], edgecolor="#555",
-                       label="Rep+Warrant – Base"),
+                       label="Rep+Warrant – Seller-Only"),
         mpatches.Patch(facecolor=COLORS["good_dark"], edgecolor="#555",
                        hatch=HATCH_COMM,
-                       label="Rep+Warrant – +Buyer Comm"),
+                       label="Rep+Warrant – Both"),
     ]
     fig.legend(handles=legend_handles, loc="lower center", ncol=2,
                bbox_to_anchor=(0.5, 0.00), frameon=False, fontsize=8.5)
@@ -294,7 +296,7 @@ def fig8_round_utility(base_dir: str, output_dir: Path) -> None:
         sharey=True,
     )
     fig.suptitle(
-        "Buyer Communication Accelerates Convergence to Higher Utility",
+        "Adversarial Design: Round-Level Buyer Utility (Seller-Only vs Both Comm)",
         fontsize=11, fontweight="bold",
     )
     fig.subplots_adjust(top=0.88)
@@ -306,7 +308,7 @@ def fig8_round_utility(base_dir: str, output_dir: Path) -> None:
     # Rep+BComm    = good_mid green (improvement from buyer comm)
     (base_ms, base_ss), (comm_ms, comm_ss) = _plot_mechanism_lines(
         ax_rep,
-        base_lbl="Rep", comm_lbl="Rep, Comm",
+        base_lbl="Rep", comm_lbl="Rep, +BComm",
         base_dir=base_dir,
         base_color=COLORS["neutral"],      # gray = neutral baseline
         comm_color=COLORS["good_mid"],     # green = comm brings improvement
@@ -314,7 +316,7 @@ def fig8_round_utility(base_dir: str, output_dir: Path) -> None:
 
     # Per-round significance markers
     df_rep  = _load(base_dir, "Rep")
-    df_repc = _load(base_dir, "Rep, Comm")
+    df_repc = _load(base_dir, "Rep, +BComm")
     if not df_rep.empty and not df_repc.empty:
         for r in rounds:
             v_r  = [float(df_rep [(df_rep ["run_id"] == rid) &
@@ -342,7 +344,7 @@ def fig8_round_utility(base_dir: str, output_dir: Path) -> None:
             arrowprops=dict(arrowstyle="->", color=COLORS["good_mid"], lw=1.2),
         )
 
-    ax_rep.set_title("Rep Mechanism: Effect of Buyer Communication",
+    ax_rep.set_title("Rep Mechanism: Seller-Only vs +Buyer Comm (Adversarial)",
                      fontsize=10, pad=4)
     ax_rep.set_xlabel("Market Round", fontsize=10)
     ax_rep.set_ylabel("Buyer Utility (per round, mean ± std)", fontsize=10)
@@ -355,7 +357,7 @@ def fig8_round_utility(base_dir: str, output_dir: Path) -> None:
     # Rep+Warrant+BComm = good_dark dashed (marginal further improvement)
     (rw_ms, rw_ss), (rwc_ms, rwc_ss) = _plot_mechanism_lines(
         ax_rw,
-        base_lbl="Rep+Warrant", comm_lbl="Rep+Warrant, Comm",
+        base_lbl="Rep+Warrant", comm_lbl="Rep+Warrant, +BComm",
         base_dir=base_dir,
         base_color=COLORS["good_dark"],          # solid dark green
         comm_color=COLORS["good_dark"],          # same color, dashed
@@ -366,7 +368,7 @@ def fig8_round_utility(base_dir: str, output_dir: Path) -> None:
 
     # Per-round significance: RW vs RW+Comm
     df_rw  = _load(base_dir, "Rep+Warrant")
-    df_rwc = _load(base_dir, "Rep+Warrant, Comm")
+    df_rwc = _load(base_dir, "Rep+Warrant, +BComm")
     if not df_rw.empty and not df_rwc.empty:
         for r in rounds:
             v_rw  = [float(df_rw [(df_rw ["run_id"] == rid) &
@@ -395,7 +397,7 @@ def fig8_round_utility(base_dir: str, output_dir: Path) -> None:
                 arrowprops=dict(arrowstyle="->", color="#43a047", lw=1.2),
             )
 
-    ax_rw.set_title("Rep+Warrant Mechanism: Effect of Buyer Communication",
+    ax_rw.set_title("Rep+Warrant Mechanism: Seller-Only vs +Buyer Comm (Adversarial)",
                     fontsize=10, pad=4)
     ax_rw.set_xlabel("Market Round", fontsize=10)
     ax_rw.set_xticks(rounds)
