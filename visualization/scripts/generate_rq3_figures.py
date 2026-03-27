@@ -423,7 +423,7 @@ def main():
     parser.add_argument("--base-dir",
                         default="experiments/gpt-4o-mini/paper/rq3")
     parser.add_argument("--output-dir",
-                        default="visualization/figs/paper/rq3")
+                        default="visualization/figs/paper/rq3")   #TODO: Need to check
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
