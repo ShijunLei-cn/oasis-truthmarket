@@ -86,6 +86,6 @@ for label, d in DIRS.items():
     if df.empty:
         continue
     s = per_run_product_stats(df)
-    print(f" & {fmt(s['hq_auth_on_sale'])} & {fmt(s['hq_auth_sold'])} & {fmt(s['lq_auth_on_sale'])} & {fmt(s['lq_auth_sold'])} & {fmt(s['hq_cfeit_on_sale'])} & {fmt(s['hq_cfeit_sold'])} \\\\")
+    print(f"{label} & {fmt(s['hq_auth_on_sale'])} & {fmt(s['hq_auth_sold'])} & {fmt(s['lq_auth_on_sale'])} & {fmt(s['lq_auth_sold'])} & {fmt(s['hq_cfeit_on_sale'])} & {fmt(s['hq_cfeit_sold'])} \\\\")
 print(r"\bottomrule")
 print(r"\end{tabular}")

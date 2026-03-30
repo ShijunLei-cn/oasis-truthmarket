@@ -45,7 +45,8 @@ def generate_latex_table(
     bold_columns: Optional[List[int]] = None,
     bold_rows: Optional[List[int]] = None,
     multicolumn_headers: Optional[Dict[int, Tuple[int, str]]] = None,
-    alignment: str = "c"
+    alignment: str = "c",
+    subheaders: Optional[List[str]] = None,
 ) -> str:
     """
     Generate a LaTeX table in the format required for the ICML paper.
@@ -80,24 +81,27 @@ def generate_latex_table(
 
     # Add headers
     if multicolumn_headers:
-        # Handle multicolumn headers
+        # Handle multicolumn headers — skip indices covered by a preceding span
         header_line = []
-        col_idx = 0
+        skip_until = -1
         for i, header in enumerate(headers):
+            if i <= skip_until:
+                continue
             if i in multicolumn_headers:
                 span, text = multicolumn_headers[i]
                 header_line.append(f"\\multicolumn{{{span}}}{{{alignment}}}{{{text}}}")
-                col_idx += span
+                skip_until = i + span - 1
             else:
-                # Regular header
-                if col_idx < num_cols:
-                    header_line.append(f"\\textbf{{{header}}}")
-                    col_idx += 1
+                header_line.append(f"\\textbf{{{header}}}")
         lines.append("    " + " & ".join(header_line) + " \\\\")
     else:
         # Regular headers
         formatted_headers = [f"\\textbf{{{h}}}" for h in headers]
         lines.append("    " + " & ".join(formatted_headers) + " \\\\")
+
+    # Optional sub-header row (e.g. "On sale & Sold" labels under multicolumn groups)
+    if subheaders:
+        lines.append("    " + " & ".join(subheaders) + " \\\\")
 
     # Add midrule after headers
     lines.append("    \\midrule")
@@ -301,7 +305,7 @@ def create_product_quality_table(
     table_code = generate_latex_table(
         caption="Product Quality Statistics",
         label="rq1_product_quality",
-        headers=["Condition", "On sale", "Sold", "On sale", "Sold", "On sale", "Sold"],
+        headers=["Condition", "", "", "", "", "", ""],
         rows=rows,
         table_type="table*",
         position="t",
@@ -309,7 +313,8 @@ def create_product_quality_table(
             1: (2, "HQ Authentic"),
             3: (2, "LQ Authentic"),
             5: (2, "HQ Counterfeit")
-        }
+        },
+        subheaders=["", "On sale", "Sold", "On sale", "Sold", "On sale", "Sold"],
     )
 
     save_latex_table(table_code, output_path)
@@ -547,7 +552,8 @@ def create_buyer_comm_quality_table(
             1: (2, "HQ Authentic"),
             3: (2, "LQ Authentic"),
             5: (2, "HQ Counterfeit")
-        }
+        },
+        subheaders=["", "On sale", "Sold", "On sale", "Sold", "On sale", "Sold"],
     )
 
     save_latex_table(table_code, output_path)

@@ -42,6 +42,12 @@ python3 visualization/scripts/generate_rq3_figures.py \
     --base-dir   "${EXPERIMENT_PREFIX}/rq3" \
     --output-dir "${OUTPUT_BASE}/rq3"
 
+echo ""
+echo "── RQ3: Tables ───────────────────────────────────────"
+python3 visualization/scripts/generate_rq3_tables.py \
+    --base-dir   "${EXPERIMENT_PREFIX}" \
+    --output-dir "visualization/table/paper/rq3"
+
 # ── Statistical Significance Report ─────────────────────────
 echo ""
 echo "── Statistical Significance Report ───────────────────"

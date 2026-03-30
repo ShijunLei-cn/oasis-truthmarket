@@ -231,3 +231,5 @@ visualization/cache/
 paper/*
 .github/
 .claude/
+
+.omc
