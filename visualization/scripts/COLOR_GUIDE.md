@@ -11,39 +11,51 @@
 
 | Color role | Hex | Usage |
 |---|---|---|
-| `good_dark`  | `#1a7a3a` | Best / Rep+Warrant positive bars; key "good outcome" emphasis |
-| `good_mid`   | `#4caf72` | Rep positive bars (lighter shade of same green hue) |
-| `good_light` | `#a8d8b8` | Stacked honest-profit segment inside bars |
-| `bad_dark`   | `#c0392b` | Deception bars (Rep), high-manipulation probe bars |
-| `bad_mid`    | `#e57373` | Deception bars (Rep+Warrant, near-zero) |
-| `bad_light`  | `#ffcdd2` | Stacked dishonest-profit segment inside bars |
-| `neutral`    | `#9e9e9e` | Baseline / no-comm end of dumbbell; gray line in evolution plots |
-| `neutral_dark`| `#424242`| Dark annotation text, secondary axis labels |
+| `good_dark` | `#1D6B3A` | Rep+Warrant positive bars; key "good outcome" emphasis |
+| `good_mid` | `#52B788` | Rep positive bars (lighter shade of same green hue) |
+| `good_light` | `#C8E6C9` | Stacked honest-profit segment inside bars |
+| `bad_dark` | `#AE2012` | Deception bars (Rep), high-manipulation probe bars |
+| `bad_mid` | `#D4866A` | Deception bars (Rep+Warrant, near-zero) |
+| `bad_light` | `#F4C9BA` | Stacked dishonest-profit segment inside bars |
+| `neutral` | `#6B6B6B` | Baseline / no-comm end of dumbbell; gray line in evolution plots |
+| `neutral_dark` | `#2D2D2D` | Dark annotation text, secondary axis labels |
 
 ## Product Quality Colors
 
 | Color role | Hex | Usage |
 |---|---|---|
-| `hq_auth`    | `#2e7d32` | HQ Authentic sold — green (genuinely good product) |
-| `lq_auth`    | `#66bb6a` | LQ Authentic sold — lighter green (honest, lower quality) |
-| `counterfeit`| `#c62828` | HQ Counterfeit sold — red (fraud: advertised HQ, delivered LQ) |
+| `hq_auth` | `#2D6A4F` | HQ Authentic — 深绿色 (genuinely good product) |
+| `lq_auth` | `#74C69D` | LQ Authentic — 浅绿色 (honest, lower quality) |
+| `counterfeit` | `#9B2226` | HQ Counterfeit — 深红色 (fraud: advertised HQ, delivered LQ) |
 
-## RQ3 Mechanism Colors
+## Communication & Mechanism Colors
+
+| Color role | Hex | Usage |
+|---|---|---|
+| `comm_dark` | `#1565c0` | Rep+Warrant + Comm (深蓝色) |
+| `comm_mid` | `#64b5f6` | Rep + Comm (浅蓝色) |
+| `comm_baseline` | `#90caf9` | Baseline for comm comparison |
+| `rep_dark` | `#1a7a3a` | Rep only (深绿色) |
+| `rep_mid` | `#4caf72` | Rep (浅绿色) |
+| `warrant_dark` | `#1565c0` | Rep+Warrant (深蓝色) |
+| `warrant_mid` | `#64b5f6` | Rep+Warrant (浅蓝色) |
+
+## RQ3 Mechanism Colors (Line Charts)
 
 Used in Fig 7 and Fig 8 to distinguish the two market mechanisms:
 
 | Condition | Color | Line style | Rationale |
 |---|---|---|---|
-| Rep (no comm)       | `#81c784` (light green)   | solid   | Mechanism base, positive metric |
-| Rep + Buyer Comm    | `#2e7d32` (dark green)    | dashed  | Same mechanism, darker = improvement |
-| Rep+Warrant (no comm)| `#64b5f6` (light blue)  | solid   | Blue = warrant mechanism |
-| Rep+Warrant + Comm  | `#1565c0` (dark blue)     | dashed  | Same warrant, darker = with comm |
+| Rep (no comm) | `#AAAAAA` (gray) | solid | Baseline |
+| Rep + Buyer Comm | `#4caf72` (green) | dashed | Same mechanism, green for Rep |
+| Rep+Warrant (no comm) | `#64b5f6` (blue) | solid | Blue = warrant mechanism |
+| Rep+Warrant + Comm | `#1565c0` (dark blue) | dashed | Darker blue = with comm |
 
-> **Why two hues for RQ3?**  
-> RQ3 compares two *mechanisms* (Rep vs Rep+Warrant) each with/without buyer  
-> communication. Using green for Rep and blue for Rep+Warrant makes the  
-> mechanism contrast visually immediate. Both hues are applied dark→light for  
-> the communication contrast within each mechanism.
+> **颜色规则 (Color Rules)**：
+> - **红色系** (`bad_dark`, `bad_mid`, `counterfeit`): 用于欺诈相关统计
+> - **深绿色** (`hq_auth`): 用于高质量正品
+> - **浅绿色** (`lq_auth`): 用于低质量正品  
+> - **蓝色系** (`comm_dark`, `comm_mid`, `warrant_*`): 用于Buyer Communication相关
 
 ## Significance Marker Convention
 
@@ -51,8 +63,8 @@ All significance markers use **black text** positioned above the compared bars:
 
 | Marker | Threshold | Test |
 |---|---|---|
-| `*`   | p < 0.05  | Mann-Whitney U (for total counts/sums) |
-| `**`  | p < 0.01  | Mann-Whitney U |
+| `*` | p < 0.05 | Mann-Whitney U (for total counts/sums) |
+| `**` | p < 0.01 | Mann-Whitney U |
 | `***` | p < 0.001 | Mann-Whitney U or z-score proportion test |
 | *(none)* | p ≥ 0.05 | Not shown (no marker drawn) |
 
@@ -81,7 +93,7 @@ Output filenames encode the finding, not the chart type:
 |---|---|
 | `rq1_warrant_vs_rep_deception_and_profit.png` | RQ1 main: profit & deceptions |
 | `rq1_exit_loophole_vulnerability.png` | RQ1: probe detection by vulnerability |
-| `rq1_product_mix_appendix.png` | RQ1 appendix: sold product composition |
+| `rq1_product_mix_appendix.png` | RQ1 appendix: listed product composition |
 | `rq2_seller_comm_deception_by_constraint.png` | RQ2: deceptions × constraint × condition |
 | `rq2_profit_decomposition_honest_vs_dishonest.png` | RQ2: honest vs dishonest profit split |
 | `rq2_product_mix_appendix.png` | RQ2 appendix: product quality by constraint |

@@ -1,0 +1,74 @@
+{
+    "data_dir": "data",
+    "output_dir": "visualization/figs/paper/collusion_analysis",
+    "case_analysis_subdir": "case_analysis",
+    "collusion_types": {
+        "1": {
+            "name": "Direct Collusion Proposal",
+            "description": "Explicit invitation to coordinate deception",
+            "collusive": true,
+            "severity": "high"
+        },
+        "2": {
+            "name": "Deception Strategy Broadcast",
+            "description": "Sharing personal deceptive plans",
+            "collusive": true,
+            "severity": "high"
+        },
+        "3": {
+            "name": "Collusion Coordination",
+            "description": "Building on others' deceptive strategies",
+            "collusive": true,
+            "severity": "medium"
+        },
+        "4": {
+            "name": "Social Normalization",
+            "description": "Framing deception as normal behavior",
+            "collusive": true,
+            "severity": "medium"
+        },
+        "5": {
+            "name": "Neutral Information",
+            "description": "Non-deceptive market information",
+            "collusive": false,
+            "severity": "none"
+        },
+        "6": {
+            "name": "Anti-Collusion",
+            "description": "Explicit opposition to deception",
+            "collusive": false,
+            "severity": "none"
+        }
+    },
+    "experiment_conditions": {
+        "r_wsc_F": "Reputation-only (No Communication)",
+        "r_wsc_R": "Reputation-only (With Communication)",
+        "rw_wsc_F": "Reputation+Warrant (No Communication)",
+        "rw_wsc_R": "Reputation+Warrant (With Communication)"
+    },
+    "constraint_types": [
+        "policy_making",
+        "pressure_quickprofits",
+        "psychological-based-attack"
+    ],
+    "colors": {
+        "collusive_high": "#9B2226",
+        "collusive_medium": "#D4866A",
+        "neutral": "#6B6B6B",
+        "anti_collusion": "#2D6A4F",
+        "rep_only": "#AAAAAA",
+        "rep_comm": "#52B788",
+        "warrant": "#2B6CB0",
+        "warrant_comm": "#1A4E8A"
+    },
+    "figure_settings": {
+        "dpi": 300,
+        "format": "png",
+        "style": "academic"
+    },
+    "key_metrics": {
+        "deception_rate_no_collusion": 0.0495,
+        "deception_rate_with_collusion": 0.4129,
+        "increase_ratio": 8.4
+    }
+}

@@ -32,18 +32,22 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import numpy as np
 import pandas as pd
+from scipy.stats import gaussian_kde
 
 # Allow running from project root
 sys.path.insert(0, str(Path(__file__).parent))
 from fig_utils import (
     COLORS,
     setup_style,
+    label_panel,
     load_results_df,
     load_probes_df,
     per_run_values,
     count_deceptions,
     sum_seller_profit,
+    sum_buyer_utility,
     product_quality_counts,
+    product_quality_counts_all,
     mannwhitney_p,
     proportion_ztest_p,
     sig_marker_display,
@@ -65,10 +69,89 @@ LABEL_RW = "Rep+Warrant"
 # Figure 1 : Seller Profit & Deceptions — main result
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _kde_panel(
+    ax: plt.Axes,
+    vals_a: list, vals_b: list,
+    label_a: str, label_b: str,
+    color_a: str, color_b: str,
+    xlabel: str, title: str,
+    p_val: float,
+    annotation: str = "",
+) -> None:
+    """Overlapping KDE distribution panel for two conditions.
+
+    Shows: filled KDE curve, dashed mean line + μ label, rug of individual points.
+    Handles degenerate case (std ≈ 0) by adding tiny noise for KDE only.
+    """
+    rng = np.random.default_rng(42)
+    arr_a = np.array(vals_a, dtype=float)
+    arr_b = np.array(vals_b, dtype=float)
+
+    all_vals = np.concatenate([arr_a, arr_b])
+    span = max(all_vals.max() - all_vals.min(), 1.0)
+    x_lo = all_vals.min() - span * 0.35
+    x_hi = all_vals.max() + span * 0.35
+    xs = np.linspace(x_lo, x_hi, 500)
+
+    y_peaks = []
+    for arr, color, label in [
+        (arr_a, color_a, label_a),
+        (arr_b, color_b, label_b),
+    ]:
+        kde_arr = arr.copy()
+        if np.std(kde_arr) < 0.1:
+            # degenerate (all zeros) — add tiny noise so KDE is a narrow spike
+            kde_arr = kde_arr + rng.normal(0, max(span * 0.02, 0.3), len(kde_arr))
+        kde = gaussian_kde(kde_arr, bw_method=0.7)
+        ys = kde(xs)
+        y_peaks.append(float(ys.max()))
+        ax.fill_between(xs, ys, alpha=0.14, color=color)
+        ax.plot(xs, ys, color=color, lw=1.6, label=label, zorder=3)
+
+    y_max = max(y_peaks) if y_peaks else 1.0
+
+    # Mean dashed vertical lines + μ labels
+    for arr, color in [(arr_a, color_a), (arr_b, color_b)]:
+        m = float(np.mean(arr))
+        ax.axvline(m, color=color, lw=1.2, ls="--", alpha=0.85, zorder=4)
+        ax.text(m, y_max * 1.07, f"μ={m:.1f}",
+                ha="center", va="bottom", fontsize=8,
+                color=color, fontweight="bold")
+
+    # Rug: individual per-run values along x-axis
+    rug_y = -y_max * 0.055
+    for arr, color in [(arr_a, color_a), (arr_b, color_b)]:
+        ax.scatter(arr, np.full(len(arr), rug_y),
+                   color=color, s=30, marker="|",
+                   linewidths=1.5, alpha=0.9, zorder=5, clip_on=False)
+
+    # Significance marker (top-right corner)
+    marker = sig_marker_display(p_val)
+    if marker:
+        ax.text(0.97, 0.96, marker,
+                transform=ax.transAxes, ha="right", va="top",
+                fontsize=10, color="black", fontweight="bold")
+
+    # Optional annotation box
+    if annotation:
+        ax.text(0.97, 0.80, annotation,
+                transform=ax.transAxes, ha="right", va="top",
+                fontsize=7, color=COLORS["good_dark"],
+                bbox=dict(boxstyle="round,pad=0.3", facecolor="#e8f5e9",
+                          edgecolor=COLORS["good_dark"], alpha=0.9, linewidth=0.8))
+
+    ax.set_xlabel(xlabel, fontsize=10)
+    ax.set_ylabel("Density", fontsize=10)
+    ax.set_title(title, fontsize=10, pad=5, loc="left")
+    ax.set_ylim(rug_y * 2.2, y_max * 1.32)
+    ax.set_xlim(x_lo, x_hi)
+    ax.legend(frameon=False, fontsize=8, loc="upper left")
+
+
 def fig1_profit_and_deceptions(
     r_dir: str, rw_dir: str, output_dir: Path
 ) -> None:
-    """Two-panel bar chart: seller profit (left) and deceptions (right)."""
+    """Two-panel KDE distribution figure: seller profit (left) and deceptions (right)."""
 
     df_r  = load_results_df(r_dir)
     df_rw = load_results_df(rw_dir)
@@ -76,119 +159,71 @@ def fig1_profit_and_deceptions(
         print("[Fig1] Missing data, skipping.")
         return
 
-    # ── Per-run values ──────────────────────────────────────────────────────
     profit_r  = per_run_values(df_r,  sum_seller_profit)
     profit_rw = per_run_values(df_rw, sum_seller_profit)
     dec_r     = per_run_values(df_r,  count_deceptions)
     dec_rw    = per_run_values(df_rw, count_deceptions)
+    util_r    = per_run_values(df_r,  sum_buyer_utility)
+    util_rw   = per_run_values(df_rw, sum_buyer_utility)
 
-    # ── Statistics ─────────────────────────────────────────────────────────
-    p_profit = mannwhitney_p(profit_r, profit_rw)
-    p_dec    = mannwhitney_p(dec_r,    dec_rw)
+    p_profit  = mannwhitney_p(profit_r, profit_rw)
+    p_dec     = mannwhitney_p(dec_r,    dec_rw)
+    p_utility = mannwhitney_p(util_r,   util_rw)
 
-    mean_p_r,  std_p_r  = np.mean(profit_r),  np.std(profit_r,  ddof=1)
-    mean_p_rw, std_p_rw = np.mean(profit_rw), np.std(profit_rw, ddof=1)
-    mean_d_r,  std_d_r  = np.mean(dec_r),     np.std(dec_r,     ddof=1)
-    mean_d_rw, std_d_rw = np.mean(dec_rw),    np.std(dec_rw,    ddof=1)
+    mean_p_r  = float(np.mean(profit_r))
+    mean_p_rw = float(np.mean(profit_rw))
+    lift_pct  = (mean_p_rw - mean_p_r) / mean_p_r * 100 if mean_p_r > 0 else 0
+    mean_d_rw = float(np.mean(dec_rw))
 
-    lift_pct = (mean_p_rw - mean_p_r) / mean_p_r * 100 if mean_p_r > 0 else 0
+    mean_u_r  = float(np.mean(util_r))
+    mean_u_rw = float(np.mean(util_rw))
+    util_lift = (mean_u_rw - mean_u_r) / abs(mean_u_r) * 100 if mean_u_r != 0 else 0
 
-    # ── Layout ─────────────────────────────────────────────────────────────
-    fig, (ax_p, ax_d) = plt.subplots(1, 2, figsize=(8, 4.5),
-                                      gridspec_kw={"wspace": 0.38})
+    fig, (ax_p, ax_d, ax_u) = plt.subplots(1, 3, figsize=(11.0, 3.8),
+                                             gridspec_kw={"wspace": 0.42})
     fig.suptitle(
         "Warrant Eliminates Deception; Honest Trade Rises by 55%",
-        fontsize=11, fontweight="bold", y=1.01,
+        fontsize=11, fontweight="bold", y=1.02,
     )
 
-    BAR_W = 0.42
-    xs = np.array([0.0, 1.0])
-    labels = [LABEL_R, LABEL_RW]
-
-    # ── Left panel : Seller Profit ──────────────────────────────────────────
-    profit_means = [mean_p_r,  mean_p_rw]
-    profit_stds  = [std_p_r,   std_p_rw]
-    profit_colors = [COLORS["good_mid"], COLORS["good_dark"]]
-
-    bars_p = ax_p.bar(
-        xs, profit_means,
-        width=BAR_W,
-        color=profit_colors,
-        edgecolor="white", linewidth=0.5,
-        yerr=profit_stds,
-        capsize=4,
-        error_kw={"elinewidth": 1.2, "ecolor": "#333333"},
-        zorder=3,
-    )
-    ax_p.set_xticks(xs)
-    ax_p.set_xticklabels(labels, fontsize=10)
-    ax_p.set_ylabel("Total Seller Profit (per run)", fontsize=10)
-    ax_p.set_title("Seller Profit", fontsize=10, pad=6)
-    ax_p.set_ylim(0, max(profit_means) * 1.35)
-
-    # Significance bracket
-    y_top_p = max(mean_p_r + std_p_r, mean_p_rw + std_p_rw)
-    add_significance_bracket(ax_p, xs[0], xs[1], y_top_p, p_profit,
-                              h_frac=0.06, fontsize=10)
-
-    # Lift annotation
-    ax_p.annotate(
-        f"+{lift_pct:.0f}%",
-        xy=(xs[1], mean_p_rw + std_p_rw),
-        xytext=(xs[1] + 0.28, mean_p_rw * 1.10),
-        fontsize=9, color=COLORS["good_dark"], fontweight="bold",
-        arrowprops=dict(arrowstyle="->", color=COLORS["good_dark"], lw=1.2),
+    _kde_panel(
+        ax_p,
+        profit_r, profit_rw,
+        LABEL_R, LABEL_RW,
+        COLORS["good_mid"], COLORS["good_dark"],
+        xlabel="Total Seller Profit (per run)",
+        title="(a) Seller Profit",
+        p_val=p_profit,
+        annotation=f"+{lift_pct:.0f}% mean profit",
     )
 
-    # ── Right panel : Deceptions ────────────────────────────────────────────
-    dec_means  = [mean_d_r,  mean_d_rw]
-    dec_stds   = [std_d_r,   std_d_rw]
-    dec_colors = [COLORS["bad_dark"], COLORS["neutral"]]
-
-    bars_d = ax_d.bar(
-        xs, dec_means,
-        width=BAR_W,
-        color=dec_colors,
-        edgecolor="white", linewidth=0.5,
-        yerr=dec_stds,
-        capsize=4,
-        error_kw={"elinewidth": 1.2, "ecolor": "#333333"},
-        zorder=3,
+    dec_annot = "0 deceptions\nin all 5 runs" if mean_d_rw == 0 else ""
+    _kde_panel(
+        ax_d,
+        dec_r, dec_rw,
+        LABEL_R, LABEL_RW,
+        COLORS["bad_dark"], COLORS["neutral"],
+        xlabel="Deceptive Transactions (per run)",
+        title="(b) Deceptions",
+        p_val=p_dec,
+        annotation=dec_annot,
     )
-    ax_d.set_xticks(xs)
-    ax_d.set_xticklabels(labels, fontsize=10)
-    ax_d.set_ylabel("Deceptive Transactions (per run)", fontsize=10)
-    ax_d.set_title("Deceptions", fontsize=10, pad=6)
-    ax_d.set_ylim(0, max(dec_means) * 1.45)
 
-    # Significance bracket
-    y_top_d = max(mean_d_r + std_d_r, mean_d_rw + std_d_rw)
-    add_significance_bracket(ax_d, xs[0], xs[1], y_top_d, p_dec,
-                              h_frac=0.07, fontsize=10)
-
-    # "0 deceptions" annotation
-    if mean_d_rw == 0:
-        add_text_box(
-            ax_d, xs[1], max(dec_means) * 0.08,
-            "0 deceptions\nin all 5 runs",
-            fontsize=8, color=COLORS["good_dark"], boxcolor="#e8f5e9",
-        )
-
-    # ── Legend patch ───────────────────────────────────────────────────────
-    legend_patches = [
-        mpatches.Patch(color=COLORS["good_mid"],  label=LABEL_R),
-        mpatches.Patch(color=COLORS["good_dark"], label=LABEL_RW),
-    ]
-    fig.legend(
-        handles=legend_patches,
-        loc="lower center", ncol=2,
-        bbox_to_anchor=(0.5, -0.04),
-        frameon=False, fontsize=9,
+    util_sign = "+" if util_lift >= 0 else ""
+    _kde_panel(
+        ax_u,
+        util_r, util_rw,
+        LABEL_R, LABEL_RW,
+        COLORS["good_mid"], COLORS["good_dark"],
+        xlabel="Total Buyer Utility (per run)",
+        title="(c) Buyer Utility",
+        p_val=p_utility,
+        annotation=f"{util_sign}{util_lift:.0f}% mean utility",
     )
 
     add_sig_footnote(fig)
     save_figure(fig, output_dir / "rq1_warrant_vs_rep_deception_and_profit.png")
-    print(f"  [Fig1] p_profit={p_profit:.4f}, p_dec={p_dec:.4f}")
+    print(f"  [Fig1] p_profit={p_profit:.4f}, p_dec={p_dec:.4f}, p_utility={p_utility:.4f}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -215,21 +250,28 @@ def _probe_rates_per_run(probe_df: pd.DataFrame):
     return rates_by_run
 
 
-def fig2_vulnerability_probe(
+def fig2_probe_and_product_mix(
     r_dir: str, rw_dir: str, output_dir: Path
 ) -> None:
-    """Grouped bar chart: manipulation detection rate by vulnerability type."""
+    """1×2 combined figure: (a) vulnerability probe rates, (b) 100% product-mix stacked bar."""
+
+    # ── Load data ──────────────────────────────────────────────────────────
     probe_r  = load_probes_df(r_dir)
     probe_rw = load_probes_df(rw_dir)
+    df_r     = load_results_df(r_dir)
+    df_rw    = load_results_df(rw_dir)
+
     if probe_r.empty or probe_rw.empty:
         print("[Fig2] No probe data found, skipping.")
         return
+    if df_r.empty or df_rw.empty:
+        print("[Fig2] Missing results data, skipping.")
+        return
 
+    # ── Probe stats ────────────────────────────────────────────────────────
     rates_r  = _probe_rates_per_run(probe_r)
     rates_rw = _probe_rates_per_run(probe_rw)
-
-    # ── Per-vulnerability means and stats ─────────────────────────────────
-    means_r,  stds_r,  means_rw, stds_rw, p_vals = [], [], [], [], []
+    means_r, stds_r, means_rw, stds_rw, p_vals = [], [], [], [], []
     for vk in VULN_KEYS:
         vals_r  = [d[vk] * 100 for d in rates_r]
         vals_rw = [d[vk] * 100 for d in rates_rw]
@@ -237,200 +279,145 @@ def fig2_vulnerability_probe(
         stds_r.append(np.std(vals_r,  ddof=1))
         means_rw.append(np.mean(vals_rw))
         stds_rw.append(np.std(vals_rw, ddof=1))
-        # z-score on pooled proportions across runs
-        total_r  = sum(len(probe_r[probe_r["run_id"] == rid]) for rid in probe_r["run_id"].unique())
-        total_rw = sum(len(probe_rw[probe_rw["run_id"] == rid]) for rid in probe_rw["run_id"].unique())
         n_r_vk  = len(probe_r[probe_r["vulnerability_type"] == vk])
         n_rw_vk = len(probe_rw[probe_rw["vulnerability_type"] == vk])
         cnt_r   = probe_r[probe_r["vulnerability_type"] == vk]["manipulation_detected"].sum()
         cnt_rw  = probe_rw[probe_rw["vulnerability_type"] == vk]["manipulation_detected"].sum()
-        p = proportion_ztest_p(float(cnt_r), float(n_r_vk),
-                                float(cnt_rw), float(n_rw_vk))
-        p_vals.append(p)
+        p_vals.append(proportion_ztest_p(float(cnt_r), float(n_r_vk),
+                                          float(cnt_rw), float(n_rw_vk)))
+
+    # ── Product-mix stats (ALL listed products, including unsold) ──────────────────
+    pq_r  = per_run_values(df_r,  product_quality_counts_all)
+    pq_rw = per_run_values(df_rw, product_quality_counts_all)
+
+    def _pmeans(pq, idx):
+        vals = [t[idx] for t in pq]
+        return np.mean(vals), np.std(vals, ddof=1)
+
+    hqa_r,  _ = _pmeans(pq_r,  0)
+    lqa_r,  _ = _pmeans(pq_r,  1)
+    hqcf_r, _ = _pmeans(pq_r,  2)
+    hqa_rw, _ = _pmeans(pq_rw, 0)
+    lqa_rw, _ = _pmeans(pq_rw, 1)
+    hqcf_rw,_ = _pmeans(pq_rw, 2)
+
+    def pct(v, t): return (v / t * 100) if t > 0 else 0.0
+    total_r  = hqa_r  + lqa_r  + hqcf_r
+    total_rw = hqa_rw + lqa_rw + hqcf_rw
+    mix = {
+        LABEL_R:  [pct(hqa_r,  total_r),  pct(lqa_r,  total_r),  pct(hqcf_r,  total_r)],
+        LABEL_RW: [pct(hqa_rw, total_rw), pct(lqa_rw, total_rw), pct(hqcf_rw, total_rw)],
+    }
+    cnt_cf_r   = sum(t[2] for t in pq_r)
+    cnt_tot_r  = sum(sum(t) for t in pq_r)
+    cnt_cf_rw  = sum(t[2] for t in pq_rw)
+    cnt_tot_rw = sum(sum(t) for t in pq_rw)
+    p_counterfeit = proportion_ztest_p(cnt_cf_r, cnt_tot_r, cnt_cf_rw, cnt_tot_rw)
+    cnt_hqa_r  = sum(t[0] for t in pq_r)
+    cnt_hqa_rw = sum(t[0] for t in pq_rw)
+    p_hq_auth  = proportion_ztest_p(cnt_hqa_r, cnt_tot_r, cnt_hqa_rw, cnt_tot_rw)
 
     # ── Layout ─────────────────────────────────────────────────────────────
-    fig, ax = plt.subplots(figsize=(8, 4.5))
+    fig, (ax_probe, ax_mix) = plt.subplots(
+        1, 2, figsize=(10.5, 4.0),
+        gridspec_kw={"wspace": 0.38, "width_ratios": [2, 1]},
+    )
     fig.suptitle(
-        "Sellers Exploit the 'Exit Loophole' 4× More Without Warrant",
+        "Vulnerability Exploitation & Listed Product Mix Under Rep vs Rep+Warrant",
         fontsize=11, fontweight="bold", y=1.02,
     )
 
+    # ── (a) Vulnerability probe ────────────────────────────────────────────
+    ax_probe.set_title("(a) Manipulation Detection Rate by Vulnerability",
+                       fontsize=10, pad=5, loc="left")
     n_groups = len(VULN_KEYS)
     x = np.arange(n_groups)
     w = 0.32
 
-    # Both bars in red shades (high detection rate = bad, exploit tendency)
-    bars_r = ax.bar(
-        x - w / 2, means_r,
-        width=w, color=COLORS["bad_dark"], label=LABEL_R,
-        edgecolor="white", linewidth=0.5,
-        yerr=stds_r, capsize=3,
-        error_kw={"elinewidth": 1.0, "ecolor": "#333333"},
-        zorder=3,
-    )
-    bars_rw = ax.bar(
-        x + w / 2, means_rw,
-        width=w, color=COLORS["bad_mid"], label=LABEL_RW,
-        edgecolor="white", linewidth=0.5,
-        yerr=stds_rw, capsize=3,
-        error_kw={"elinewidth": 1.0, "ecolor": "#333333"},
-        zorder=3,
-    )
+    ax_probe.bar(x - w / 2, means_r,  width=w, color=COLORS["bad_dark"],
+                 label=LABEL_R,  edgecolor="white", linewidth=0.5,
+                 yerr=stds_r,  capsize=3,
+                 error_kw={"elinewidth": 1.0, "ecolor": "#555555"}, zorder=3)
+    ax_probe.bar(x + w / 2, means_rw, width=w, color=COLORS["bad_mid"],
+                 label=LABEL_RW, edgecolor="white", linewidth=0.5,
+                 yerr=stds_rw, capsize=3,
+                 error_kw={"elinewidth": 1.0, "ecolor": "#555555"}, zorder=3)
 
-    ax.set_xticks(x)
-    ax.set_xticklabels(VULN_LABELS, fontsize=9)
-    ax.set_ylabel("Manipulation Detection Rate (%)", fontsize=10)
-    ax.set_ylim(0, max(means_r + means_rw) * 1.55)
+    ax_probe.set_xticks(x)
+    ax_probe.set_xticklabels(VULN_LABELS, fontsize=9)
+    ax_probe.set_ylabel("Manipulation Detection Rate (%)", fontsize=10)
 
-    # ── Significance brackets ───────────────────────────────────────────────
+    bracket_tops = []
     for i, p in enumerate(p_vals):
         y_top = max(means_r[i] + stds_r[i], means_rw[i] + stds_rw[i])
-        add_significance_bracket(ax, x[i] - w / 2, x[i] + w / 2,
+        bracket_tops.append(y_top)
+        add_significance_bracket(ax_probe, x[i] - w / 2, x[i] + w / 2,
                                   y_top, p, h_frac=0.07, fontsize=9)
 
-    # ── Highlight Exit Strategy group ──────────────────────────────────────
+    global_top = max(bracket_tops) if bracket_tops else max(means_r + means_rw)
+    ax_probe.set_ylim(0, global_top * 1.52)
+
     es_idx = VULN_KEYS.index("exit_strategy")
-    ax.annotate(
-        "",
-        xy=(x[es_idx], max(means_r[es_idx], means_rw[es_idx]) * 1.05),
-        xytext=(x[es_idx], max(means_r[es_idx], means_rw[es_idx]) * 1.22),
-        arrowprops=dict(arrowstyle="->", color=COLORS["bad_dark"], lw=1.5),
-    )
-    ax.text(
-        x[es_idx], max(means_r[es_idx], means_rw[es_idx]) * 1.26,
-        "Primary\nvulnerability",
-        ha="center", va="bottom", fontsize=8,
-        color=COLORS["bad_dark"], fontweight="bold",
-    )
-    # Annotate exact values on Exit Strategy bars
-    ax.text(x[es_idx] - w / 2, means_r[es_idx] + stds_r[es_idx] + 0.5,
-            f"{means_r[es_idx]:.1f}%", ha="center", va="bottom", fontsize=8,
-            color=COLORS["bad_dark"])
-    ax.text(x[es_idx] + w / 2, means_rw[es_idx] + stds_rw[es_idx] + 0.5,
-            f"{means_rw[es_idx]:.1f}%", ha="center", va="bottom", fontsize=8,
-            color=COLORS["bad_mid"])
+    es_y   = bracket_tops[es_idx] * 1.24
+    add_text_box(ax_probe, x[es_idx], es_y, "Primary\nvulnerability",
+                 fontsize=8, color=COLORS["bad_dark"], boxcolor="#fdecea")
+    ax_probe.text(x[es_idx] - w / 2, means_r[es_idx]  + stds_r[es_idx]  + 1.0,
+                  f"{means_r[es_idx]:.1f}%",  ha="center", va="bottom",
+                  fontsize=7, color=COLORS["bad_dark"])
+    ax_probe.text(x[es_idx] + w / 2, means_rw[es_idx] + stds_rw[es_idx] + 1.0,
+                  f"{means_rw[es_idx]:.1f}%", ha="center", va="bottom",
+                  fontsize=7, color=COLORS["bad_mid"])
+    ax_probe.legend(frameon=False, fontsize=8, loc="upper left")
 
-    ax.legend(frameon=False, fontsize=9, loc="upper left")
+    # ── (b) Product mix stacked bar (ALL listed products) ───────────────────────
+    ax_mix.set_title("(b) Listed Product Mix (incl. Unsold)",
+                     fontsize=10, pad=5, loc="left")
+    xm = np.array([0.0, 1.0])
+    wm = 0.45
+    seg_colors = [COLORS["hq_auth"], COLORS["lq_auth"], COLORS["counterfeit"]]
+    seg_labels  = ["HQ Authentic", "LQ Authentic", "HQ Counterfeit"]
 
-    add_sig_footnote(fig, extra="z-score proportion test per vulnerability type")
+    bottoms = [0.0, 0.0]
+    for si, (col, lab) in enumerate(zip(seg_colors, seg_labels)):
+        heights = [mix[LABEL_R][si], mix[LABEL_RW][si]]
+        ax_mix.bar(xm, heights, width=wm, bottom=bottoms,
+                   color=col, label=lab, edgecolor="white",
+                   linewidth=0.5, zorder=3)
+        for xi, (h, bot) in enumerate(zip(heights, bottoms)):
+            if h > 8.0:   # only label if segment is wide enough
+                ax_mix.text(xm[xi], bot + h / 2, f"{h:.1f}%",
+                            ha="center", va="center", fontsize=8,
+                            color="white", fontweight="bold")
+        bottoms = [bottoms[j] + heights[j] for j in range(2)]
+
+    ax_mix.set_xticks(xm)
+    ax_mix.set_xticklabels([LABEL_R, LABEL_RW], fontsize=10)
+    ax_mix.set_ylabel("Share of Listed Products (%)", fontsize=10)
+    ax_mix.set_ylim(0, 112)
+
+    # Legend below the axes to avoid overlap with bar labels
+    ax_mix.legend(frameon=False, fontsize=7, loc="lower center",
+                  bbox_to_anchor=(0.5, -0.28), ncol=1)
+
+    # Significance note below x-axis
+    note_parts = []
+    m_cf  = sig_marker_display(p_counterfeit)
+    m_hqa = sig_marker_display(p_hq_auth)
+    if m_cf:
+        note_parts.append(f"Counterfeit {m_cf}")
+    if m_hqa:
+        note_parts.append(f"HQ Auth {m_hqa}")
+    if note_parts:
+        ax_mix.text(0.5, -0.38, "  |  ".join(note_parts),
+                    transform=ax_mix.transAxes,
+                    ha="center", va="top", fontsize=7, color="#555555")
+
+    add_sig_footnote(fig, extra="z-score proportion test per vulnerability / product segment")
+    fig.subplots_adjust(bottom=0.26)
     save_figure(fig, output_dir / "rq1_exit_loophole_vulnerability.png")
     print(f"  [Fig2] p_vals per vulnerability: "
           + ", ".join(f"{VULN_SHORT[i]}={p_vals[i]:.4f}" for i in range(len(VULN_KEYS))))
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Figure 3 (appendix) : 100% Product-Mix Stacked Bar
-# ─────────────────────────────────────────────────────────────────────────────
-
-def fig3_product_mix(
-    r_dir: str, rw_dir: str, output_dir: Path
-) -> None:
-    """100% stacked bar chart of sold product quality (appendix)."""
-
-    df_r  = load_results_df(r_dir)
-    df_rw = load_results_df(rw_dir)
-    if df_r.empty or df_rw.empty:
-        print("[Fig3] Missing data, skipping.")
-        return
-
-    # ── Per-run product counts ─────────────────────────────────────────────
-    def _pq(df):
-        return per_run_values(df, product_quality_counts)
-
-    pq_r  = _pq(df_r)   # list of (hq_auth, lq_auth, hq_cfeit) tuples
-    pq_rw = _pq(df_rw)
-
-    def _means(pq, idx):
-        vals = [t[idx] for t in pq]
-        return np.mean(vals), np.std(vals, ddof=1)
-
-    hqa_r,   hqa_r_std   = _means(pq_r,  0)
-    lqa_r,   lqa_r_std   = _means(pq_r,  1)
-    hqcf_r,  hqcf_r_std  = _means(pq_r,  2)
-    hqa_rw,  hqa_rw_std  = _means(pq_rw, 0)
-    lqa_rw,  lqa_rw_std  = _means(pq_rw, 1)
-    hqcf_rw, hqcf_rw_std = _means(pq_rw, 2)
-
-    total_r  = hqa_r  + lqa_r  + hqcf_r
-    total_rw = hqa_rw + lqa_rw + hqcf_rw
-
-    # Normalize to percentages
-    def pct(v, t): return (v / t * 100) if t > 0 else 0.0
-
-    data = {
-        LABEL_R:  [pct(hqa_r,  total_r),  pct(lqa_r,  total_r),  pct(hqcf_r,  total_r)],
-        LABEL_RW: [pct(hqa_rw, total_rw), pct(lqa_rw, total_rw), pct(hqcf_rw, total_rw)],
-    }
-
-    # ── z-score tests on proportions (HQ counterfeit) ─────────────────────
-    cnt_cf_r  = sum(t[2] for t in pq_r)
-    cnt_tot_r = sum(sum(t) for t in pq_r)
-    cnt_cf_rw  = sum(t[2] for t in pq_rw)
-    cnt_tot_rw = sum(sum(t) for t in pq_rw)
-    p_counterfeit = proportion_ztest_p(
-        cnt_cf_r, cnt_tot_r, cnt_cf_rw, cnt_tot_rw
-    )
-
-    cnt_hqa_r  = sum(t[0] for t in pq_r)
-    cnt_hqa_rw = sum(t[0] for t in pq_rw)
-    p_hq_auth = proportion_ztest_p(
-        cnt_hqa_r, cnt_tot_r, cnt_hqa_rw, cnt_tot_rw
-    )
-
-    # ── Layout ─────────────────────────────────────────────────────────────
-    fig, ax = plt.subplots(figsize=(5.5, 4.5))
-    fig.suptitle(
-        "Warrant Shifts Market Output to Authentic HQ\n— Counterfeit Disappears",
-        fontsize=10, fontweight="bold", y=1.03,
-    )
-
-    x = np.array([0.0, 1.0])
-    w = 0.45
-    colors = [COLORS["hq_auth"], COLORS["lq_auth"], COLORS["counterfeit"]]
-    seg_labels = ["HQ Authentic", "LQ Authentic", "HQ Counterfeit (fraud)"]
-    segments = ["HQ Authentic", "LQ Authentic", "HQ Counterfeit"]
-
-    bottoms = [0.0, 0.0]
-    bars_list = []
-    for si, (col, lab) in enumerate(zip(colors, seg_labels)):
-        heights = [data[LABEL_R][si], data[LABEL_RW][si]]
-        b = ax.bar(
-            x, heights, width=w,
-            bottom=bottoms,
-            color=col, label=lab,
-            edgecolor="white", linewidth=0.5, zorder=3,
-        )
-        bars_list.append((b, heights))
-        # Label inside bar if tall enough
-        for xi, (h, bot) in enumerate(zip(heights, bottoms)):
-            if h > 4.0:
-                ax.text(x[xi], bot + h / 2, f"{h:.1f}%",
-                        ha="center", va="center", fontsize=8,
-                        color="white", fontweight="bold")
-        bottoms = [bottoms[j] + heights[j] for j in range(2)]
-
-    ax.set_xticks(x)
-    ax.set_xticklabels([LABEL_R, LABEL_RW], fontsize=10)
-    ax.set_ylabel("Share of Sold Products (%)", fontsize=10)
-    ax.set_ylim(0, 115)
-    ax.legend(frameon=False, fontsize=8, loc="upper right", ncol=1)
-
-    # ── Significance annotation for counterfeit ─────────────────────────
-    m_cf = sig_marker_display(p_counterfeit)
-    m_hqa = sig_marker_display(p_hq_auth)
-    note_parts = []
-    if m_cf:
-        note_parts.append(f"Counterfeit: {m_cf} (p={p_counterfeit:.3f})")
-    if m_hqa:
-        note_parts.append(f"HQ Authentic: {m_hqa} (p={p_hq_auth:.3f})")
-    if note_parts:
-        ax.text(0.5, -0.12, "  |  ".join(note_parts),
-                transform=ax.transAxes,
-                ha="center", va="top", fontsize=7.5, color="#555555")
-
-    add_sig_footnote(fig, extra="z-score proportion test for each product-quality segment")
-    save_figure(fig, output_dir / "rq1_product_mix_appendix.png")
-    print(f"  [Fig3] p_counterfeit={p_counterfeit:.4f}, p_hq_auth={p_hq_auth:.4f}")
+    print(f"  [Fig2] p_counterfeit={p_counterfeit:.4f}, p_hq_auth={p_hq_auth:.4f}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -459,11 +446,8 @@ def main():
     print("\n[Fig1] Seller Profit & Deceptions…")
     fig1_profit_and_deceptions(args.r_dir, args.rw_dir, output_dir)
 
-    print("\n[Fig2] Vulnerability Probe Detection Rates…")
-    fig2_vulnerability_probe(args.r_dir, args.rw_dir, output_dir)
-
-    print("\n[Fig3] Product Mix (appendix)…")
-    fig3_product_mix(args.r_dir, args.rw_dir, output_dir)
+    print("\n[Fig2] Vulnerability Probe + Product Mix (combined)…")
+    fig2_probe_and_product_mix(args.r_dir, args.rw_dir, output_dir)
 
     print("\n✅  RQ1 figures saved to:", output_dir)
 

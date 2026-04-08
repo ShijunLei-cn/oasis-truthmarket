@@ -26,31 +26,41 @@ from scipy import stats
 # ─── Semantic Color Palette ──────────────────────────────────────────────────
 
 COLORS = {
-    # Good-outcome greens
-    "good_dark":    "#1a7a3a",   # Rep+Warrant – primary positive bar
-    "good_mid":     "#4caf72",   # Rep – lighter positive bar
-    "good_light":   "#a8d8b8",   # stacked honest segment
-    "hq_auth":      "#2e7d32",   # HQ authentic product
-    "lq_auth":      "#66bb6a",   # LQ authentic product (lighter green)
-    # Bad-outcome reds
-    "bad_dark":     "#c0392b",   # Rep – high deception bar
-    "bad_mid":      "#e57373",   # Rep+Warrant – lower deception bar
-    "bad_light":    "#ffcdd2",   # stacked dishonest segment
-    "counterfeit":  "#c62828",   # HQ counterfeit product
+    # Good-outcome greens (muted, Nature-quality)
+    "good_dark":    "#1D6B3A",   # deep forest green — Rep+Warrant positive
+    "good_mid":     "#52B788",   # sage green — Rep positive
+    "good_light":   "#C8E6C9",   # pale mint — honest segment fill
+    # Product quality colors
+    "hq_auth":      "#2D6A4F",   # dark teal green — HQ authentic
+    "lq_auth":      "#74C69D",   # lighter teal green — LQ authentic
+    # Bad-outcome reds (muted brick/terracotta)
+    "bad_dark":     "#AE2012",   # deep brick red — deception (欺诈)
+    "bad_mid":      "#D4866A",   # terracotta — lighter deception
+    "bad_light":    "#F4C9BA",   # pale peach — dishonest segment fill
+    "counterfeit":  "#9B2226",   # dark burgundy — counterfeit product (假冒)
     # Neutral grays
-    "neutral":      "#9e9e9e",   # baseline / no-comm dot/bar
-    "neutral_dark": "#424242",   # dark annotation text
-    "neutral_light":"#e0e0e0",   # light background panel
+    "neutral":      "#6B6B6B",   # cool gray — neutral baseline
+    "neutral_dark": "#2D2D2D",   # charcoal — annotation text
+    "neutral_light":"#EEEEEE",   # silver — light background
     # Accent for annotations
-    "accent":       "#1565c0",   # annotation arrow/box border
+    "accent":       "#1A4E8A",   # steel blue — annotation arrows/borders
+    # Buyer Communication colors (蓝色调)
+    "comm_dark":    "#1565c0",   # dark blue — Rep+Warrant + Comm
+    "comm_mid":     "#64b5f6",   # light blue — Rep + Comm
+    "comm_baseline":"#90caf9",   # pale blue — baseline for comm comparison
+    # Mechanism colors
+    "rep_dark":     "#1a7a3a",   # dark green — Rep only
+    "rep_mid":      "#4caf72",   # lighter green — Rep
+    "warrant_dark": "#1565c0",   # dark blue — Rep+Warrant
+    "warrant_mid":  "#64b5f6",   # light blue — Rep+Warrant
 }
 
 # Consistent condition colors for line charts (RQ3 round evolution)
 CONDITION_COLORS = {
-    "Rep":                 "#9e9e9e",   # gray
-    "Rep, Comm":           "#43a047",   # green (improvement on Rep)
-    "Rep+Warrant":         "#1565c0",   # blue
-    "Rep+Warrant, Comm":   "#0d47a1",   # deep blue
+    "Rep":                 "#AAAAAA",   # medium gray
+    "Rep, Comm":           "#52B788",   # sage green
+    "Rep+Warrant":         "#2B6CB0",   # steel blue
+    "Rep+Warrant, Comm":   "#1A4E8A",   # deep navy
 }
 CONDITION_LS = {
     "Rep":                 "-",
@@ -63,27 +73,55 @@ CONDITION_LS = {
 # ─── Matplotlib Style Setup ──────────────────────────────────────────────────
 
 def setup_style() -> None:
-    """Apply global academic plotting style."""
+    """Apply global Nature/Science-inspired academic plotting style."""
     plt.rcParams.update(
         {
-            "font.family": "serif",
-            "font.serif": ["Times New Roman", "DejaVu Serif"],
-            "font.size": 10,
-            "axes.labelsize": 11,
-            "axes.titlesize": 11,
-            "xtick.labelsize": 9,
-            "ytick.labelsize": 9,
-            "legend.fontsize": 9,
-            "figure.titlesize": 12,
-            "axes.unicode_minus": False,
-            "axes.spines.top": False,
-            "axes.spines.right": False,
-            "axes.grid": True,
-            "grid.alpha": 0.3,
-            "grid.linestyle": "--",
-            "grid.color": "#cccccc",
+            # ── Typography ──────────────────────────────────────────────────
+            "font.family":          "sans-serif",
+            "font.sans-serif":      ["Helvetica Neue", "Helvetica", "Arial",
+                                     "Liberation Sans", "DejaVu Sans"],
+            "font.size":            9,
+            "axes.labelsize":       9,
+            "axes.titlesize":       10,
+            "xtick.labelsize":      8,
+            "ytick.labelsize":      8,
+            "legend.fontsize":      8,
+            "figure.titlesize":     11,
+            "axes.unicode_minus":   False,
+            # ── Spines & frame ──────────────────────────────────────────────
+            "axes.spines.top":      False,
+            "axes.spines.right":    False,
+            "axes.linewidth":       0.7,
+            # ── Grid: off by default (Nature style) ─────────────────────────
+            "axes.grid":            False,
+            "axes.axisbelow":       True,
+            # ── Ticks: outward, thin ─────────────────────────────────────────
+            "xtick.direction":      "out",
+            "ytick.direction":      "out",
+            "xtick.major.width":    0.7,
+            "ytick.major.width":    0.7,
+            "xtick.major.size":     3.5,
+            "ytick.major.size":     3.5,
+            "xtick.minor.width":    0.4,
+            "ytick.minor.width":    0.4,
+            # ── Lines & patches ─────────────────────────────────────────────
+            "lines.linewidth":      1.2,
+            "patch.linewidth":      0.5,
+            # ── Backgrounds ─────────────────────────────────────────────────
+            "figure.facecolor":     "white",
+            "axes.facecolor":       "white",
         }
     )
+
+
+def label_panel(ax: "plt.Axes", letter: str,
+                fontsize: int = 10,
+                x: float = -0.12, y: float = 1.04) -> None:
+    """Add a bold (a)/(b)/… panel label at the top-left corner of an axes."""
+    ax.text(x, y, f"({letter})",
+            transform=ax.transAxes,
+            fontsize=fontsize, fontweight="bold",
+            va="bottom", ha="right")
 
 
 # ─── Statistical Tests ───────────────────────────────────────────────────────
@@ -233,13 +271,65 @@ def highlight_bar_group(
 
 # ─── Data Loading ─────────────────────────────────────────────────────────────
 
+def _extract_transactions_from_actions(actions_file: Path, run_id: int) -> list:
+    """Extract flat transaction rows from a run_*_actions.json file.
+
+    The actions.json stores per-round agent actions; buyer purchase_products
+    results contain the transaction records we need for analysis.
+    """
+    rows = []
+    data = json.loads(actions_file.read_text(encoding="utf-8"))
+    for rnd in data:
+        round_num = rnd.get("round", None)
+        for agent in rnd.get("agent_infos", []):
+            info = agent.get("agent_action_info", {})
+            if not isinstance(info, dict):
+                continue
+            if info.get("action_name") != "purchase_products":
+                continue
+            results = info.get("action_results", {})
+            # action_results may be a JSON string or already a dict
+            if isinstance(results, str):
+                try:
+                    results = json.loads(results)
+                except Exception:
+                    continue
+            for txn in results.get("transactions", []):
+                adv = str(txn.get("advertised_quality", "")).upper().strip()
+                true = str(txn.get("true_quality", "")).upper().strip()
+                rows.append({
+                    "run_id": run_id,
+                    "round": round_num,
+                    "transaction_id": txn.get("transaction_id"),
+                    "product_id": txn.get("product_id"),
+                    "seller_id": txn.get("seller_id"),
+                    "advertised_quality": adv,
+                    "true_quality": true,
+                    "has_warrant": txn.get("has_warrant"),
+                    "seller_profit": txn.get("seller_profit", 0.0),
+                    "buyer_utility": txn.get("buyer_utility", 0.0),
+                    "purchase_price": txn.get("purchase_price"),
+                    "is_honest": adv == true,
+                    "sold": True,
+                    "is_sold": True,
+                    "quality": true,
+                    "actual_quality": true,
+                })
+    return rows
+
+
 def load_results_df(experiment_dir: str) -> pd.DataFrame:
-    """Load all run_*_results.json from a directory into one DataFrame."""
+    """Load transaction data from a directory into one DataFrame.
+
+    Tries run_*_results.json first; falls back to extracting transactions
+    from run_*_actions.json when results files are absent.
+    """
     path = Path(experiment_dir)
     if not path.exists():
         print(f"  WARNING: directory not found: {experiment_dir}")
         return pd.DataFrame()
     rows = []
+    # Primary: flat results files
     for f in sorted(path.glob("run_*_results.json")):
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
@@ -249,6 +339,14 @@ def load_results_df(experiment_dir: str) -> pd.DataFrame:
             rows.extend(data)
         except Exception as e:
             print(f"  ERROR loading {f}: {e}")
+    # Fallback: extract transactions from actions files
+    if not rows:
+        for f in sorted(path.glob("run_*_actions.json")):
+            try:
+                run_id = int(f.stem.split("_")[1])
+                rows.extend(_extract_transactions_from_actions(f, run_id))
+            except Exception as e:
+                print(f"  ERROR loading {f}: {e}")
     if not rows:
         print(f"  WARNING: no results in {experiment_dir}")
         return pd.DataFrame()
@@ -306,6 +404,14 @@ def dishonest_profit(run_df: pd.DataFrame) -> float:
     return float(run_df[run_df["is_honest"] == False]["seller_profit"].sum())  # noqa: E712
 
 
+def honest_buyer_utility(run_df: pd.DataFrame) -> float:
+    return float(run_df[run_df["is_honest"] == True]["buyer_utility"].sum())  # noqa: E712
+
+
+def dishonest_buyer_utility(run_df: pd.DataFrame) -> float:
+    return float(run_df[run_df["is_honest"] == False]["buyer_utility"].sum())  # noqa: E712
+
+
 def count_counterfeit_sold(run_df: pd.DataFrame) -> float:
     q_col = next(
         (c for c in ["quality", "actual_quality", "true_quality"] if c in run_df.columns),
@@ -324,6 +430,16 @@ def count_counterfeit_sold(run_df: pd.DataFrame) -> float:
 
 def product_quality_counts(run_df: pd.DataFrame):
     """Return (hq_auth_sold, lq_auth_sold, hq_counterfeit_sold) for a run."""
+    return _product_quality_counts_by_status(run_df, only_sold=True)
+
+
+def product_quality_counts_all(run_df: pd.DataFrame):
+    """Return (hq_auth_listed, lq_auth_listed, hq_counterfeit_listed) for ALL listed products (including unsold)."""
+    return _product_quality_counts_by_status(run_df, only_sold=False)
+
+
+def _product_quality_counts_by_status(run_df: pd.DataFrame, only_sold: bool = True):
+    """Internal helper: count product quality for sold or listed products."""
     q_col = next(
         (c for c in ["quality", "actual_quality", "true_quality"] if c in run_df.columns),
         None,
@@ -335,7 +451,10 @@ def product_quality_counts(run_df: pd.DataFrame):
     df = run_df.copy()
     df[q_col] = df[q_col].astype(str).str.upper().str.strip()
     df[a_col] = df[a_col].astype(str).str.upper().str.strip()
-    sold = (df[s_col] == True) if s_col else pd.Series(False, index=df.index)  # noqa: E712
+    if only_sold and s_col:
+        sold = (df[s_col] == True)  # noqa: E712
+    else:
+        sold = pd.Series(True, index=df.index)  # All listed products
     hq_auth = float(((df[a_col] == "HQ") & (df[q_col] == "HQ") & sold).sum())
     lq_auth = float(((df[a_col] == "LQ") & (df[q_col] == "LQ") & sold).sum())
     hq_cfeit = float(((df[a_col] == "HQ") & (df[q_col] == "LQ") & sold).sum())
@@ -344,10 +463,17 @@ def product_quality_counts(run_df: pd.DataFrame):
 
 # ─── Footnote Helper ─────────────────────────────────────────────────────────
 
-def add_sig_footnote(fig: plt.Figure, extra: str = "") -> None:
+def add_sig_footnote(fig: plt.Figure, extra: str = "", y: float = -0.02) -> None:
     """Add a standard significance-marker footnote at the bottom of a figure.
 
     Explains the *, **, *** notation so readers know the p-value thresholds.
+
+    Parameters
+    ----------
+    y : float
+        Vertical position in figure coordinates (default -0.02).
+        Pass a more negative value (e.g. -0.10) when the figure has an
+        external legend below the axes to avoid overlap.
     """
     note = (
         "Significance markers: * p<0.05,  ** p<0.01,  *** p<0.001  "
@@ -356,7 +482,7 @@ def add_sig_footnote(fig: plt.Figure, extra: str = "") -> None:
     if extra:
         note = note + "   |   " + extra
     fig.text(
-        0.5, -0.02,
+        0.5, y,
         note,
         ha="center", va="top",
         fontsize=7, color="#555555",
