@@ -3,9 +3,9 @@
 
 experiment:
   runs: 3
-  num_sellers: 50
-  num_buyers: 50
-  simulation_rounds: 10
+  num_sellers: 20
+  num_buyers: 20
+  simulation_rounds: 20
 
 market_params:
   # Production costs

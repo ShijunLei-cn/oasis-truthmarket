@@ -1,9 +1,11 @@
 #!/bin/bash
 # =============================================================================
-# Run Collusion Analysis Visualization
+# Run Collusion Analysis Visualization (RQ2)
 # =============================================================================
-# This script generates all collusion analysis visualizations for the 
-# TruthMarketTwin paper.
+# This script generates the RQ2-relevant collusion analysis visualizations:
+#   - fig1_deception_by_collusion.png (核心发现：欺诈率对比)
+#   - fig1_1_sankey_by_condition.png (桑基图：post collusion → 行为欺诈)
+#   - fig1_2_embedding_cluster.png (UMAP散点图 + 词云)
 #
 # Usage:
 #   ./run_collusion_analysis.sh              # Default paths
@@ -50,13 +52,16 @@ while [[ $# -gt 0 ]]; do
 done
 
 echo "============================================================================"
-echo "Collusion Analysis Visualization Generator"
+echo "Collusion Analysis Visualization Generator (RQ2)"
 echo "============================================================================"
 echo ""
 echo "Project root: ${PROJECT_ROOT}"
 echo "Data directory: ${DATA_DIR}"
 echo "Output directory: ${OUTPUT_DIR}"
 echo ""
+
+# Create output directory
+mkdir -p "${OUTPUT_DIR}"
 
 # Check if data directory exists
 if [ ! -d "${DATA_DIR}" ]; then
@@ -70,10 +75,7 @@ if [ ! -d "${DATA_DIR}/case_analysis" ]; then
     exit 1
 fi
 
-# Create output directory
-mkdir -p "${OUTPUT_DIR}"
-
-# Check if required data files exist
+# Check required data files
 REQUIRED_FILES=(
     "deception_rate_by_collusion.csv"
     "type_distribution_by_condition.csv"
@@ -91,22 +93,6 @@ for file in "${REQUIRED_FILES[@]}"; do
 done
 echo ""
 
-# Check Python and required packages
-echo "Checking Python environment..."
-if ! command -v python3 &> /dev/null; then
-    echo "ERROR: python3 not found"
-    exit 1
-fi
-
-# Try to import required packages
-if ! python3 -c "import matplotlib" 2>/dev/null; then
-    echo "WARNING: matplotlib not installed, attempting to install..."
-    pip install matplotlib numpy pandas scipy --quiet
-fi
-
-echo "  ✓ Python: $(python3 --version)"
-echo ""
-
 # Run the visualization script
 echo "Running collusion analysis visualization..."
 echo "----------------------------------------------------------------------------"
@@ -114,6 +100,13 @@ cd "${PROJECT_ROOT}"
 python3 "${SCRIPT_DIR}/collusion_analysis.py" \
     --data-dir "${DATA_DIR}" \
     --output-dir "${OUTPUT_DIR}"
+
+# Run 2x2 analysis
+echo ""
+echo "----------------------------------------------------------------------------"
+echo "Running 2x2 collusion analysis..."
+echo "----------------------------------------------------------------------------"
+python3 "${SCRIPT_DIR}/analyze_2x2_collusion.py"
 
 # Check if figures were generated
 echo ""

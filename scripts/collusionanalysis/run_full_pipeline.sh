@@ -70,8 +70,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Paths
-EXPERIMENTS_DIR="${PROJECT_ROOT}/experiments/gpt-4o-mini/paper"
-OUTPUT_DIR="${PROJECT_ROOT}/experiments/gpt-4o-mini/paper/data/case_analysis"
+EXPERIMENTS_DIR="${PROJECT_ROOT}/experiments/gpt-4o-mini/paper_important_results"
+OUTPUT_DIR="${PROJECT_ROOT}/experiments/gpt-4o-mini/paper_important_results/data/case_analysis"
 TEMP_DIR="${OUTPUT_DIR}/temp"
 
 echo "============================================================================"

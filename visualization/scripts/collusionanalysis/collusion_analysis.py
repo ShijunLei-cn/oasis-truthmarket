@@ -266,6 +266,206 @@ def _compute_agent_transitions(df: pd.DataFrame,
     return dc, dn, nc_c, nc_n
 
 
+def _draw_sankey_ax(ax, cc: int, cn: int, nc: int, nn: int,
+                    x_offset: float = 0.0, x_scale: float = 1.0,
+                    sublabel: str = "") -> None:
+    """
+    Draw a simple mini Sankey diagram on the given axis.
+    
+    Parameters:
+    - cc: Collusion post + Deception behavior
+    - cn: Collusion post + No deception
+    - nc: No collusion post + Deception behavior  
+    - nn: No collusion post + No deception
+    - x_offset: Horizontal offset
+    - x_scale: Horizontal scale
+    - sublabel: Sublabel for the plot
+    """
+    total = cc + cn + nc + nn
+    if total == 0:
+        ax.text(0.5, 0.5, "No Data", ha='center', va='center', fontsize=8)
+        return
+    
+    # Calculate proportions
+    p_cc = cc / total
+    p_cn = cn / total
+    p_nc = nc / total
+    p_nn = nn / total
+    
+    # Node positions (normalized to 0-1, then scaled)
+    left = 0.15 * x_scale + x_offset
+    right = 0.85 * x_scale + x_offset
+    node_width = 0.12 * x_scale
+    
+    # Colors
+    C_COLL = "#AE2012"      # Collusion - red
+    C_NOCOLL = "#6B6B6B"   # No Collusion - gray
+    C_DEC = "#9B2226"      # Deception - dark red
+    C_NODEC = "#52B788"    # No Deception - green
+    
+    # Left nodes (Post Collusion Status)
+    coll_height = p_cc + p_cn
+    nocoll_height = p_nc + p_nn
+    
+    # Draw left nodes
+    if coll_height > 0:
+        ax.add_patch(plt.Rectangle((left, 1 - coll_height), node_width, coll_height,
+                                    facecolor=C_COLL, edgecolor='white', linewidth=0.5))
+        if coll_height > 0.1:
+            ax.text(left + node_width/2, 1 - coll_height/2, f"{coll_height:.0%}", 
+                   ha='center', va='center', fontsize=6, color='white', fontweight='bold')
+    
+    if nocoll_height > 0:
+        ax.add_patch(plt.Rectangle((left, 0), node_width, nocoll_height,
+                                    facecolor=C_NOCOLL, edgecolor='white', linewidth=0.5))
+        if nocoll_height > 0.1:
+            ax.text(left + node_width/2, nocoll_height/2, f"{nocoll_height:.0%}",
+                   ha='center', va='center', fontsize=6, color='white', fontweight='bold')
+    
+    # Right nodes (Behavior)
+    dec_height = p_cc + p_nc
+    nodec_height = p_cn + p_nn
+    
+    if dec_height > 0:
+        ax.add_patch(plt.Rectangle((right, 1 - dec_height), node_width, dec_height,
+                                    facecolor=C_DEC, edgecolor='white', linewidth=0.5))
+        if dec_height > 0.1:
+            ax.text(right + node_width/2, 1 - dec_height/2, f"{dec_height:.0%}",
+                   ha='center', va='center', fontsize=6, color='white', fontweight='bold')
+    
+    if nodec_height > 0:
+        ax.add_patch(plt.Rectangle((right, 0), node_width, nodec_height,
+                                    facecolor=C_NODEC, edgecolor='white', linewidth=0.5))
+        if nodec_height > 0.1:
+            ax.text(right + node_width/2, nodec_height/2, f"{nodec_height:.0%}",
+                   ha='center', va='center', fontsize=6, color='white', fontweight='bold')
+    
+    # Draw flow ribbons between left and right nodes using cubic Bezier curves
+    # Flow colors: Coordinated (cc) = dark red, Verbal (cn) = pink, Hidden (nc) = darker red, Honest (nn) = green
+    R_CC = "#AE2012"   # Coll→Dec (Coordinated Deception)
+    R_CN = "#E07A5F"   # Coll→NoDec (Verbal Collusion) 
+    R_NC = "#9B2226"   # NoColl→Dec (Hidden Deception)
+    R_NN = "#52B788"   # NoColl→NoDec (Honest)
+    
+    # Helper to draw a ribbon with cubic Bezier curves
+    def ribbon(xleft, xright, ly0, ly1, ry0, ry1, color, alpha):
+        """Draw a ribbon/flow using cubic Bezier curves."""
+        if (ly1 - ly0) < 4e-4 or (ry1 - ry0) < 4e-4:
+            return
+        mx = (xleft + xright) / 2
+        verts = [
+            (xleft, ly1), (mx, ly1), (mx, ry1), (xright, ry1),
+            (xright, ry0), (mx, ry0), (mx, ly0), (xleft, ly0),
+            (xleft, ly1),
+        ]
+        codes = [MPath.MOVETO,
+                 MPath.CURVE4, MPath.CURVE4, MPath.CURVE4,
+                 MPath.LINETO,
+                 MPath.CURVE4, MPath.CURVE4, MPath.CURVE4,
+                 MPath.CLOSEPOLY]
+        ax.add_patch(PathPatch(MPath(verts, codes),
+                               fc=color, ec='none', alpha=alpha, zorder=2))
+    
+    # Calculate flow boundaries for proper Sankey layout
+    # Left node: Coll occupies [1-coll_height, 1], NoColl occupies [0, 1-coll_height]
+    # Right node: Dec occupies [1-dec_height, 1], NoDec occupies [0, 1-dec_height]
+    
+    # Calculate proportional heights within each node
+    # For left Coll node: cc portion and cn portion
+    coll_total = cc + cn
+    nocoll_total = nc + nn
+    
+    # Left Coll node: occupies [1-coll_height, 1]
+    # Split between cc (top) and cn (bottom)
+    if coll_total > 0:
+        cc_top = 1.0
+        cc_bottom = 1.0 - (cn / coll_total) * coll_height if cn > 0 else 1.0
+        cn_bottom = 1.0 - coll_height
+        cn_top = cn_bottom + (cn / coll_total) * coll_height if cn > 0 else 1.0 - coll_height
+    else:
+        cc_top = cc_bottom = 1.0
+        cn_top = cn_bottom = 1.0 - coll_height
+    
+    # Left NoColl node: occupies [0, 1-coll_height]
+    # Split between nc (top) and nn (bottom)
+    if nocoll_total > 0:
+        nc_top = 1.0 - coll_height
+        nc_bottom = 1.0 - coll_height - (nc / nocoll_total) * nocoll_height
+        nn_bottom = 0.0
+        nn_top = (nn / nocoll_total) * nocoll_height
+    else:
+        nc_top = nc_bottom = 1.0 - coll_height
+        nn_top = nn_bottom = 0.0
+    
+    # Right Dec node: occupies [1-dec_height, 1]
+    # Split between cc (top) and nc (bottom)
+    dec_total = cc + nc
+    nodec_total = cn + nn
+    
+    if dec_total > 0:
+        dec_cc_top = 1.0
+        dec_cc_bottom = 1.0 - (nc / dec_total) * dec_height if nc > 0 else 1.0
+        dec_nc_bottom = 1.0 - dec_height
+        dec_nc_top = dec_nc_bottom + (nc / dec_total) * dec_height if nc > 0 else 1.0 - dec_height
+    else:
+        dec_cc_top = dec_cc_bottom = 1.0
+        dec_nc_top = dec_nc_bottom = 1.0 - dec_height
+    
+    # Right NoDec node: occupies [0, 1-dec_height]
+    # Split between cn (top) and nn (bottom)
+    if nodec_total > 0:
+        nodec_cn_top = 1.0 - dec_height
+        nodec_cn_bottom = 1.0 - dec_height - (cn / nodec_total) * nodec_height
+        nodec_nn_bottom = 0.0
+        nodec_nn_top = (nn / nodec_total) * nodec_height
+    else:
+        nodec_cn_top = nodec_cn_bottom = 1.0 - dec_height
+        nodec_nn_top = nodec_nn_bottom = 0.0
+    
+    # Draw flows
+    # cc: Left Coll (top) → Right Dec (top)
+    if cc > 0:
+        ribbon(left + node_width, right,
+               cc_bottom, cc_top,
+               dec_cc_bottom, dec_cc_top,
+               R_CC, 0.65)
+    
+    # cn: Left Coll (bottom) → Right NoDec (top)
+    if cn > 0:
+        ribbon(left + node_width, right,
+               cn_bottom, cn_top,
+               nodec_cn_bottom, nodec_cn_top,
+               R_CN, 0.60)
+    
+    # nc: Left NoColl (top) → Right Dec (bottom)
+    if nc > 0:
+        ribbon(left + node_width, right,
+               nc_bottom, nc_top,
+               dec_nc_bottom, dec_nc_top,
+               R_NC, 0.60)
+    
+    # nn: Left NoColl (bottom) → Right NoDec (bottom)
+    if nn > 0:
+        ribbon(left + node_width, right,
+               nn_bottom, nn_top,
+               nodec_nn_bottom, nodec_nn_top,
+               R_NN, 0.55)
+    
+    # Node labels
+    ax.text(left - 0.02, 0.5, "Coll" if coll_height > 0.3 else "", 
+           ha='right', va='center', fontsize=5, fontweight='bold', color=C_COLL)
+    ax.text(left - 0.02, 0.5, "NoColl" if nocoll_height > 0.3 else "", 
+           ha='right', va='center', fontsize=5, fontweight='bold', color=C_NOCOLL)
+    ax.text(right + node_width + 0.02, 0.5, "Dec" if dec_height > 0.3 else "",
+           ha='left', va='center', fontsize=5, fontweight='bold', color=C_DEC)
+    ax.text(right + node_width + 0.02, 0.5, "NoDec" if nodec_height > 0.3 else "",
+           ha='left', va='center', fontsize=5, fontweight='bold', color=C_NODEC)
+    
+    # Sublabel
+    if sublabel:
+        ax.text(0.5, -0.05, sublabel, ha='center', va='top', fontsize=5, style='italic')
+
+
 def _draw_threestage_sankey_panel(ax,
                                    r1_cc: int, r1_cn: int, r1_nc: int, r1_nn: int,
                                    tr_dc: int, tr_dn: int, tr_nc_c: int, tr_nc_n: int,
@@ -909,6 +1109,138 @@ def fig3_collusion_evolution(data_dir: str, output_dir: Path) -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Figure 1-3: 2x2 Stacked Bar Chart (Communication vs Behavior)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def fig1_3_2x2_stacked_bar(data_dir: str, output_dir: Path) -> None:
+    """
+    Stacked bar chart showing the 4 categories of posts across 4 market conditions.
+    
+    Categories:
+    - Honest: No collusive post + No deception
+    - Hidden Deception: No collusive post + Deception
+    - Verbal Collusion: Collusive post + No deception
+    - Coordinated Deception: Collusive post + Deception
+    
+    4 Market Conditions:
+    - Rep (No Comm)
+    - Rep + Comm  
+    - Rep + Warrant (No Comm)
+    - Rep + Warrant + Comm
+    """
+    posts = _load_labeled_posts(data_dir)
+    if not posts:
+        print("  WARNING: No labeled posts for fig1-3")
+        return
+    
+    df = pd.DataFrame(posts)
+    df["post_collusion"] = df["primary_type"].isin([1, 2, 3, 4])
+    df["behavior_deception"] = df["deceptive_listing"].astype(bool)
+    
+    def get_condition_group(exp_id: str) -> str:
+        if exp_id.startswith('r_wsc_F_'):
+            return 'Rep_NoComm'
+        elif exp_id.startswith('r_wsc_R_'):
+            return 'Rep_Comm'
+        elif exp_id.startswith('rw_wsc_F_'):
+            return 'Warrant_NoComm'
+        elif exp_id.startswith('rw_wsc_R_'):
+            return 'Warrant_Comm'
+        return 'Unknown'
+    
+    def get_2x2_category(row: pd.Series) -> str:
+        if not row['post_collusion'] and not row['behavior_deception']:
+            return 'Honest'
+        elif not row['post_collusion'] and row['behavior_deception']:
+            return 'Hidden_Deception'
+        elif row['post_collusion'] and not row['behavior_deception']:
+            return 'Verbal_Collusion'
+        else:
+            return 'Coordinated_Deception'
+    
+    df['condition'] = df['experiment_id'].apply(get_condition_group)
+    df['category'] = df.apply(get_2x2_category, axis=1)
+    
+    # Filter out unknown conditions
+    df = df[df['condition'] != 'Unknown']
+    
+    # Calculate counts per condition
+    conditions = ['Rep_NoComm', 'Rep_Comm', 'Warrant_NoComm', 'Warrant_Comm']
+    categories = ['Honest', 'Hidden_Deception', 'Verbal_Collusion', 'Coordinated_Deception']
+    
+    # Colors for each category
+    cat_colors = {
+        'Honest': '#52B788',                    # Green
+        'Hidden_Deception': '#9B2226',           # Dark red
+        'Verbal_Collusion': '#E07A5F',           # Pink/salmon
+        'Coordinated_Deception': '#AE2012',      # Red
+    }
+    
+    # Aggregate data
+    data = {cond: {cat: 0 for cat in categories} for cond in conditions}
+    for _, row in df.iterrows():
+        cond = row['condition']
+        cat = row['category']
+        if cond in data and cat in data[cond]:
+            data[cond][cat] += 1
+    
+    # Convert to percentages
+    totals = {cond: sum(data[cond].values()) for cond in conditions}
+    percentages = {}
+    for cond in conditions:
+        percentages[cond] = {}
+        for cat in categories:
+            if totals[cond] > 0:
+                percentages[cond][cat] = (data[cond][cat] / totals[cond]) * 100
+            else:
+                percentages[cond][cat] = 0
+    
+    # Create stacked bar chart
+    fig, ax = plt.subplots(figsize=(12, 6))
+    
+    x = np.arange(len(conditions))
+    width = 0.6
+    
+    # Build stacked bars
+    bottom = np.zeros(len(conditions))
+    for cat in categories:
+        values = [percentages[cond][cat] for cond in conditions]
+        bars = ax.bar(x, values, width, label=cat, bottom=bottom, 
+                      color=cat_colors[cat], edgecolor='white', linewidth=0.5)
+        
+        # Add text labels on bars if segment is large enough
+        for i, (val, bot) in enumerate(zip(values, bottom)):
+            if val >= 5:  # Only show label if segment >= 5%
+                ax.text(x[i], bot + val/2, f'{val:.1f}%',
+                       ha='center', va='center', fontsize=8, 
+                       color='white', fontweight='bold')
+        
+        bottom += values
+    
+    # Formatting
+    ax.set_xlabel('Market Condition', fontsize=12)
+    ax.set_ylabel('Percentage of Posts (%)', fontsize=12)
+    ax.set_title('Collusion Communication vs Deceptive Behavior\nby Market Condition',
+                 fontsize=13, fontweight='bold')
+    ax.set_xticks(x)
+    ax.set_xticklabels(['Rep\n(No Comm)', 'Rep\n(Comm)', 
+                        'Rep + Warrant\n(No Comm)', 'Rep + Warrant\n(Comm)'],
+                       fontsize=10)
+    ax.legend(loc='upper right', frameon=False, fontsize=9)
+    ax.set_ylim(0, 105)
+    ax.grid(True, axis='y', alpha=0.3, linestyle=':')
+    
+    # Add sample size annotations
+    for i, cond in enumerate(conditions):
+        ax.text(x[i], -5, f'n={totals[cond]}',
+               ha='center', va='top', fontsize=8, color='gray')
+    
+    plt.tight_layout()
+    save_figure(fig, output_dir / "fig1_3_2x2_stacked_bar.png")
+    print("  [Fig1-3] 2x2 Stacked bar chart saved.")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Entry Point
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -953,6 +1285,9 @@ def main():
         fig1_2_embedding_cluster(args.data_dir, output_dir)
     else:
         print("\n[Fig1-2] Skipped (--skip-embedding).")
+
+    print("\n[Fig1-3] 2x2 Stacked Bar: Communication vs Behavior...")
+    fig1_3_2x2_stacked_bar(args.data_dir, output_dir)
 
     print("\n[Fig2] Collusion by Mechanism × Communication (4 groups)...")
     fig2_collusion_by_mechanism(args.data_dir, output_dir)
