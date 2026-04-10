@@ -96,18 +96,18 @@ To modify simulation parameters, edit these values in `config.py` before running
 
 For detailed instructions on running simulations, please refer to the [Example Documentation](./example/README.md).
 
-The `example/` folder contains ready-to-run scripts:
-- **Single Simulation**: `run_market_simulation.py` - Run individual simulations with various configurations
-- **Batch Experiments**: `run_batch_experiments.py` - Run multiple experiments with different market types and communication settings
+The `example/` folder contains streamlined runners:
+- **Intent Probe Runner**: `run_intent_probe_experiment.py` - Run intent-focused probing experiments
+- **Condition Batch Runner**: `run_market_condition_experiment.py` - Run market-condition batch experiments
 
 Quick start examples:
 
 ```bash
-# Run a single simulation
-python ./example/run_market_simulation.py test.db -m reputation_only -c buyer
+# Run intent probing experiment
+python ./example/run_intent_probe_experiment.py --market-type reputation_only
 
-# Run batch experiments (5 runs per configuration)
-python ./example/run_batch_experiments.py 5
+# Run condition batch experiment
+python ./example/run_market_condition_experiment.py --experiment-id demo --market-type reputation_only --communication none
 ```
 
 See [example/README.md](./example/README.md) for comprehensive documentation on:

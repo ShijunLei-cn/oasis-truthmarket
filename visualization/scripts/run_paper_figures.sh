@@ -20,6 +20,7 @@ if [ ! -d "${EXPERIMENT_PREFIX}" ]; then
     exit 1
 fi
 OUTPUT_BASE="./figs/${MODEL_TYPE}/paper_important_results"
+GENERATE_STATS="${GENERATE_STATS:-0}"
 
 export PYTHONPATH="${PYTHONPATH:-}:$(pwd)"
 
@@ -37,10 +38,14 @@ python3 visualization/scripts/generate_main_figures.py \
     --output-dir "${OUTPUT_BASE}"
 
 echo ""
-echo "── Generating Statistical Report ─────────────────────"
-python3 visualization/scripts/generate_paper_stats_report.py \
-    --base-dir "${EXPERIMENT_PREFIX}" \
-    --output-dir "${OUTPUT_BASE}/stats"
+if [ "${GENERATE_STATS}" = "1" ]; then
+    echo "── Generating Statistical Report ─────────────────────"
+    python3 visualization/scripts/generate_paper_stats_report.py \
+        --base-dir "${EXPERIMENT_PREFIX}" \
+        --output-dir "${OUTPUT_BASE}/stats"
+else
+    echo "── Statistical Report Skipped (GENERATE_STATS=${GENERATE_STATS}) ───"
+fi
 
 echo ""
 echo "=========================================="
@@ -50,13 +55,19 @@ echo ""
 echo "RQ1:"
 echo "  ${OUTPUT_BASE}/rq1/rq1_intent_rep_only_manipulation_detection.png"
 echo "RQ2:"
+echo "  ${OUTPUT_BASE}/rq2/rq2_warrant_vs_rep_welfare_overview.png"
 echo "  ${OUTPUT_BASE}/rq2/rq2_warrant_vs_rep_deception_and_profit.png"
-echo "  ${OUTPUT_BASE}/rq2/rq2_exit_loophole_vulnerability.png"
+echo "  ${OUTPUT_BASE}/rq2/rq2_listed_vs_sold_quality.png"
+echo "  ${OUTPUT_BASE}/rq2/rq2_product_quality_over_rounds.png"
 echo "RQ3:"
+echo "  ${OUTPUT_BASE}/rq3/rq3_welfare_overview.png"
 echo "  ${OUTPUT_BASE}/rq3/rq3_seller_comm_deception_by_constraint.png"
 echo "  ${OUTPUT_BASE}/rq3/rq3_profit_decomposition_honest_vs_dishonest.png"
-echo "  ${OUTPUT_BASE}/rq3/rq3_ALL_markettype_hqfake_profit.png"
-echo "Stats:"
-echo "  ${OUTPUT_BASE}/stats/stats_report.txt"
-echo "  ${OUTPUT_BASE}/stats/stats_report.tex"
-echo "  ${OUTPUT_BASE}/stats/stats_report.csv"
+echo "  ${OUTPUT_BASE}/rq3/rq3_all_constraints_grouped.png"
+echo "  ${OUTPUT_BASE}/rq3/rq3_markettype_hqfake_utility_ratio.png"
+if [ "${GENERATE_STATS}" = "1" ]; then
+    echo "Stats:"
+    echo "  ${OUTPUT_BASE}/stats/stats_report.txt"
+    echo "  ${OUTPUT_BASE}/stats/stats_report.tex"
+    echo "  ${OUTPUT_BASE}/stats/stats_report.csv"
+fi

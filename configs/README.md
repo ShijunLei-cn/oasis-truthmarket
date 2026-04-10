@@ -12,7 +12,7 @@ All experiment scripts now support loading configuration from YAML files using t
 
 ```bash
 # Run with YAML config
-python ./example/run_single_config_experiment.py \
+python ./example/run_market_condition_experiment.py \
     --experiment-id r_wo \
     --market-type reputation_only \
     --communication none \
@@ -21,7 +21,7 @@ python ./example/run_single_config_experiment.py \
     --config configs/sim_gpt4omini_5s_5b_10r_runs5_base.yaml
 
 # Run without YAML config (uses default config.py)
-python ./example/run_single_config_experiment.py \
+python ./example/run_market_condition_experiment.py \
     --experiment-id r_wo \
     --market-type reputation_only \
     --communication none \

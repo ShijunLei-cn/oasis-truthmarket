@@ -2430,6 +2430,11 @@ class Platform:
         current_round = int(getattr(self.sandbox_clock, "round_step", 0) or 0)
         try:
             allowed_round = SimulationConfig.REENTRY_ALLOWED_ROUND
+            if allowed_round is None:
+                return {
+                    "success": False,
+                    "error": "reenter_market is disabled by current market rules."
+                }
             if allowed_round is not None and current_round < allowed_round:
                 return {
                     "success": False,

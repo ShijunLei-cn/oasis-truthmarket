@@ -40,7 +40,9 @@ def load_config_from_yaml(yaml_path: Optional[str] = None):
 async def run_experiment(experiment_id: str, market_type: str, 
                         communication_type: str, run_id: int,
                         communication_channel_type: str = "Fake",
-                        posts4seller: str = ""):
+                        posts4seller: str = "",
+                        enable_cognitive_probing: bool = False,
+                        probe_interval: int = 1):
     """
     Run a single experiment with specified parameters
     
@@ -51,6 +53,8 @@ async def run_experiment(experiment_id: str, market_type: str,
         run_id: Run identifier
         communication_channel_type: Type of communication channel ("Fake" or "Real")
         posts4seller: Type of initial posts for sellers ('policy_making', 'pressure_quickprofits', 'psychological-based-attack')
+        enable_cognitive_probing: Enable cognitive probing
+        probe_interval: Probe every N rounds
     """
     # Create experiment directory
     exp_dir = f"experiments/{experiment_id}"
@@ -67,6 +71,8 @@ async def run_experiment(experiment_id: str, market_type: str,
     print(f"  Communication Channel Type: {communication_channel_type}")
     if posts4seller:
         print(f"  Posts4Seller Type: {posts4seller}")
+    if enable_cognitive_probing:
+        print(f"  Cognitive Probing: enabled (interval={probe_interval})")
     
     # Run simulation
     await run_single_simulation(
@@ -74,7 +80,9 @@ async def run_experiment(experiment_id: str, market_type: str,
         market_type=market_type, 
         communication_type=communication_type,
         communication_channel_type=communication_channel_type,
-        posts4seller=posts4seller if posts4seller else None
+        posts4seller=posts4seller if posts4seller else None,
+        enable_cognitive_probing=enable_cognitive_probing,
+        probe_interval=probe_interval,
     )
     
     return db_path
@@ -84,7 +92,9 @@ async def run_batch_experiment(experiment_id: str, market_type: str,
                                communication_type: str, 
                                communication_channel_type: str = "Fake",
                                num_runs: int = None,
-                               posts4seller: str = ""):
+                               posts4seller: str = "",
+                               enable_cognitive_probing: bool = False,
+                               probe_interval: int = 1):
     """
     Run batch experiments with specified configuration
     
@@ -95,6 +105,8 @@ async def run_batch_experiment(experiment_id: str, market_type: str,
         communication_channel_type: Type of communication channel ("Fake" or "Real")
         num_runs: Number of runs (default: from config)
         posts4seller: Type of initial posts for sellers ('policy_making', 'pressure_quickprofits', 'psychological-based-attack')
+        enable_cognitive_probing: Enable cognitive probing
+        probe_interval: Probe every N rounds
     """
     if num_runs is None:
         num_runs = SimulationConfig.RUNS
@@ -111,6 +123,8 @@ async def run_batch_experiment(experiment_id: str, market_type: str,
         "communication_type": communication_type,
         "communication_channel_type": communication_channel_type,
         "posts4seller": posts4seller,
+        "cognitive_probing_enabled": enable_cognitive_probing,
+        "probe_interval": probe_interval,
         "runs": num_runs,
         "simulation_config": SimulationConfig.to_dict()
     }
@@ -126,6 +140,8 @@ async def run_batch_experiment(experiment_id: str, market_type: str,
     print(f"Communication Channel Type: {communication_channel_type}")
     if posts4seller:
         print(f"Posts4Seller Type: {posts4seller}")
+    if enable_cognitive_probing:
+        print(f"Cognitive Probing: enabled (interval={probe_interval})")
     print(f"Number of Runs: {num_runs}")
     print("=" * 60)
     
@@ -136,8 +152,14 @@ async def run_batch_experiment(experiment_id: str, market_type: str,
         print(f"\n[{run_id}/{num_runs}] Run {run_id}")
         
         db_path = await run_experiment(
-            experiment_id, market_type, communication_type, 
-            run_id, communication_channel_type, posts4seller
+            experiment_id=experiment_id,
+            market_type=market_type,
+            communication_type=communication_type,
+            run_id=run_id,
+            communication_channel_type=communication_channel_type,
+            posts4seller=posts4seller,
+            enable_cognitive_probing=enable_cognitive_probing,
+            probe_interval=probe_interval,
         )
         
         results.append({
@@ -146,6 +168,8 @@ async def run_batch_experiment(experiment_id: str, market_type: str,
             "communication_type": communication_type,
             "communication_channel_type": communication_channel_type,
             "posts4seller": posts4seller,
+            "cognitive_probing_enabled": enable_cognitive_probing,
+            "probe_interval": probe_interval,
             "database": db_path
         })
     
@@ -252,6 +276,36 @@ Examples:
         help='Enhanced seller actions type'
     )
 
+    parser.add_argument(
+        '--enable-cognitive-probing',
+        dest='enable_cognitive_probing',
+        action='store_true',
+        help='Enable cognitive probing interviews during simulation.'
+    )
+
+    parser.add_argument(
+        '--probe-interval',
+        dest='probe_interval',
+        type=int,
+        default=1,
+        help='Probe every N rounds when cognitive probing is enabled (default: 1).'
+    )
+
+    parser.add_argument(
+        '--reentry-allowed-round',
+        dest='reentry_allowed_round',
+        type=int,
+        default=None,
+        help='Enable reenter_market from this round (e.g., 5). If omitted, keep config value.'
+    )
+
+    parser.add_argument(
+        '--disable-reentry',
+        dest='disable_reentry',
+        action='store_true',
+        help='Disable reenter_market action regardless of config file.'
+    )
+
     args = parser.parse_args()
     
     # Set model platform and type BEFORE loading config (so they can override config values)
@@ -268,6 +322,14 @@ Examples:
 
     # Respect YAML-configured runs unless explicitly overridden
     resolved_runs = args.num_runs if args.num_runs is not None else SimulationConfig.RUNS
+
+    # Optional market-rule override for reentry action
+    if args.disable_reentry:
+        SimulationConfig.REENTRY_ALLOWED_ROUND = None
+        print("Reentry action override: DISABLED")
+    elif args.reentry_allowed_round is not None:
+        SimulationConfig.REENTRY_ALLOWED_ROUND = args.reentry_allowed_round
+        print(f"Reentry action override: enabled from round {args.reentry_allowed_round}")
     
     # Run batch experiment
     asyncio.run(run_batch_experiment(
@@ -276,7 +338,9 @@ Examples:
         args.communication_type,
         args.communication_channel_type,
         resolved_runs,
-        args.posts4seller
+        args.posts4seller,
+        args.enable_cognitive_probing,
+        args.probe_interval,
     ))
 
 

@@ -13,20 +13,21 @@ echo "Config: ${CONFIG_FILE}"
 echo "Output: experiments/${EXP_ROOT}/rq2_welfare"
 echo "=========================================="
 
-python ./example/run_single_config_experiment.py \
+python ./example/run_market_condition_experiment.py \
     --experiment-id "${EXP_ROOT}/rq2_welfare/r_wo" \
     --market-type reputation_only \
     --communication none \
     --communication-channel-type Fake \
-    --config "${CONFIG_FILE}"
+    --config "${CONFIG_FILE}" \
+    --disable-reentry
 
-python ./example/run_single_config_experiment.py \
+python ./example/run_market_condition_experiment.py \
     --experiment-id "${EXP_ROOT}/rq2_welfare/rw_wo" \
     --market-type reputation_and_warrant \
     --communication none \
     --communication-channel-type Fake \
-    --config "${CONFIG_FILE}"
+    --config "${CONFIG_FILE}" \
+    --disable-reentry
 
 echo ""
 echo "RQ2 done."
-

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-RQ1 Experiment Runner: Cognitive Probing for Reputation Manipulation
+Intent Probe Experiment Runner
 
 This script runs market simulations with cognitive probing to study
-how agents exploit reputation mechanisms.
+how agents exploit market vulnerabilities in reputation-only settings.
 
 Usage:
-    python example/run_rq1_experiment.py [OPTIONS]
+    python example/run_intent_probe_batch_experiment.py [OPTIONS]
 
 Options:
     --runs N              Number of simulation runs (default: 5)
@@ -48,7 +48,7 @@ async def run_single_simulation_with_probing(
         Dictionary with simulation results and probe data
     """
     print(f"\n{'='*70}")
-    print(f"RQ1 SIMULATION RUN {run_id}")
+    print(f"INTENT-PROBE SIMULATION RUN {run_id}")
     print(f"Database: {db_path}")
     print(f"{'='*70}")
 
@@ -92,16 +92,16 @@ async def run_single_simulation_with_probing(
     return summary
 
 
-async def run_rq1_experiment(args):
-    """Run the complete RQ1 experiment"""
+async def run_intent_probe_experiment(args):
+    """Run the complete intent-probe experiment"""
 
     # Setup experiment
-    experiment_id = datetime.now().strftime("rq1_%Y%m%d_%H%M%S")
+    experiment_id = datetime.now().strftime("intent_probe_%Y%m%d_%H%M%S")
     output_dir = args.output_dir or f"experiments/{experiment_id}"
     os.makedirs(output_dir, exist_ok=True)
 
     print(f"\n{'#'*70}")
-    print(f"# RQ1 EXPERIMENT: Cognitive Probing for Reputation Manipulation")
+    print(f"# INTENT PROBE EXPERIMENT: Cognitive Probing")
     print(f"# Experiment ID: {experiment_id}")
     print(f"# Output: {output_dir}")
     print(f"{'#'*70}")
@@ -172,14 +172,14 @@ async def run_rq1_experiment(args):
     print(f"Successful: {experiment_summary['successful_runs']}")
     print(f"Output Dir: {output_dir}")
     print(f"\nTo analyze results, run:")
-    print(f"  python analysis/analyze_rq1.py {output_dir}")
+    print(f"  python scripts/analyze_intent_actions.py {output_dir}  # adjust to your analysis script path")
 
     return experiment_summary
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Run RQ1 Experiment: Cognitive Probing for Reputation Manipulation"
+        description="Run intent-probe experiment with cognitive probing"
     )
     parser.add_argument(
         "--runs", type=int, default=None, help="Number of simulation runs (default: value from config)"
@@ -204,7 +204,7 @@ def main():
         "--output-dir",
         type=str,
         default=None,
-        help="Output directory (default: experiments/rq1_TIMESTAMP)",
+        help="Output directory (default: experiments/intent_probe_TIMESTAMP)",
     )
     parser.add_argument(
         "--probe-interval",
@@ -218,6 +218,13 @@ def main():
         type=str,
         default=None,
         help="Path to YAML configuration file (optional, overrides default config.py values)",
+    )
+    parser.add_argument(
+        "--reentry-allowed-round",
+        dest="reentry_allowed_round",
+        type=int,
+        default=None,
+        help="Enable reenter_market from this round (e.g., 5). If omitted, keep config value.",
     )
 
     args = parser.parse_args()
@@ -257,8 +264,12 @@ def main():
     if args.buyers is None:
         args.buyers = SimulationConfig.NUM_BUYERS
 
+    if args.reentry_allowed_round is not None:
+        SimulationConfig.REENTRY_ALLOWED_ROUND = args.reentry_allowed_round
+        print(f"Reentry action override: enabled from round {args.reentry_allowed_round}")
+
     # Run experiment
-    asyncio.run(run_rq1_experiment(args))
+    asyncio.run(run_intent_probe_experiment(args))
 
 
 if __name__ == "__main__":

@@ -93,6 +93,66 @@ _UTIL_COLORS = {
 }
 
 
+def _set_dynamic_ylim_positive(
+    ax: plt.Axes,
+    tops: List[float],
+    pad_ratio: float = 0.20,
+    min_top: float = 1.0,
+) -> None:
+    """Adaptive positive y-limits for bar charts."""
+    ymax = max([float(v) for v in tops] + [min_top])
+    ax.set_ylim(0, ymax * (1.0 + pad_ratio))
+
+
+def _set_dynamic_ylim_diverging(
+    ax: plt.Axes,
+    lows: List[float],
+    highs: List[float],
+    pad_ratio: float = 0.20,
+) -> None:
+    """Adaptive diverging y-limits for charts with positive and negative bars."""
+    y_lo = min([float(v) for v in lows] + [0.0])
+    y_hi = max([float(v) for v in highs] + [0.0, 1.0])
+    span = max(y_hi - y_lo, 1.0)
+    ax.set_ylim(y_lo - span * pad_ratio * 0.45, y_hi + span * pad_ratio)
+
+
+def _set_dynamic_ylim_focus_positive(
+    ax: plt.Axes,
+    values: List[float],
+    errs: List[float] | None = None,
+    pad_top: float = 0.10,
+    pad_bottom: float = 0.08,
+) -> None:
+    """Tighter positive-axis limits for readability in grouped bar charts.
+
+    If all bars are strictly positive, axis lower bound is set near the minimum
+    observed value (instead of forcing 0) to make inter-bar differences clearer.
+    If any bar touches/below 0, falls back to 0-based lower bound.
+    """
+    vals = [float(v) for v in values]
+    if not vals:
+        ax.set_ylim(0, 1)
+        return
+    es = [0.0] * len(vals) if errs is None else [float(e) for e in errs]
+    tops = [v + e for v, e in zip(vals, es)]
+    bots = [v - e for v, e in zip(vals, es)]
+    y_hi = max(max(tops), 1.0)
+    y_lo = min(bots)
+    span = max(y_hi - y_lo, 1.0)
+    upper = y_hi + span * pad_top
+    has_zero_bar = any(abs(v) <= 1e-12 for v in vals)
+    if has_zero_bar:
+        lower = 0.0
+    elif y_lo > 0:
+        lower = max(0.0, y_lo - span * pad_bottom)
+    else:
+        lower = min(0.0, y_lo - span * pad_bottom * 0.6)
+    if upper <= lower:
+        upper = lower + 1.0
+    ax.set_ylim(lower, upper)
+
+
 def _load_cond(base_dir: str, constraint_key: str, cond: str) -> pd.DataFrame:
     prefix = DIR_PREFIXES[cond]
     return load_results_df(str(Path(base_dir) / f"{prefix}_{constraint_key}"))
@@ -162,14 +222,12 @@ def fig4_deception_by_constraint(base_dir: str, output_dir: Path, file_prefix: s
                error_kw={"elinewidth": 1.0, "ecolor": "#555"},
                zorder=3)
 
-        max_bar_top = max(m + s for m, s in zip(means, stds)) if means else 1.0
-        ylim = max_bar_top * 1.55 + 2
-
         ax.set_xticks(xs)
         ax.set_xticklabels(CONDITIONS_ORDER, fontsize=8.5, rotation=15, ha="right")
         if col_idx == 0:
             ax.set_ylabel("Deceptions per Run", fontsize=10)
-        ax.set_ylim(0, ylim)
+        max_bar_top = max(m + s for m, s in zip(means, stds)) if means else 1.0
+        _set_dynamic_ylim_positive(ax, [max_bar_top], pad_ratio=0.30, min_top=1.0)
         for tick, cond in zip(ax.get_xticklabels(), CONDITIONS_ORDER):
             tick.set_color(COND_XCOLORS[cond])
 
@@ -284,8 +342,8 @@ def fig5_profit_decomposition(base_dir: str, output_dir: Path, file_prefix: str 
             ax.set_ylabel("Seller Profit per Run", fontsize=10)
         for tick, cond in zip(ax.get_xticklabels(), CONDITIONS_ORDER):
             tick.set_color(COND_XCOLORS[cond])
-        ymax = max(h + d for h, d in zip(h_means, d_means)) if h_means else 10
-        ax.set_ylim(0, ymax * 1.50 + 10)
+        ymax = max(h + d for h, d in zip(h_means, d_means)) if h_means else 1.0
+        _set_dynamic_ylim_positive(ax, [ymax], pad_ratio=0.28, min_top=1.0)
 
         if col_idx == 0:
             ax.legend(frameon=False, fontsize=8, loc="upper left")
@@ -300,63 +358,86 @@ def fig5_profit_decomposition(base_dir: str, output_dir: Path, file_prefix: str 
 # ─────────────────────────────────────────────────────────────────────────────
 
 def fig6_product_mix(base_dir: str, output_dir: Path, file_prefix: str = "rq2") -> None:
-    n_cols = len(CONSTRAINTS)
-    fig, axes = plt.subplots(
-        1, n_cols, figsize=(4.5 * n_cols, 3.8),
-        gridspec_kw={"wspace": 0.38},
-        sharey=True,
-    )
-    xs = np.arange(len(CONDITIONS_ORDER))
-    w = 0.52
-    seg_colors = [COLORS["hq_auth"], COLORS["lq_auth"], COLORS["counterfeit"]]
-    seg_labels = ["HQ Authentic", "LQ Authentic", "HQ Counterfeit (fraud)"]
-    panel_letters = "abc"
+    """Grouped bars for product quality shares (RQ3 style)."""
+    constraints = _rq3_constraints_with_baseline()
+    base_path = Path(base_dir)
+    baseline_dir = base_path.parent / "rq2_welfare"
+    market_types = _rq3_market_types(baseline_dir)
+    bar_colors = {
+        "baseline": COLORS["neutral"],
+        "policy_making": COLORS["good_mid"],
+        "pressure_quickprofits": COLORS["accent"],
+        "psychological-based-attack": COLORS["bad_mid"],
+    }
 
-    for col_idx, (c_key, c_label) in enumerate(CONSTRAINTS):
-        ax = axes[col_idx]
-        label_panel(ax, panel_letters[col_idx])
-        segs: List[List[float]] = [[], [], []]
-        for cond in CONDITIONS_ORDER:
-            df = _load_cond(base_dir, c_key, cond)
-            if df.empty:
-                for si in range(3):
-                    segs[si].append(0.0)
-                continue
-            pq_runs = per_run_values(df, product_quality_counts_all)
-            means_t = [np.mean([t[i] for t in pq_runs]) for i in range(3)]
-            total = sum(means_t)
-            for si in range(3):
-                segs[si].append(means_t[si] / total * 100 if total > 0 else 0.0)
+    def _share_metric(idx: int):
+        out: Dict[str, List[float]] = {}
+        err: Dict[str, List[float]] = {}
+        for mt_key, _mt_label, dir_prefix, baseline_subdir in market_types:
+            means, sems = [], []
+            for c_key, _ in constraints:
+                if c_key == "baseline":
+                    df = load_results_df(str(baseline_subdir))
+                else:
+                    df = load_results_df(str(base_path / f"{dir_prefix}_{c_key}"))
+                vals = []
+                if not df.empty:
+                    for t in per_run_values(df, product_quality_counts_all):
+                        total = float(sum(t))
+                        vals.append((float(t[idx]) / total * 100.0) if total > 0 else 0.0)
+                if not vals:
+                    vals = [0.0]
+                means.append(float(np.mean(vals)))
+                sems.append(_sem(vals))
+            out[mt_key] = means
+            err[mt_key] = sems
+        return out, err
 
-        bottoms = [0.0] * len(CONDITIONS_ORDER)
-        for si in range(3):
-            lbl = seg_labels[si] if col_idx == 0 else "_"
-            ax.bar(xs, segs[si], width=w, bottom=bottoms,
-                   color=seg_colors[si], label=lbl,
-                   edgecolor="white", linewidth=0.4, zorder=3)
-            for xi, (h, b) in enumerate(zip(segs[si], bottoms)):
-                if h > 10.0:   # raise threshold to avoid overlap
-                    ax.text(xs[xi], b + h / 2, f"{h:.0f}%",
-                            ha="center", va="center", fontsize=7,
-                            color="white", fontweight="bold")
-            bottoms = [bottoms[xi] + segs[si][xi] for xi in range(len(xs))]
+    share_hq, sem_hq = _share_metric(0)
+    share_lq, sem_lq = _share_metric(1)
+    share_cf, sem_cf = _share_metric(2)
 
-        ax.set_xticks(xs)
-        ax.set_xticklabels(CONDITIONS_ORDER, fontsize=8.5, rotation=15, ha="right")
-        if col_idx == 0:
-            ax.set_ylabel("Share of Listed Products (%)", fontsize=10)
-        ax.set_ylim(0, 112)
-        for tick, cond in zip(ax.get_xticklabels(), CONDITIONS_ORDER):
-            tick.set_color(COND_XCOLORS[cond])
+    fig, axes = plt.subplots(1, 3, figsize=(13.2, 4.3), gridspec_kw={"wspace": 0.25})
+    group_x = np.arange(len(market_types))
+    bw = 0.18
+    offsets = np.array([-1.5, -0.5, 0.5, 1.5]) * bw
 
-    # Collect legend handles from first panel, place below entire figure
+    for ax, metric, sems, ylabel in [
+        (axes[0], share_hq, sem_hq, "HQ Authentic Share (%)"),
+        (axes[1], share_lq, sem_lq, "LQ Authentic Share (%)"),
+        (axes[2], share_cf, sem_cf, "HQ Counterfeit Share (%)"),
+    ]:
+        for idx, (c_key, c_label) in enumerate(constraints):
+            x_pos = group_x + offsets[idx]
+            vals = [metric[mt_key][idx] for mt_key, *_ in market_types]
+            errs = [sems[mt_key][idx] for mt_key, *_ in market_types]
+            ax.bar(
+                x_pos, vals, width=bw,
+                color=bar_colors[c_key], edgecolor="white", linewidth=0.5,
+                yerr=errs, capsize=3, error_kw={"elinewidth": 1.0, "ecolor": "#666"},
+                label=c_label, zorder=3
+            )
+        ax.set_xticks(group_x)
+        ax.set_xticklabels([mt_label for _, mt_label, _, _ in market_types], fontsize=9)
+        ax.set_ylabel(ylabel, fontsize=9.5)
+        ytops = []
+        yvals = []
+        yerrs = []
+        for mt_key, *_ in market_types:
+            for i in range(len(constraints)):
+                ytops.append(metric[mt_key][i] + sems[mt_key][i])
+                yvals.append(metric[mt_key][i])
+                yerrs.append(sems[mt_key][i])
+        _set_dynamic_ylim_focus_positive(ax, yvals, yerrs, pad_top=0.10, pad_bottom=0.08)
+        ax.grid(axis="y", alpha=0.25, zorder=0)
+        ax.set_axisbelow(True)
+
     handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="lower center",
-               bbox_to_anchor=(0.5, 0.01), ncol=3,
-               frameon=False, fontsize=8)
+    fig.legend(handles, labels, loc="lower center", bbox_to_anchor=(0.5, -0.02),
+               ncol=4, frameon=False, fontsize=9)
     fig.subplots_adjust(bottom=0.22)
     save_figure(fig, output_dir / f"{file_prefix}_product_mix_appendix.png")
-    print("  [Fig6] Product mix appendix figure saved.")
+    print("  [Fig6] Grouped product mix appendix figure saved.")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -459,9 +540,9 @@ def fig7_buyer_utility_by_constraint(base_dir: str, output_dir: Path, file_prefi
         for tick, cond in zip(ax.get_xticklabels(), CONDITIONS_ORDER):
             tick.set_color(COND_XCOLORS[cond])
 
-        y_lo = min(0.0, min(d_means) * 1.25) if d_means else 0.0
-        y_hi = max(h_means) * 1.55 + 10 if h_means else 10
-        ax.set_ylim(y_lo, y_hi)
+        d_low = min(d_means) if d_means else 0.0
+        h_high = max(h_means) if h_means else 1.0
+        _set_dynamic_ylim_diverging(ax, [d_low], [h_high], pad_ratio=0.22)
 
     # Shared legend
     handles, labels = axes[0].get_legend_handles_labels()
@@ -478,137 +559,83 @@ def fig7_buyer_utility_by_constraint(base_dir: str, output_dir: Path, file_prefi
 # ─────────────────────────────────────────────────────────────────────────────
 
 def fig_all_constraints_summary(base_dir: str, output_dir: Path, file_prefix: str = "rq2") -> None:
-    """Aggregate samples across all three constraints and render 4 RQ2 views in one figure."""
-    df_by_cond = {cond: _load_cond_all_constraints(base_dir, cond) for cond in CONDITIONS_ORDER}
-    xs = np.arange(len(CONDITIONS_ORDER))
+    """RQ3 grouped 2x2 summary (grouped bars in all subplots)."""
+    base_path = Path(base_dir)
+    baseline_dir = base_path.parent / "rq2_welfare"
+    constraints = _rq3_constraints_with_baseline()
+    market_types = _rq3_market_types(baseline_dir)
+    bar_colors = {
+        "baseline": COLORS["neutral"],
+        "policy_making": COLORS["good_mid"],
+        "pressure_quickprofits": COLORS["accent"],
+        "psychological-based-attack": COLORS["bad_mid"],
+    }
 
-    fig, axes = plt.subplots(2, 2, figsize=(12.0, 8.2), gridspec_kw={"wspace": 0.30, "hspace": 0.34})
-    ax_dec, ax_profit = axes[0, 0], axes[0, 1]
-    ax_mix, ax_util = axes[1, 0], axes[1, 1]
-    label_panel(ax_dec, "a")
-    label_panel(ax_profit, "b")
-    label_panel(ax_mix, "c")
-    label_panel(ax_util, "d")
+    def _transaction_count(run_df: pd.DataFrame) -> float:
+        return float(len(run_df))
 
-    # (a) Deceptions
-    dec_runs = []
-    dec_means, dec_stds = [], []
-    for cond in CONDITIONS_ORDER:
-        df = df_by_cond[cond]
-        vals = per_run_values(df, count_deceptions) if not df.empty else [0.0]
-        dec_runs.append(vals)
-        dec_means.append(np.mean(vals))
-        dec_stds.append(np.std(vals, ddof=1) if len(vals) > 1 else 0.0)
-    dec_colors = [
-        METRIC_COLORS["deception_secondary"],
-        METRIC_COLORS["deception_primary"],
-        METRIC_COLORS["deception_secondary"],
-        METRIC_COLORS["deception_primary"],
+    def _collect(metric_fn):
+        means: Dict[str, List[float]] = {}
+        sems: Dict[str, List[float]] = {}
+        for mt_key, _mt_label, dir_prefix, baseline_subdir in market_types:
+            mt_means, mt_sems = [], []
+            for c_key, _ in constraints:
+                if c_key == "baseline":
+                    df = load_results_df(str(baseline_subdir))
+                else:
+                    df = load_results_df(str(base_path / f"{dir_prefix}_{c_key}"))
+                vals = per_run_values(df, metric_fn) if not df.empty else [0.0]
+                if not vals:
+                    vals = [0.0]
+                mt_means.append(float(np.mean(vals)))
+                mt_sems.append(_sem(vals))
+            means[mt_key] = mt_means
+            sems[mt_key] = mt_sems
+        return means, sems
+
+    metrics = [
+        ("Deceptions per Run", count_deceptions),
+        ("Seller Profit per Run", sum_seller_profit),
+        ("Buyer Utility per Run", sum_buyer_utility),
+        ("Transaction Count per Run", _transaction_count),
     ]
-    ax_dec.bar(xs, dec_means, width=0.56, color=dec_colors, edgecolor="white", linewidth=0.4,
-               yerr=dec_stds, capsize=3, error_kw={"elinewidth": 1.0, "ecolor": "#555"}, zorder=3)
-    ax_dec.set_ylabel("Deceptions per Run", fontsize=10)
-    ax_dec.set_xticks(xs)
-    ax_dec.set_xticklabels(CONDITIONS_ORDER, fontsize=8.5, rotation=15, ha="right")
-    for tick in ax_dec.get_xticklabels():
-        tick.set_color(COLORS["neutral_dark"])
-    dec_top = max(m + s for m, s in zip(dec_means, dec_stds)) if dec_means else 1.0
-    ax_dec.set_ylim(0, dec_top * 1.55 + 2)
-    for (ci, cj) in [(0, 2), (1, 3)]:
-        p = mannwhitney_p(dec_runs[ci], dec_runs[cj])
-        y_top = max(dec_means[ci] + dec_stds[ci], dec_means[cj] + dec_stds[cj])
-        add_significance_bracket(ax_dec, xs[ci], xs[cj], y_top, p, h_frac=0.08, fontsize=9)
 
-    # (b) Seller profit decomposition
-    h_means, h_stds, d_means, d_stds = [], [], [], []
-    for cond in CONDITIONS_ORDER:
-        df = df_by_cond[cond]
-        if df.empty:
-            h_means.append(0.0); h_stds.append(0.0); d_means.append(0.0); d_stds.append(0.0)
-            continue
-        h_vals = per_run_values(df, honest_profit)
-        d_vals = per_run_values(df, dishonest_profit)
-        h_means.append(np.mean(h_vals)); d_means.append(np.mean(d_vals))
-        h_stds.append(np.std(h_vals, ddof=1) if len(h_vals) > 1 else 0.0)
-        d_stds.append(np.std(d_vals, ddof=1) if len(d_vals) > 1 else 0.0)
-    ax_profit.bar(xs, h_means, width=0.56, color=METRIC_COLORS["honest_component"],
-                  edgecolor="#aaaaaa", linewidth=0.5, label="Honest profit", zorder=3)
-    ax_profit.bar(xs, d_means, width=0.56, bottom=h_means, color=METRIC_COLORS["dishonest_component"],
-                  edgecolor="#aaaaaa", linewidth=0.5, label="Dishonest profit", zorder=3)
-    ax_profit.set_ylabel("Seller Profit per Run", fontsize=10)
-    ax_profit.set_xticks(xs)
-    ax_profit.set_xticklabels(CONDITIONS_ORDER, fontsize=8.5, rotation=15, ha="right")
-    for tick in ax_profit.get_xticklabels():
-        tick.set_color(COLORS["neutral_dark"])
-    ymax_p = max(h + d for h, d in zip(h_means, d_means)) if h_means else 10
-    ax_profit.set_ylim(0, ymax_p * 1.50 + 10)
-    ax_profit.legend(frameon=False, fontsize=8, loc="upper left")
+    fig, axes = plt.subplots(2, 2, figsize=(12.4, 8.0), gridspec_kw={"wspace": 0.26, "hspace": 0.28})
+    axes_flat = [axes[0, 0], axes[0, 1], axes[1, 0], axes[1, 1]]
+    for letter, ax in zip("abcd", axes_flat):
+        label_panel(ax, letter)
 
-    # (c) Product mix (all listed)
-    seg_colors = [COLORS["hq_auth"], COLORS["lq_auth"], COLORS["counterfeit"]]
-    seg_labels = ["HQ Authentic", "LQ Authentic", "HQ Counterfeit (fraud)"]
-    segs = [[], [], []]
-    for cond in CONDITIONS_ORDER:
-        df = df_by_cond[cond]
-        if df.empty:
-            for si in range(3):
-                segs[si].append(0.0)
-            continue
-        pq_runs = per_run_values(df, product_quality_counts_all)
-        means_t = [np.mean([t[i] for t in pq_runs]) for i in range(3)]
-        total = sum(means_t)
-        for si in range(3):
-            segs[si].append(means_t[si] / total * 100 if total > 0 else 0.0)
-    bottoms = [0.0] * len(CONDITIONS_ORDER)
-    for si in range(3):
-        ax_mix.bar(xs, segs[si], width=0.56, bottom=bottoms, color=seg_colors[si],
-                   label=seg_labels[si], edgecolor="white", linewidth=0.4, zorder=3)
-        bottoms = [bottoms[i] + segs[si][i] for i in range(len(xs))]
-    ax_mix.set_ylabel("Share of Listed Products (%)", fontsize=10)
-    ax_mix.set_xticks(xs)
-    ax_mix.set_xticklabels(CONDITIONS_ORDER, fontsize=8.5, rotation=15, ha="right")
-    for tick in ax_mix.get_xticklabels():
-        tick.set_color(COLORS["neutral_dark"])
-    ax_mix.set_ylim(0, 112)
-    ax_mix.legend(frameon=False, fontsize=8, loc="upper right")
+    group_x = np.arange(len(market_types))
+    bw = 0.18
+    offsets = np.array([-1.5, -0.5, 0.5, 1.5]) * bw
 
-    # (d) Buyer utility decomposition
-    uh_means, ud_means = [], []
-    total_runs = []
-    for cond in CONDITIONS_ORDER:
-        df = df_by_cond[cond]
-        if df.empty:
-            uh_means.append(0.0); ud_means.append(0.0); total_runs.append([0.0])
-            continue
-        h_vals = per_run_values(df, honest_buyer_utility)
-        d_vals = per_run_values(df, dishonest_buyer_utility)
-        t_vals = per_run_values(df, sum_buyer_utility)
-        uh_means.append(np.mean(h_vals)); ud_means.append(np.mean(d_vals)); total_runs.append(t_vals)
-    ax_util.bar(xs, uh_means, width=0.56, color=METRIC_COLORS["honest_component"],
-                edgecolor="#aaaaaa", linewidth=0.5, label="Honest utility", zorder=3)
-    d_bottoms = [min(dm, 0.0) for dm in ud_means]
-    ax_util.bar(xs, [dm if dm >= 0 else -dm for dm in ud_means], width=0.56, bottom=d_bottoms,
-                color=METRIC_COLORS["dishonest_component"], edgecolor="#aaaaaa", linewidth=0.5,
-                label="Fraud-induced loss", zorder=3)
-    ax_util.axhline(0, color="#888888", lw=0.8, zorder=2)
-    ax_util.set_ylabel("Buyer Utility per Run", fontsize=10)
-    ax_util.set_xticks(xs)
-    ax_util.set_xticklabels(CONDITIONS_ORDER, fontsize=8.5, rotation=15, ha="right")
-    for tick in ax_util.get_xticklabels():
-        tick.set_color(COLORS["neutral_dark"])
-    y_lo = min(0.0, min(ud_means) * 1.25) if ud_means else 0.0
-    y_hi = max(uh_means) * 1.55 + 10 if uh_means else 10
-    ax_util.set_ylim(y_lo, y_hi)
-    for (la, lb) in [("Rep", "Rep+Warrant"), ("Rep, Comm", "Rep+Warrant, Comm")]:
-        ia = CONDITIONS_ORDER.index(la)
-        ib = CONDITIONS_ORDER.index(lb)
-        p = mannwhitney_p(total_runs[ia], total_runs[ib])
-        y_top = max(uh_means) * (1.08 + 0.14 * (0 if ia == 0 else 1)) if uh_means else 10
-        add_significance_bracket(ax_util, xs[ia], xs[ib], y_top, p, h_frac=0.06, fontsize=9)
+    for ax, (ylabel, metric_fn) in zip(axes_flat, metrics):
+        means, sems = _collect(metric_fn)
+        for idx, (c_key, c_label) in enumerate(constraints):
+            x_pos = group_x + offsets[idx]
+            vals = [means[mt_key][idx] for mt_key, *_ in market_types]
+            errs = [sems[mt_key][idx] for mt_key, *_ in market_types]
+            ax.bar(
+                x_pos, vals, width=bw,
+                color=bar_colors[c_key], edgecolor="white", linewidth=0.5,
+                yerr=errs, capsize=3, error_kw={"elinewidth": 1.0, "ecolor": "#666"},
+                label=c_label, zorder=3
+            )
+        ax.set_xticks(group_x)
+        ax.set_xticklabels([mt_label for _, mt_label, _, _ in market_types], fontsize=8.5)
+        ax.set_ylabel(ylabel, fontsize=9.5)
+        flat_vals = [means[mt_key][i] for mt_key, *_ in market_types for i in range(len(constraints))]
+        flat_errs = [sems[mt_key][i] for mt_key, *_ in market_types for i in range(len(constraints))]
+        _set_dynamic_ylim_focus_positive(ax, flat_vals, flat_errs, pad_top=0.10, pad_bottom=0.08)
+        ax.grid(axis="y", alpha=0.25, zorder=0)
+        ax.set_axisbelow(True)
 
-    fig.subplots_adjust(bottom=0.14)
-    save_figure(fig, output_dir / f"{file_prefix}_All_constraints_combined.png")
-    print("  [RQ2-All] Aggregated 2x2 summary figure saved.")
+    handles, labels = axes_flat[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="lower center", bbox_to_anchor=(0.5, -0.01),
+               ncol=4, frameon=False, fontsize=9)
+    fig.subplots_adjust(bottom=0.16)
+    save_figure(fig, output_dir / f"{file_prefix}_all_constraints_grouped.png")
+    print("  [RQ3] Grouped all-constraints summary figure saved.")
 
 
 def fig_rq2_all_markettype_dual_metrics(
@@ -721,8 +748,10 @@ def fig_rq2_all_markettype_dual_metrics(
 
     left_positions = []
     left_values = []
+    left_errs = []
     right_positions = []
     right_values = []
+    right_errs = []
 
     for idx, (c_key, c_label) in enumerate(constraints):
         vals_left = [metrics_mean["hq_fake"][mt_key][idx] for mt_key, *_ in market_types]
@@ -745,8 +774,10 @@ def fig_rq2_all_markettype_dual_metrics(
 
         left_positions.extend(x_pos.tolist())
         left_values.extend(vals_left)
+        left_errs.extend(errs_left)
         right_positions.extend(x_pos.tolist())
         right_values.extend(vals_right)
+        right_errs.extend(errs_right)
 
     xlabels = [mt_label for _, mt_label, _, _ in market_types]
     ax_left.set_xticks(group_x)
@@ -761,6 +792,9 @@ def fig_rq2_all_markettype_dual_metrics(
     for ax in (ax_left, ax_right):
         ax.grid(axis="y", alpha=0.25, zorder=0)
         ax.set_axisbelow(True)
+
+    _set_dynamic_ylim_focus_positive(ax_left, left_values, left_errs, pad_top=0.10, pad_bottom=0.08)
+    _set_dynamic_ylim_focus_positive(ax_right, right_values, right_errs, pad_top=0.10, pad_bottom=0.08)
 
     # Add explicit zero markers so zero-height bars are visible.
     def _mark_zero_bars(ax, x_positions, values):
@@ -784,8 +818,266 @@ def fig_rq2_all_markettype_dual_metrics(
         fontsize=9,
     )
     fig.subplots_adjust(bottom=0.22)
-    save_figure(fig, output_dir / f"{file_prefix}_ALL_markettype_hqfake_profit.png")
-    print("  [RQ2_ALL] Market-type grouped dual-metric figure saved.")
+    save_figure(fig, output_dir / f"{file_prefix}_markettype_hqfake_utility_ratio.png")
+    print("  [RQ3] Market-type grouped dual-metric figure saved.")
+
+
+def _rq3_constraints_with_baseline():
+    return [
+        ("baseline", "Baseline"),
+        ("policy_making", "Policy-Making"),
+        ("pressure_quickprofits", "Pressure"),
+        ("psychological-based-attack", "Psychology"),
+    ]
+
+
+def _rq3_market_types(baseline_dir: Path):
+    return [
+        ("rep", "Rep", "r_wsc_F", baseline_dir / "r_wo"),
+        ("rep_comm", "Rep Comm", "r_wsc_R", baseline_dir / "r_wo"),
+        ("rw", "Rep+Warrant", "rw_wsc_F", baseline_dir / "rw_wo"),
+        ("rw_comm", "Rep+Warrant Comm", "rw_wsc_R", baseline_dir / "rw_wo"),
+    ]
+
+
+def _sem(vals: List[float]) -> float:
+    n = len(vals)
+    if n <= 1:
+        return 0.0
+    return float(np.std(vals, ddof=1) / np.sqrt(n))
+
+
+def _rq3_grouped_metric(
+    base_dir: str,
+    output_dir: Path,
+    baseline_dir: str,
+    metric_fn,
+    ylabel: str,
+    out_name: str,
+) -> None:
+    base_path = Path(base_dir)
+    baseline_path = Path(baseline_dir)
+    constraints = _rq3_constraints_with_baseline()
+    market_types = _rq3_market_types(baseline_path)
+    bar_colors = {
+        "baseline": COLORS["neutral"],
+        "policy_making": COLORS["good_mid"],
+        "pressure_quickprofits": COLORS["accent"],
+        "psychological-based-attack": COLORS["bad_mid"],
+    }
+
+    means: Dict[str, List[float]] = {}
+    sems: Dict[str, List[float]] = {}
+    for mt_key, _, dir_prefix, baseline_subdir in market_types:
+        mt_means, mt_sems = [], []
+        for c_key, _ in constraints:
+            if c_key == "baseline":
+                df = load_results_df(str(baseline_subdir))
+            else:
+                df = load_results_df(str(base_path / f"{dir_prefix}_{c_key}"))
+            vals = per_run_values(df, metric_fn) if not df.empty else [0.0]
+            if not vals:
+                vals = [0.0]
+            mt_means.append(float(np.mean(vals)))
+            mt_sems.append(_sem(vals))
+        means[mt_key] = mt_means
+        sems[mt_key] = mt_sems
+
+    fig, ax = plt.subplots(1, 1, figsize=(7.6, 4.4))
+    group_x = np.arange(len(market_types))
+    bw = 0.18
+    offsets = np.array([-1.5, -0.5, 0.5, 1.5]) * bw
+
+    for idx, (c_key, c_label) in enumerate(constraints):
+        x_pos = group_x + offsets[idx]
+        vals = [means[mt_key][idx] for mt_key, *_ in market_types]
+        errs = [sems[mt_key][idx] for mt_key, *_ in market_types]
+        ax.bar(
+            x_pos, vals, width=bw,
+            color=bar_colors[c_key], edgecolor="white", linewidth=0.5,
+            yerr=errs, capsize=3, error_kw={"elinewidth": 1.0, "ecolor": "#666"},
+            label=c_label, zorder=3,
+        )
+
+    ax.set_xticks(group_x)
+    ax.set_xticklabels([mt_label for _, mt_label, _, _ in market_types], fontsize=9)
+    ax.set_ylabel(ylabel, fontsize=10)
+    flat_vals = [means[mt_key][i] for mt_key, *_ in market_types for i in range(len(constraints))]
+    flat_errs = [sems[mt_key][i] for mt_key, *_ in market_types for i in range(len(constraints))]
+    _set_dynamic_ylim_focus_positive(ax, flat_vals, flat_errs, pad_top=0.10, pad_bottom=0.08)
+    ax.grid(axis="y", alpha=0.25, zorder=0)
+    ax.set_axisbelow(True)
+    ax.legend(frameon=False, ncol=2, fontsize=8, loc="upper left")
+    save_figure(fig, output_dir / out_name)
+    print(f"  [RQ3] Saved grouped figure: {out_name}")
+
+
+def fig_rq3_welfare_overview(base_dir: str, output_dir: Path, baseline_dir: str, file_prefix: str = "rq3") -> None:
+    """RQ3 welfare overview with grouped bars by market type and interference constraint."""
+    base_path = Path(base_dir)
+    baseline_path = Path(baseline_dir)
+    constraints = _rq3_constraints_with_baseline()
+    market_types = _rq3_market_types(baseline_path)
+    bar_colors = {
+        "baseline": COLORS["neutral"],
+        "policy_making": COLORS["good_mid"],
+        "pressure_quickprofits": COLORS["accent"],
+        "psychological-based-attack": COLORS["bad_mid"],
+    }
+
+    def _transaction_count(run_df: pd.DataFrame) -> float:
+        return float(len(run_df))
+
+    def _hq_auth_share(run_df: pd.DataFrame) -> float:
+        hq_auth, lq_auth, hq_fake = product_quality_counts_all(run_df)
+        total = float(hq_auth + lq_auth + hq_fake)
+        if total <= 0:
+            return 0.0
+        return 100.0 * float(hq_auth) / total
+
+    metrics = [
+        ("Seller Profit", sum_seller_profit),
+        ("Buyer Utility", sum_buyer_utility),
+        ("Transactions", _transaction_count),
+        ("HQ Auth Share (%)", _hq_auth_share),
+    ]
+
+    fig, axes = plt.subplots(2, 2, figsize=(12.4, 8.0), gridspec_kw={"wspace": 0.26, "hspace": 0.28})
+    axes_flat = [axes[0, 0], axes[0, 1], axes[1, 0], axes[1, 1]]
+    group_x = np.arange(len(market_types))
+    bw = 0.18
+    offsets = np.array([-1.5, -0.5, 0.5, 1.5]) * bw
+
+    for ax, (ylabel, metric_fn), letter in zip(axes_flat, metrics, "abcd"):
+        label_panel(ax, letter)
+        means: Dict[str, List[float]] = {}
+        sems: Dict[str, List[float]] = {}
+        for mt_key, _mt_label, dir_prefix, baseline_subdir in market_types:
+            mt_means, mt_sems = [], []
+            for c_key, _ in constraints:
+                if c_key == "baseline":
+                    df = load_results_df(str(baseline_subdir))
+                else:
+                    df = load_results_df(str(base_path / f"{dir_prefix}_{c_key}"))
+                vals = per_run_values(df, metric_fn) if not df.empty else [0.0]
+                if not vals:
+                    vals = [0.0]
+                mt_means.append(float(np.mean(vals)))
+                mt_sems.append(_sem(vals))
+            means[mt_key] = mt_means
+            sems[mt_key] = mt_sems
+
+        for idx, (c_key, c_label) in enumerate(constraints):
+            x_pos = group_x + offsets[idx]
+            vals = [means[mt_key][idx] for mt_key, *_ in market_types]
+            errs = [sems[mt_key][idx] for mt_key, *_ in market_types]
+            ax.bar(
+                x_pos, vals, width=bw,
+                color=bar_colors[c_key], edgecolor="white", linewidth=0.5,
+                yerr=errs, capsize=3, error_kw={"elinewidth": 1.0, "ecolor": "#666"},
+                label=c_label, zorder=3
+            )
+        ax.set_xticks(group_x)
+        ax.set_xticklabels([mt_label for _, mt_label, _, _ in market_types], fontsize=8.5)
+        ax.set_ylabel(ylabel, fontsize=9.5)
+        flat_vals = [means[mt_key][i] for mt_key, *_ in market_types for i in range(len(constraints))]
+        flat_errs = [sems[mt_key][i] for mt_key, *_ in market_types for i in range(len(constraints))]
+        _set_dynamic_ylim_focus_positive(ax, flat_vals, flat_errs, pad_top=0.10, pad_bottom=0.08)
+        ax.grid(axis="y", alpha=0.25, zorder=0)
+        ax.set_axisbelow(True)
+
+    handles, labels = axes_flat[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="lower center", bbox_to_anchor=(0.5, -0.01),
+               ncol=4, frameon=False, fontsize=9)
+    fig.subplots_adjust(bottom=0.16)
+    save_figure(fig, output_dir / f"{file_prefix}_welfare_overview.png")
+    print("  [RQ3] Welfare overview figure saved.")
+
+
+def fig_rq3_profit_decomposition_grouped(
+    base_dir: str, output_dir: Path, baseline_dir: str, file_prefix: str = "rq3"
+) -> None:
+    """Grouped-bar profit decomposition (left: honest, right: dishonest)."""
+    base_path = Path(base_dir)
+    baseline_path = Path(baseline_dir)
+    constraints = _rq3_constraints_with_baseline()
+    market_types = _rq3_market_types(baseline_path)
+    bar_colors = {
+        "baseline": COLORS["neutral"],
+        "policy_making": COLORS["good_mid"],
+        "pressure_quickprofits": COLORS["accent"],
+        "psychological-based-attack": COLORS["bad_mid"],
+    }
+
+    def _collect(metric_fn):
+        means: Dict[str, List[float]] = {}
+        sems: Dict[str, List[float]] = {}
+        for mt_key, _, dir_prefix, baseline_subdir in market_types:
+            mt_means, mt_sems = [], []
+            for c_key, _ in constraints:
+                if c_key == "baseline":
+                    df = load_results_df(str(baseline_subdir))
+                else:
+                    df = load_results_df(str(base_path / f"{dir_prefix}_{c_key}"))
+                vals = per_run_values(df, metric_fn) if not df.empty else [0.0]
+                if not vals:
+                    vals = [0.0]
+                mt_means.append(float(np.mean(vals)))
+                mt_sems.append(_sem(vals))
+            means[mt_key] = mt_means
+            sems[mt_key] = mt_sems
+        return means, sems
+
+    h_means, h_sems = _collect(honest_profit)
+    d_means, d_sems = _collect(dishonest_profit)
+
+    fig, (ax_h, ax_d) = plt.subplots(1, 2, figsize=(13.0, 4.4), gridspec_kw={"wspace": 0.22})
+    group_x = np.arange(len(market_types))
+    bw = 0.18
+    offsets = np.array([-1.5, -0.5, 0.5, 1.5]) * bw
+
+    for idx, (c_key, c_label) in enumerate(constraints):
+        x_pos = group_x + offsets[idx]
+        vals_h = [h_means[mt_key][idx] for mt_key, *_ in market_types]
+        errs_h = [h_sems[mt_key][idx] for mt_key, *_ in market_types]
+        vals_d = [d_means[mt_key][idx] for mt_key, *_ in market_types]
+        errs_d = [d_sems[mt_key][idx] for mt_key, *_ in market_types]
+        ax_h.bar(
+            x_pos, vals_h, width=bw,
+            color=bar_colors[c_key], edgecolor="white", linewidth=0.5,
+            yerr=errs_h, capsize=3, error_kw={"elinewidth": 1.0, "ecolor": "#666"},
+            label=c_label, zorder=3
+        )
+        ax_d.bar(
+            x_pos, vals_d, width=bw,
+            color=bar_colors[c_key], edgecolor="white", linewidth=0.5,
+            yerr=errs_d, capsize=3, error_kw={"elinewidth": 1.0, "ecolor": "#666"},
+            label=c_label, zorder=3
+        )
+
+    for ax, ylab in [
+        (ax_h, "Honest Profit per Run"),
+        (ax_d, "Dishonest Profit per Run"),
+    ]:
+        ax.set_xticks(group_x)
+        ax.set_xticklabels([mt_label for _, mt_label, _, _ in market_types], fontsize=9)
+        ax.set_ylabel(ylab, fontsize=10)
+        if ax is ax_h:
+            flat_vals = [h_means[mt_key][i] for mt_key, *_ in market_types for i in range(len(constraints))]
+            flat_errs = [h_sems[mt_key][i] for mt_key, *_ in market_types for i in range(len(constraints))]
+        else:
+            flat_vals = [d_means[mt_key][i] for mt_key, *_ in market_types for i in range(len(constraints))]
+            flat_errs = [d_sems[mt_key][i] for mt_key, *_ in market_types for i in range(len(constraints))]
+        _set_dynamic_ylim_focus_positive(ax, flat_vals, flat_errs, pad_top=0.10, pad_bottom=0.08)
+        ax.grid(axis="y", alpha=0.25, zorder=0)
+        ax.set_axisbelow(True)
+
+    handles, labels = ax_h.get_legend_handles_labels()
+    fig.legend(handles, labels, loc="lower center", bbox_to_anchor=(0.5, -0.02),
+               ncol=4, frameon=False, fontsize=9)
+    fig.subplots_adjust(bottom=0.22)
+    save_figure(fig, output_dir / f"{file_prefix}_profit_decomposition_honest_vs_dishonest.png")
+    print("  [RQ3] Grouped profit decomposition figure saved.")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -820,13 +1112,18 @@ def main():
     print("\n[Fig6] Product Mix (appendix)…")
     fig6_product_mix(args.base_dir, output_dir, file_prefix=args.file_prefix)
 
-    print("\n[Fig7] Buyer Utility by Constraint…")
-    fig7_buyer_utility_by_constraint(args.base_dir, output_dir, file_prefix=args.file_prefix)
+    print("\n[RQ3] Welfare Overview…")
+    fig_rq3_welfare_overview(
+        args.base_dir,
+        output_dir,
+        baseline_dir=(args.baseline_dir if args.baseline_dir else str(Path(args.base_dir).parent / "rq2_welfare")),
+        file_prefix=args.file_prefix,
+    )
 
-    print("\n[RQ2-All] Aggregated Summary Across Constraints…")
+    print("\n[RQ3] Grouped All-Constraints Summary…")
     fig_all_constraints_summary(args.base_dir, output_dir, file_prefix=args.file_prefix)
 
-    print("\n[RQ2_ALL] Market-Type Grouped Figure (HQ fake + Profit)…")
+    print("\n[RQ3] Market-Type Grouped Figure (HQ fake + Utility ratio)…")
     fig_rq2_all_markettype_dual_metrics(
         args.base_dir,
         output_dir,

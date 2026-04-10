@@ -13,16 +13,17 @@ from pathlib import Path
 from generate_rq1_figures import (
     fig1_2_manipulation_detection_rep_only,
     fig1_profit_and_deceptions,
-    fig1_1_manipulation_detection,
-    fig2_probe_and_product_mix,
+    fig_rq2_listed_vs_sold_quality,
+    fig_rq2_product_quality_over_rounds,
+    fig_rq2_welfare_overview,
 )
 from generate_rq2_figures import (
-    fig4_deception_by_constraint,
-    fig5_profit_decomposition,
+    fig_rq3_welfare_overview,
+    fig_rq3_profit_decomposition_grouped,
     fig6_product_mix,
-    fig7_buyer_utility_by_constraint,
     fig_all_constraints_summary,
     fig_rq2_all_markettype_dual_metrics,
+    _rq3_grouped_metric,
 )
 
 
@@ -47,13 +48,15 @@ def generate_rq2(base_dir: Path, output_dir: Path) -> None:
     rw_dir = base_dir / "rq2_welfare" / "rw_wo"
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    fig1_profit_and_deceptions(str(r_dir), str(rw_dir), output_dir)
-    fig1_1_manipulation_detection(str(r_dir), str(rw_dir), output_dir)
-    fig2_probe_and_product_mix(str(r_dir), str(rw_dir), output_dir)
+    fig_rq2_welfare_overview(str(r_dir), str(rw_dir), output_dir)
+    fig1_profit_and_deceptions(str(r_dir), str(rw_dir), output_dir, show_significance=False)
+    fig_rq2_listed_vs_sold_quality(str(r_dir), str(rw_dir), output_dir)
+    fig_rq2_product_quality_over_rounds(str(r_dir), str(rw_dir), output_dir)
 
-    for src in output_dir.glob("rq1_*.png"):
-        dst = src.with_name(src.name.replace("rq1_", "rq2_", 1))
-        _copy_if_exists(src, dst)
+    _copy_if_exists(
+        output_dir / "rq1_warrant_vs_rep_deception_and_profit.png",
+        output_dir / "rq2_warrant_vs_rep_deception_and_profit.png",
+    )
 
 
 def generate_rq3(base_dir: Path, output_dir: Path) -> None:
@@ -62,10 +65,19 @@ def generate_rq3(base_dir: Path, output_dir: Path) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     prefix = "rq3"
 
-    fig4_deception_by_constraint(str(rq3_base), output_dir, file_prefix=prefix)
-    fig5_profit_decomposition(str(rq3_base), output_dir, file_prefix=prefix)
+    fig_rq3_welfare_overview(str(rq3_base), output_dir, baseline_dir=str(baseline), file_prefix=prefix)
+    _rq3_grouped_metric(
+        str(rq3_base),
+        output_dir,
+        baseline_dir=str(baseline),
+        metric_fn=lambda run_df: float((run_df["is_honest"] == False).sum()),  # noqa: E712
+        ylabel="Deceptions per Run",
+        out_name=f"{prefix}_seller_comm_deception_by_constraint.png",
+    )
+    fig_rq3_profit_decomposition_grouped(
+        str(rq3_base), output_dir, baseline_dir=str(baseline), file_prefix=prefix
+    )
     fig6_product_mix(str(rq3_base), output_dir, file_prefix=prefix)
-    fig7_buyer_utility_by_constraint(str(rq3_base), output_dir, file_prefix=prefix)
     fig_all_constraints_summary(str(rq3_base), output_dir, file_prefix=prefix)
     fig_rq2_all_markettype_dual_metrics(
         str(rq3_base),

@@ -90,9 +90,11 @@ class SellerListingPhase(MarketPhase):
                     history_summary=visible_history_string
                 )
                 
-                # Tools available for sellers
-                # `reenter_market` is used to refresh brand reputation under configured market rules.
-                listing_tools = ['list_products', 'reenter_market']
+                # Tools available for sellers.
+                # Re-entry is enabled only when market rules explicitly allow it.
+                listing_tools = ['list_products']
+                if getattr(self.config, "REENTRY_ALLOWED_ROUND", None) is not None:
+                    listing_tools.append('reenter_market')
                 
                 seller_actions[agent] = LLMAction(
                     extra_action=listing_tools,
