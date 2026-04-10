@@ -182,16 +182,16 @@ def main():
         description="Run RQ1 Experiment: Cognitive Probing for Reputation Manipulation"
     )
     parser.add_argument(
-        "--runs", type=int, default=5, help="Number of simulation runs (default: 5)"
+        "--runs", type=int, default=None, help="Number of simulation runs (default: value from config)"
     )
     parser.add_argument(
-        "--rounds", type=int, default=10, help="Rounds per simulation (default: 10)"
+        "--rounds", type=int, default=None, help="Rounds per simulation (default: value from config)"
     )
     parser.add_argument(
-        "--sellers", type=int, default=5, help="Number of sellers (default: 5)"
+        "--sellers", type=int, default=None, help="Number of sellers (default: value from config)"
     )
     parser.add_argument(
-        "--buyers", type=int, default=5, help="Number of buyers (default: 5)"
+        "--buyers", type=int, default=None, help="Number of buyers (default: value from config)"
     )
     parser.add_argument(
         "--market-type",
@@ -246,6 +246,16 @@ def main():
     # Set MODEL_API_KEY if only OPENAI_API_KEY is set
     if not os.getenv("MODEL_API_KEY") and os.getenv("OPENAI_API_KEY"):
         os.environ["MODEL_API_KEY"] = os.getenv("OPENAI_API_KEY")
+
+    # Fill unresolved args from config (avoid overriding YAML with parser defaults)
+    if args.runs is None:
+        args.runs = SimulationConfig.RUNS
+    if args.rounds is None:
+        args.rounds = SimulationConfig.SIMULATION_ROUNDS
+    if args.sellers is None:
+        args.sellers = SimulationConfig.NUM_SELLERS
+    if args.buyers is None:
+        args.buyers = SimulationConfig.NUM_BUYERS
 
     # Run experiment
     asyncio.run(run_rq1_experiment(args))

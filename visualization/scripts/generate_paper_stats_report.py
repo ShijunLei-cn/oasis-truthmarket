@@ -27,6 +27,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).parent))
 from fig_utils import (
     load_results_df,
+    load_probes_df,
     per_run_values,
     count_deceptions,
     sum_seller_profit,
@@ -88,33 +89,28 @@ def fmt(mean: float, std: float) -> str:
 # ── RQ1 Analysis ──────────────────────────────────────────────────────────────
 
 def analyze_rq1(base_dir: Path) -> List[Dict]:
-    """Compare Rep vs Rep+Warrant without communication."""
-    rq1_dir = base_dir / "rq1"
-    df_rep = _load(rq1_dir, "r_wo")
-    df_rw  = _load(rq1_dir, "rw_wo")
+    """RQ1 (new): intention probes in reputation-only market."""
+    probe_df = load_probes_df(str(base_dir / "rq1_intent" / "r_wo"))
+    if probe_df.empty:
+        return []
 
     rows = []
-    for metric_name, fn in [
-        ("Seller Profit",  sum_seller_profit),
-        ("Buyer Utility",  sum_buyer_utility),
-        ("Deceptions",     count_deceptions),
-    ]:
-        a = _vals(df_rep, fn)
-        b = _vals(df_rw,  fn)
-        p = mannwhitney_p(a, b)
-        ma, sa = _stats(a)
-        mb, sb = _stats(b)
+    for vuln, sub in probe_df.groupby("vulnerability_type"):
+        # Per-run detection rate
+        run_rates = sub.groupby("run_id")["manipulation_detected"].mean().astype(float).tolist()
+        m, s = _stats(run_rates)
+        total = int(len(sub))
+        detected = int(sub["manipulation_detected"].sum())
         rows.append({
             "RQ": "RQ1",
-            "Comparison": "Rep vs Rep+Warrant",
-            "Metric": metric_name,
-            "Rep (mean±std)": fmt(ma, sa),
-            "Rep+Warrant (mean±std)": fmt(mb, sb),
-            "p-value": f"{p:.4f}",
-            "Sig": sig_stars(p),
-            "Cohen's d": f"{cohens_d(a, b):.2f}" if not np.isnan(cohens_d(a, b)) else "N/A",
-            "n (Rep)": len(a),
-            "n (RW)": len(b),
+            "Comparison": "Rep-only intention level",
+            "Metric": f"Detection Rate ({vuln})",
+            "Rep-only (mean±std)": fmt(m * 100.0, s * 100.0),
+            "Detected/Total": f"{detected}/{total}",
+            "p-value": "N/A",
+            "Sig": "N/A",
+            "Cohen's d": "N/A",
+            "n (runs)": len(run_rates),
         })
     return rows
 
@@ -137,40 +133,36 @@ RQ2_COMPARISONS = [
 
 
 def analyze_rq2(base_dir: Path) -> List[Dict]:
-    rq2_dir = base_dir / "rq2"
+    rq2_dir = base_dir / "rq2_welfare"
     rows = []
 
-    for c_key, c_label in CONSTRAINTS:
-        for la, da, lb, db, desc in RQ2_COMPARISONS:
-            df_a = _load(rq2_dir, f"{da}_{c_key}")
-            df_b = _load(rq2_dir, f"{db}_{c_key}")
-
-            for metric_name, fn in [
-                ("Seller Profit",    sum_seller_profit),
-                ("Buyer Utility",    sum_buyer_utility),
-                ("Deceptions",       count_deceptions),
-                ("Dishonest Profit", dishonest_profit),
-            ]:
-                a = _vals(df_a, fn)
-                b = _vals(df_b, fn)
-                if not a or not b:
-                    continue
-                p = mannwhitney_p(a, b)
-                ma, sa = _stats(a)
-                mb, sb = _stats(b)
-                rows.append({
-                    "RQ": "RQ2",
-                    "Constraint": c_label,
-                    "Comparison": desc,
-                    "Metric": metric_name,
-                    f"{la} (mean±std)": fmt(ma, sa),
-                    f"{lb} (mean±std)": fmt(mb, sb),
-                    "p-value": f"{p:.4f}",
-                    "Sig": sig_stars(p),
-                    "Cohen's d": f"{cohens_d(a, b):.2f}" if not np.isnan(cohens_d(a, b)) else "N/A",
-                    "n_a": len(a),
-                    "n_b": len(b),
-                })
+    df_rep = _load(rq2_dir, "r_wo")
+    df_rw = _load(rq2_dir, "rw_wo")
+    for metric_name, fn in [
+        ("Seller Profit", sum_seller_profit),
+        ("Buyer Utility", sum_buyer_utility),
+        ("Deceptions", count_deceptions),
+        ("Dishonest Profit", dishonest_profit),
+    ]:
+        a = _vals(df_rep, fn)
+        b = _vals(df_rw, fn)
+        if not a or not b:
+            continue
+        p = mannwhitney_p(a, b)
+        ma, sa = _stats(a)
+        mb, sb = _stats(b)
+        rows.append({
+            "RQ": "RQ2",
+            "Comparison": "Rep vs Rep+Warrant (no communication)",
+            "Metric": metric_name,
+            "Rep (mean±std)": fmt(ma, sa),
+            "Rep+Warrant (mean±std)": fmt(mb, sb),
+            "p-value": f"{p:.4f}",
+            "Sig": sig_stars(p),
+            "Cohen's d": f"{cohens_d(a, b):.2f}" if not np.isnan(cohens_d(a, b)) else "N/A",
+            "n_a": len(a),
+            "n_b": len(b),
+        })
     return rows
 
 
@@ -192,20 +184,25 @@ RQ3_COMPARISONS = [
 
 
 def analyze_rq3(base_dir: Path) -> List[Dict]:
-    rq3_dir = base_dir / "rq3"
+    rq3_dir = base_dir / "rq3_resilience"
     rows = []
+    constraints = [
+        ("policy_making", "Policy-Making"),
+        ("pressure_quickprofits", "Pressure-Quick-Profits"),
+        ("psychological-based-attack", "Psychological-Attack"),
+    ]
 
-    for la, lb, desc in RQ3_COMPARISONS:
-        df_a = _load(rq3_dir, RQ3_DIRS[la])
-        df_b = _load(rq3_dir, RQ3_DIRS[lb])
-
+    for c_key, c_label in constraints:
+        df_rep = _load(rq3_dir, f"r_wsc_R_{c_key}")
+        df_rw = _load(rq3_dir, f"rw_wsc_R_{c_key}")
         for metric_name, fn in [
-            ("Seller Profit",  sum_seller_profit),
-            ("Buyer Utility",  sum_buyer_utility),
-            ("Deceptions",     count_deceptions),
+            ("Seller Profit", sum_seller_profit),
+            ("Buyer Utility", sum_buyer_utility),
+            ("Deceptions", count_deceptions),
+            ("Dishonest Profit", dishonest_profit),
         ]:
-            a = _vals(df_a, fn)
-            b = _vals(df_b, fn)
+            a = _vals(df_rep, fn)
+            b = _vals(df_rw, fn)
             if not a or not b:
                 continue
             p = mannwhitney_p(a, b)
@@ -213,10 +210,11 @@ def analyze_rq3(base_dir: Path) -> List[Dict]:
             mb, sb = _stats(b)
             rows.append({
                 "RQ": "RQ3",
-                "Comparison": desc,
+                "Constraint": c_label,
+                "Comparison": "Rep vs Rep+Warrant under seller communication",
                 "Metric": metric_name,
-                f"{la} (mean±std)": fmt(ma, sa),
-                f"{lb} (mean±std)": fmt(mb, sb),
+                "Rep, Comm (mean±std)": fmt(ma, sa),
+                "Rep+Warrant, Comm (mean±std)": fmt(mb, sb),
                 "p-value": f"{p:.4f}",
                 "Sig": sig_stars(p),
                 "Cohen's d": f"{cohens_d(a, b):.2f}" if not np.isnan(cohens_d(a, b)) else "N/A",
@@ -356,8 +354,8 @@ def main():
     )
     parser.add_argument(
         "--base-dir",
-        default="experiments/gpt-4o/paper",
-        help="Root directory containing rq1/, rq2/, rq3/ subdirectories",
+        default="experiments/gpt-4o-mini/paper_important_results",
+        help="Root directory containing rq1_intent/, rq2_welfare/, rq3_resilience/",
     )
     parser.add_argument(
         "--output-dir",
@@ -391,13 +389,13 @@ def main():
         print(f"  {len(rows)} comparisons computed.")
 
     if args.rq in ("rq2", "all"):
-        print("\n[RQ2] Seller Communication...")
+        print("\n[RQ2] Warrant Welfare...")
         rows = analyze_rq2(base_dir)
         all_rows.extend(rows)
         print(f"  {len(rows)} comparisons computed.")
 
     if args.rq in ("rq3", "all"):
-        print("\n[RQ3] Buyer Communication...")
+        print("\n[RQ3] Communication Interference & Resistance...")
         rows = analyze_rq3(base_dir)
         all_rows.extend(rows)
         print(f"  {len(rows)} comparisons computed.")

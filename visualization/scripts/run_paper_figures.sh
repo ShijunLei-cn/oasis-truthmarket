@@ -26,6 +26,12 @@ python3 visualization/scripts/generate_main_figures.py \
     --output-dir "${OUTPUT_BASE}"
 
 echo ""
+echo "── Generating Statistical Report ─────────────────────"
+python3 visualization/scripts/generate_paper_stats_report.py \
+    --base-dir "${EXPERIMENT_PREFIX}" \
+    --output-dir "${OUTPUT_BASE}/stats"
+
+echo ""
 echo "=========================================="
 echo "All figures generated with new RQ1/RQ2/RQ3 mapping."
 echo "=========================================="
@@ -39,3 +45,7 @@ echo "RQ3:"
 echo "  ${OUTPUT_BASE}/rq3/rq3_seller_comm_deception_by_constraint.png"
 echo "  ${OUTPUT_BASE}/rq3/rq3_profit_decomposition_honest_vs_dishonest.png"
 echo "  ${OUTPUT_BASE}/rq3/rq3_ALL_markettype_hqfake_profit.png"
+echo "Stats:"
+echo "  ${OUTPUT_BASE}/stats/stats_report.txt"
+echo "  ${OUTPUT_BASE}/stats/stats_report.tex"
+echo "  ${OUTPUT_BASE}/stats/stats_report.csv"
