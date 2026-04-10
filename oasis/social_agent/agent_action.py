@@ -58,7 +58,6 @@ class SocialAction:
                 self.create_group,
                 self.list_product,
                 self.list_products,
-                self.exit_market,
                 self.reenter_market,
                 self.purchase_products,
                 self.challenge_warrants,
@@ -868,32 +867,12 @@ class SocialAction:
         return await self.perform_action(products_data, 
                                         ActionType.LIST_PRODUCTS.value)
 
-    async def exit_market(self):
-        r"""Exit the market for the current round.
-
-        This method invokes an asynchronous action to exit the market. When
-        an agent exits the market, they will not be able to list products or
-        participate in market activities until they re-enter. Upon successful
-        execution, it returns a dictionary indicating the success of the
-        operation.
-
-        Returns:
-            dict: A dictionary with a 'success' key indicating whether the
-                exit operation was successful.
-
-            Example of a successful return:
-            {"success": True}
-        """
-        return await self.perform_action(None, ActionType.EXIT_MARKET.value)
-
     async def reenter_market(self):
-        r"""Re-enter the market in the next round after having exited.
+        r"""Re-enter market with brand reputation refresh.
 
-        This method invokes an asynchronous action to re-enter the market after
-        having exited in a previous round. This action is typically used to
-        reset a negative reputation score back to zero, allowing the agent to
-        start fresh in the market. Upon successful execution, it returns a
-        dictionary indicating the success of the operation.
+        This action refreshes the current seller brand's public reputation
+        signal and marks the seller as re-entered. Upon successful execution,
+        it returns a dictionary indicating the success of the operation.
 
         Returns:
             dict: A dictionary with a 'success' key indicating whether
@@ -903,9 +882,7 @@ class SocialAction:
             {"success": True}
 
         Note:
-            This action can only be performed if the agent has previously
-            exited the market. Attempting to re-enter without having exited
-            will result in a failure.
+            This action may be gated by market rules (e.g., allowed round).
         """
         return await self.perform_action(None, ActionType.REENTER_MARKET.value)
 

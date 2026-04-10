@@ -92,7 +92,6 @@ class ActionType(Enum):
         """Return a list containing only seller-specific actions."""
         return [
             cls.LIST_PRODUCTS,
-            cls.EXIT_MARKET,
             cls.REENTER_MARKET,
         ]
 
@@ -111,7 +110,6 @@ class ActionType(Enum):
         if market_type == 'reputation_only':
             return [
                 cls.LIST_PRODUCTS,
-                cls.EXIT_MARKET,
                 cls.REENTER_MARKET,
                 cls.PURCHASE_PRODUCTS,
                 cls.RATE_TRANSACTIONS,
@@ -119,7 +117,6 @@ class ActionType(Enum):
         else:  # Default 'reputation_and_warrant'
             return [
                 cls.LIST_PRODUCTS,
-                cls.EXIT_MARKET,
                 cls.REENTER_MARKET,
                 cls.PURCHASE_PRODUCTS,
                 cls.CHALLENGE_WARRANTS,

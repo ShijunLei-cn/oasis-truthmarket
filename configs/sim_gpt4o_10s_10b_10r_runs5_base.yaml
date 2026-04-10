@@ -1,25 +1,25 @@
-# RQ2 Experiment Configuration
-# Configuration file for RQ2 experiments comparing Reputation-Only vs Reputation+Warrant markets
+# Market Simulation Configuration Profile
+# Profile metadata is encoded in filename (model, scale, runs, profile).
 
 experiment:
   runs: 5
-  num_sellers: 5
-  num_buyers: 5
+  num_sellers: 10
+  num_buyers: 10
   simulation_rounds: 10
 
 market_params:
   # Production costs
-  hq_cost: 2.0
-  lq_cost: 1.0
+  hq_cost: 4.0
+  lq_cost: 2.0
   # Prices
-  hq_price: 5.0
+  hq_price: 8.0
   lq_price: 3.0
   # Consumer values (utility)
-  hq_utility: 8.0
-  lq_utility: 5.0
+  hq_utility: 12.0
+  lq_utility: 4.0
   # Warranty/Escrow system
-  hq_warrant_escrow: 5.0
-  lq_warrant_escrow: 5.0
+  hq_warrant_escrow: 8.0
+  lq_warrant_escrow: 2.0
   # Challenge mechanism
   challenge_cost: 1.0
   # Budget configuration (refreshed at the start of each round)
@@ -33,11 +33,11 @@ market_rules:
   exit_round: null
   market_type: reputation_only  # Will be overridden by command line argument
   communication_type: none  # Will be overridden by command line argument
-  communication_channel_type: Fake
+  communication_channel_type: Fake # Will be overridden by command line argument
 
 model:
   platform: openai
-  type: gpt-4o-mini
+  type: gpt-4o
   temperature: 0.0
 
 paths:

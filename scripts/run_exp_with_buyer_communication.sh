@@ -9,7 +9,7 @@ echo "RQ4 Experiment: Buyer Adaptation Mechanisms"
 echo "=========================================="
 
 # Configuration file path (optional - if not provided, uses default config.py)
-CONFIG_FILE="${CONFIG_FILE:-configs/rq4_experiment_0.yaml}"
+CONFIG_FILE="${CONFIG_FILE:-configs/sim_gpt4omini_50s_50b_10r_runs5_base.yaml}"
 
 
 

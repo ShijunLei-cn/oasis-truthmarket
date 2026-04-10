@@ -2417,28 +2417,77 @@ class Platform:
             return {"success": False, "error": str(e)}
 
     async def exit_market(self, agent_id: int, message: Any):
-        """Handle seller exiting market backend logic (conceptual intent)."""
-        seller_id = agent_id
-        current_time = self.sandbox_clock.get_time_step()
-        try:
-            # Conceptual marking: only record exit intent, no database status modification
-            self.pl_utils._record_trace(seller_id, ActionType.EXIT_MARKET.value, message or {}, current_time)
-            return {"success": True, "message": f"Seller {seller_id} submitted exit market intent."}
-        except Exception as e:
-            return {"success": False, "error": str(e)}
+        """Deprecated action: exit_market is removed from market rules."""
+        return {
+            "success": False,
+            "error": "exit_market action has been removed. Use list_products or reenter_market according to market rules."
+        }
 
     async def reenter_market(self, agent_id: int, message: Any):
-        """Handle seller re-entering market backend logic (refresh reputation)."""
+        """Re-enter market with a fresh, collision-safe brand identity."""
         seller_id = agent_id
         current_time = self.sandbox_clock.get_time_step()
+        current_round = int(getattr(self.sandbox_clock, "round_step", 0) or 0)
         try:
-            # Per simulation semantics: reset negative reputation to 0 (or directly set to non-negative baseline)
-            reset_needed = True if not message else message.get("reset_reputation", True)
-            if reset_needed:
-                update_query = "UPDATE user SET reputation_score = 0, enter_market_round = ? WHERE user_id = ?"
-                self.pl_utils._execute_db_command(update_query, (current_time, seller_id,), commit=True)
+            allowed_round = SimulationConfig.REENTRY_ALLOWED_ROUND
+            if allowed_round is not None and current_round < allowed_round:
+                return {
+                    "success": False,
+                    "error": f"reenter_market is only allowed from round {allowed_round}. Current round: {current_round}."
+                }
 
-            self.pl_utils._record_trace(seller_id, ActionType.REENTER_MARKET.value, message or {}, current_time)
-            return {"success": True, "message": f"Seller {seller_id} has re-entered market, reputation refreshed."}
+            # Find seller profile
+            seller_query = "SELECT user_id, brand_name FROM user WHERE agent_id = ?"
+            self.pl_utils._execute_db_command(seller_query, (seller_id,))
+            seller_row = self.db_cursor.fetchone()
+            if not seller_row:
+                return {"success": False, "error": f"Seller {seller_id} not found."}
+
+            canonical_user_id, old_brand_name = seller_row
+
+            # Generate a unique new brand identifier.
+            # Even if multiple sellers re-enter in the same round, this check keeps names collision-safe.
+            base_brand = f"Reentry_{seller_id}_R{current_round}"
+            new_brand_name = base_brand
+            suffix = 1
+            while True:
+                self.pl_utils._execute_db_command(
+                    "SELECT COUNT(1) FROM user WHERE brand_name = ?",
+                    (new_brand_name,)
+                )
+                exists = int(self.db_cursor.fetchone()[0])
+                if exists == 0:
+                    break
+                suffix += 1
+                new_brand_name = f"{base_brand}_{suffix}"
+
+            # Refresh only current seller's public reputation and switch to fresh brand.
+            self.pl_utils._execute_db_command(
+                "UPDATE user SET thumbs_up_count = 0, thumbs_down_count = 0, brand_name = ? WHERE user_id = ?",
+                (new_brand_name, canonical_user_id),
+                commit=True,
+            )
+
+            # Remove historical public reputation trajectory for this seller to reflect reset.
+            self.pl_utils._execute_db_command(
+                "DELETE FROM reputation_history WHERE seller_id = ?",
+                (canonical_user_id,),
+                commit=True,
+            )
+
+            action_info = {
+                "old_brand_name": old_brand_name if old_brand_name else None,
+                "new_brand_name": new_brand_name,
+                "refreshed_seller_ids": [canonical_user_id],
+                "current_round": current_round,
+            }
+            self.pl_utils._record_trace(seller_id, ActionType.REENTER_MARKET.value, action_info, current_time)
+            return {
+                "success": True,
+                "message": f"Seller {seller_id} re-entered with fresh brand '{new_brand_name}' and refreshed reputation.",
+                "old_brand_name": old_brand_name,
+                "new_brand_name": new_brand_name,
+                "refreshed_seller_ids": [canonical_user_id],
+            }
         except Exception as e:
             return {"success": False, "error": str(e)}

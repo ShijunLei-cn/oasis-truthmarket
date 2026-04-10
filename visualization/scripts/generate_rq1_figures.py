@@ -525,10 +525,15 @@ def main():
     )
     parser.add_argument("--r-dir",  required=True,
                         help="Reputation-Only experiment dir (rq1/r_wo)")
-    parser.add_argument("--rw-dir", required=True,
-                        help="Rep+Warrant experiment dir (rq1/rw_wo)")
+    parser.add_argument("--rw-dir", required=False, default=None,
+                        help="Rep+Warrant experiment dir (required unless --rep-only-only)")
     parser.add_argument("--output-dir", default="visualization/figs/paper/rq1",
                         help="Output directory for figures")
+    parser.add_argument(
+        "--rep-only-only",
+        action="store_true",
+        help="Generate only the reputation-only manipulation detection figure."
+    )
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
@@ -537,6 +542,15 @@ def main():
     print("=" * 60)
     print("RQ1: Generating Paper Figures")
     print("=" * 60)
+
+    if args.rep_only_only:
+        print("\n[Fig1-2] Manipulation Detection (Rep-only standalone)…")
+        fig1_2_manipulation_detection_rep_only(args.r_dir, output_dir)
+        print("\n✅  Rep-only figure saved to:", output_dir)
+        return
+
+    if not args.rw_dir:
+        raise ValueError("--rw-dir is required unless --rep-only-only is set.")
 
     print("\n[Fig1] Seller Profit & Deceptions…")
     fig1_profit_and_deceptions(args.r_dir, args.rw_dir, output_dir)

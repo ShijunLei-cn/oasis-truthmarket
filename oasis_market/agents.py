@@ -11,6 +11,22 @@ from prompt import format_seller_history
 
 class AgentManager:
     """Manages agent creation and state in market simulation"""
+
+    @staticmethod
+    def _is_initial_window_round(config, round_num: int) -> bool:
+        """
+        Determine whether current round is inside initial-window visibility rule.
+
+        Supports both:
+        - list/tuple/set of explicit rounds, e.g. [1, 2]
+        - integer window size N, interpreted as rounds <= N
+        """
+        rounds_cfg = getattr(config, "INITIAL_WINDOW_ROUNDS", [])
+        if isinstance(rounds_cfg, int):
+            return round_num <= rounds_cfg
+        if isinstance(rounds_cfg, (list, tuple, set)):
+            return round_num in rounds_cfg
+        return False
     
     @staticmethod
     def reset_agent_id_counter():
@@ -58,7 +74,10 @@ class AgentManager:
             market_type = agent.user_info.profile.get("market_type", "reputation_and_warrant")
         
         # Format history for display
-        visible_history_string = format_seller_history(history_log, market_type=market_type)
+        if AgentManager._is_initial_window_round(config, round_num):
+            visible_history_string = "History hidden in initial window."
+        else:
+            visible_history_string = format_seller_history(history_log, market_type=market_type)
         
         # Update agent attributes
         agent.thumbs_up_count = state['thumbs_up_count']

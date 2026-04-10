@@ -1,10 +1,10 @@
-# RQ2 Experiment Configuration
-# Configuration file for RQ2 experiments comparing Reputation-Only vs Reputation+Warrant markets
+# Market Simulation Configuration Profile
+# Profile metadata is encoded in filename (model, scale, runs, profile).
 
 experiment:
   runs: 5
-  num_sellers: 10
-  num_buyers: 10
+  num_sellers: 50
+  num_buyers: 50
   simulation_rounds: 10
 
 market_params:
@@ -37,7 +37,7 @@ market_rules:
 
 model:
   platform: openai
-  type: gpt-4o
+  type: gpt-4o-mini
   temperature: 0.0
 
 paths:

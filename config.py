@@ -56,13 +56,17 @@ class SimulationConfig:
     # }
 
     # Market rule parameters
-    REPUTATION_LAG = None  # Reputation lag display rounds
-    REENTRY_ALLOWED_ROUND = None  # Re-entry market allowed rounds
-    INITIAL_WINDOW_ROUNDS = []  # Initial rounds with hidden complete history
+    REPUTATION_LAG = 1  # Reputation lag display rounds
+    REENTRY_ALLOWED_ROUND = 5  # Re-entry market allowed rounds
+    INITIAL_WINDOW_ROUNDS = [1, 2]  # Initial rounds with hidden complete history
     EXIT_ROUND = None  # Exit market allowed rounds
     MARKET_TYPE = 'reputation_only'
     COMMUNICATION_TYPE = 'none'  # Communication type: 'none', 'seller', 'buyer', 'both'
     COMMUNICATION_CHANNEL_TYPE = "Fake"  # Communication channel type: "Fake" or "Real"
+    
+    # Optional cognitive probing (RQ1-style interviews)
+    COGNITIVE_PROBING_ENABLED = False
+    COGNITIVE_PROBING_INTERVAL = 1
     
     # Model configuration
     MODEL_PLATFORM = "openai"
@@ -117,6 +121,8 @@ class SimulationConfig:
             'MARKET_TYPE': cls.MARKET_TYPE,
             'COMMUNICATION_TYPE': cls.COMMUNICATION_TYPE,
             'COMMUNICATION_CHANNEL_TYPE': cls.COMMUNICATION_CHANNEL_TYPE,
+            'COGNITIVE_PROBING_ENABLED': cls.COGNITIVE_PROBING_ENABLED,
+            'COGNITIVE_PROBING_INTERVAL': cls.COGNITIVE_PROBING_INTERVAL,
             'MODEL_PLATFORM': cls.MODEL_PLATFORM,
             'MODEL_TYPE': cls.MODEL_TYPE,
             'MODEL_TEMPERATURE': cls.MODEL_TEMPERATURE
@@ -189,6 +195,12 @@ class SimulationConfig:
             cls.MODEL_PLATFORM = model_config.get('platform', cls.MODEL_PLATFORM)
             cls.MODEL_TYPE = model_config.get('type', cls.MODEL_TYPE)
             cls.MODEL_TEMPERATURE = model_config.get('temperature', cls.MODEL_TEMPERATURE)
+        
+        # Load cognitive probing configuration
+        if 'cognitive_probing' in config_dict:
+            probing = config_dict['cognitive_probing']
+            cls.COGNITIVE_PROBING_ENABLED = probing.get('enabled', cls.COGNITIVE_PROBING_ENABLED)
+            cls.COGNITIVE_PROBING_INTERVAL = probing.get('interval', cls.COGNITIVE_PROBING_INTERVAL)
         
         # Load path configuration
         if 'paths' in config_dict:

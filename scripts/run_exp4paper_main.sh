@@ -1,261 +1,100 @@
 #!/bin/bash
-# Comprehensive experiment script for parapurchase experiments
-# Now using 3 RQs: RQ1_probe (cognitive), RQ2 seller comm, RQ3 buyer comm
+# Paper experiment runner (refactored to the new 3-RQ framing)
+# RQ1: Vulnerability intention in reputation-only market
+# RQ2: Welfare effect of warrant mechanism (no communication)
+# RQ3: Communication interference and market resistance (macro+micro via old rq2 setup)
+
+set -euo pipefail
 
 echo "=========================================="
-echo "Paper Experiments: Comprehensive Run"
+echo "Paper Experiments: New 3-RQ Pipeline"
 echo "=========================================="
 
-# Default configuration file (can be overridden via CONFIG_FILE environment variable)
-CONFIG_FILE="${CONFIG_FILE:-configs/rq2_experiment_0_gpt_4o_mini.yaml}"
-
+CONFIG_FILE="${CONFIG_FILE:-configs/sim_gpt4omini_10s_10b_10r_runs5_base.yaml}"
 MODEL_TYPE="${MODEL_TYPE:-gpt-4o-mini}"
+EXP_ROOT="${MODEL_TYPE}/paper_important_results"
+
 echo "Using config file: ${CONFIG_FILE}"
 echo "Model type: ${MODEL_TYPE}"
+echo "Experiment root: experiments/${EXP_ROOT}"
 
-# All hyperparameters are taken from the YAML config; avoid CLI overrides to keep precedence clear.
-# If needed, pass alternative configs via CONFIG_FILE.
-
-
-# ==================== RQ1_probe: Cognitive Probing ====================
+# --------------------------------------------------------------------
+# RQ1: Reputation-only vulnerability intention
+# --------------------------------------------------------------------
 echo ""
 echo "=========================================="
-echo "RQ1_probe: Cognitive Probing for Reputation Manipulation"
+echo "RQ1: Vulnerability Intention (Reputation-Only)"
 echo "=========================================="
 
-# Reputation only market
-echo ""
-echo "Running Reputation-Only Market experiments..."
 python ./example/run_rq1_experiment.py \
     --market-type reputation_only \
-    --output-dir experiments/${MODEL_TYPE}/parapurchase/rq1/r_wo \
+    --output-dir "experiments/${EXP_ROOT}/rq1_intent/r_wo" \
     --config "${CONFIG_FILE}"
 
-# Reputation and warrant market
-echo ""
-echo "Running Reputation+Warrant Market experiments..."
-python ./example/run_rq1_experiment.py \
-    --market-type reputation_and_warrant \
-    --output-dir experiments/${MODEL_TYPE}/parapurchase/rq1/rw_wo \
-    --config "${CONFIG_FILE}"
-
-# ==================== RQ2: Seller Communication ====================
+# --------------------------------------------------------------------
+# RQ2: Warrant -> market welfare (baseline, no communication)
+# --------------------------------------------------------------------
 echo ""
 echo "=========================================="
-echo "RQ2: Group-Level Deception Dynamics (Seller Communication)"
+echo "RQ2: Warrant Welfare (No Communication)"
 echo "=========================================="
 
-# Baseline no-communication
-echo ""
-echo "Running Reputation-Only Market (no communication)..."
 python ./example/run_single_config_experiment.py \
-    --experiment-id ${MODEL_TYPE}/parapurchase/rq1/r_wo \
+    --experiment-id "${EXP_ROOT}/rq2_welfare/r_wo" \
     --market-type reputation_only \
     --communication none \
     --communication-channel-type Fake \
     --config "${CONFIG_FILE}"
 
-echo ""
-echo "Running Reputation+Warrant Market (no communication)..."
 python ./example/run_single_config_experiment.py \
-    --experiment-id ${MODEL_TYPE}/parapurchase/rq1/rw_wo \
+    --experiment-id "${EXP_ROOT}/rq2_welfare/rw_wo" \
     --market-type reputation_and_warrant \
     --communication none \
     --communication-channel-type Fake \
     --config "${CONFIG_FILE}"
 
-
-# Reputation only market - Real channel
-echo ""
-echo "Running Reputation-Only + Seller Communication + Real Channel..."
-python ./example/run_single_config_experiment.py \
-    --experiment-id ${MODEL_TYPE}/parapurchase/rq2/r_wsc_R_policy_making \
-    --market-type reputation_only \
-    --communication seller \
-    --communication-channel-type Real \
-    --config "${CONFIG_FILE}" \
-    --Posts4Seller policy_making
-
-# Reputation and warrant market - Real channel
-echo ""
-echo "Running Reputation+Warrant + Seller Communication + Real Channel..."
-python ./example/run_single_config_experiment.py \
-    --experiment-id ${MODEL_TYPE}/parapurchase/rq2/rw_wsc_R_policy_making \
-    --market-type reputation_and_warrant \
-    --communication seller \
-    --communication-channel-type Real \
-    --config "${CONFIG_FILE}" \
-    --Posts4Seller policy_making
-
-
-# Reputation only market - Real channel
-echo ""
-echo "Running Reputation-Only + Seller Communication + Real Channel..."
-python ./example/run_single_config_experiment.py \
-    --experiment-id ${MODEL_TYPE}/parapurchase/rq2/r_wsc_R_pressure_quickprofits \
-    --market-type reputation_only \
-    --communication seller \
-    --communication-channel-type Real \
-    --config "${CONFIG_FILE}" \
-    --Posts4Seller pressure_quickprofits
-
-
-# Reputation and warrant market - Real channel
-echo ""
-echo "Running Reputation+Warrant + Seller Communication + Real Channel..."
-python ./example/run_single_config_experiment.py \
-    --experiment-id ${MODEL_TYPE}/parapurchase/rq2/rw_wsc_R_pressure_quickprofits \
-    --market-type reputation_and_warrant \
-    --communication seller \
-    --communication-channel-type Real \
-    --config "${CONFIG_FILE}" \
-    --Posts4Seller pressure_quickprofits
-
-
-# Reputation only market - Real channel
-echo ""
-echo "Running Reputation-Only + Seller Communication + Real Channel..."
-python ./example/run_single_config_experiment.py \
-    --experiment-id ${MODEL_TYPE}/parapurchase/rq2/r_wsc_R_psychological-based-attack \
-    --market-type reputation_only \
-    --communication seller \
-    --communication-channel-type Real \
-    --config "${CONFIG_FILE}" \
-    --Posts4Seller psychological-based-attack
-
-
-# Reputation and warrant market - Real channel
-echo ""
-echo "Running Reputation+Warrant + Seller Communication + Real Channel..."
-python ./example/run_single_config_experiment.py \
-    --experiment-id ${MODEL_TYPE}/parapurchase/rq2/rw_wsc_R_psychological-based-attack \
-    --market-type reputation_and_warrant \
-    --communication seller \
-    --communication-channel-type Real \
-    --config "${CONFIG_FILE}" \
-    --Posts4Seller psychological-based-attack
-
-
-
-
-echo ""
-echo "Running Reputation-Only + Seller Communication + Fake Channel..."
-python ./example/run_single_config_experiment.py \
-    --experiment-id ${MODEL_TYPE}/parapurchase/rq2/r_wsc_F_policy_making \
-    --market-type reputation_only \
-    --communication seller \
-    --communication-channel-type Fake \
-    --config "${CONFIG_FILE}" \
-    # --Posts4Seller policy_making 
-
-# Reputation and warrant market - Fake channel
-echo ""
-echo "Running Reputation+Warrant + Seller Communication + Fake Channel..."
-python ./example/run_single_config_experiment.py \
-    --experiment-id ${MODEL_TYPE}/parapurchase/rq2/rw_wsc_F_policy_making \
-    --market-type reputation_and_warrant \
-    --communication seller \
-    --communication-channel-type Fake \
-    --config "${CONFIG_FILE}" \
-    # --Posts4Seller policy_making 
-
-
-# Reputation only market - Fake channel
-echo ""
-echo "Running Reputation-Only + Seller Communication + Fake Channel..."
-python ./example/run_single_config_experiment.py \
-    --experiment-id ${MODEL_TYPE}/parapurchase/rq2/r_wsc_F_pressure_quickprofits \
-    --market-type reputation_only \
-    --communication seller \
-    --communication-channel-type Fake \
-    --config "${CONFIG_FILE}" \
-    # --Posts4Seller pressure_quickprofits 
-
-
-# Reputation and warrant market - Fake channel
-echo ""
-echo "Running Reputation+Warrant + Seller Communication + Fake Channel..."
-python ./example/run_single_config_experiment.py \
-    --experiment-id ${MODEL_TYPE}/parapurchase/rq2/rw_wsc_F_pressure_quickprofits \
-    --market-type reputation_and_warrant \
-    --communication seller \
-    --communication-channel-type Fake \
-    --config "${CONFIG_FILE}" \
-    # --Posts4Seller pressure_quickprofits 
-
-
-# Reputation only market - Fake channel
-echo ""
-echo "Running Reputation-Only + Seller Communication + Fake Channel..."
-python ./example/run_single_config_experiment.py \
-    --experiment-id ${MODEL_TYPE}/parapurchase/rq2/r_wsc_F_psychological-based-attack \
-    --market-type reputation_only \
-    --communication seller \
-    --communication-channel-type Fake \
-    --config "${CONFIG_FILE}" \
-    # --Posts4Seller psychological-based-attack 
-
-
-# Reputation and warrant market - Fake channel
-echo ""
-echo "Running Reputation+Warrant + Seller Communication + Fake Channel..."
-python ./example/run_single_config_experiment.py \
-    --experiment-id ${MODEL_TYPE}/parapurchase/rq2/rw_wsc_F_psychological-based-attack \
-    --market-type reputation_and_warrant \
-    --communication seller \
-    --communication-channel-type Fake \
-    --config "${CONFIG_FILE}" \
-    --Posts4Seller psychological-based-attack 
-
-
-
-#  ==================== RQ3: Buyer Communication (Adversarial Setting) ====================
+# --------------------------------------------------------------------
+# RQ3: Communication interference vs deception resistance
+# Reuses the old rq2 design (policy / pressure / psychology, seller comm)
+# --------------------------------------------------------------------
 echo ""
 echo "=========================================="
-echo "RQ3: Buyer Collective Defense Against Seller Coordination"
+echo "RQ3: Communication Interference & Resistance"
 echo "=========================================="
-# #
-# ADVERSARIAL RQ3 DESIGN (clean causal isolation):
 
-#   Baseline (Seller comm active, NO buyer comm):
-#     → Reuse existing RQ2 Real-channel conditions:
-#         rq2/r_wsc_R_pressure_quickprofits   (Rep, seller-only comm, Real, PQP)
-#         rq2/rw_wsc_R_pressure_quickprofits  (RW,  seller-only comm, Real, PQP)
+for MARKET in reputation_only reputation_and_warrant; do
+    if [ "${MARKET}" = "reputation_only" ]; then
+        PREFIX="r"
+    else
+        PREFIX="rw"
+    fi
 
-#   Treatment (Both seller + buyer comm, Real channel):
-#     → New conditions below:
-#         rq3/r_both_R_pqp    (Rep, both comm, Real, PQP)
-#         rq3/rw_both_R_pqp   (RW,  both comm, Real, PQP)
+    python ./example/run_single_config_experiment.py \
+        --experiment-id "${EXP_ROOT}/rq3_resilience/${PREFIX}_wsc_R_policy_making" \
+        --market-type "${MARKET}" \
+        --communication seller \
+        --communication-channel-type Real \
+        --config "${CONFIG_FILE}" \
+        --Posts4Seller policy_making
 
-#   Research Question:
-#     "When sellers are already coordinating deception under Pressure-Quick-Profits,
-#      does adding buyer-to-buyer communication enable collective defense?"
+    python ./example/run_single_config_experiment.py \
+        --experiment-id "${EXP_ROOT}/rq3_resilience/${PREFIX}_wsc_R_pressure_quickprofits" \
+        --market-type "${MARKET}" \
+        --communication seller \
+        --communication-channel-type Real \
+        --config "${CONFIG_FILE}" \
+        --Posts4Seller pressure_quickprofits
 
-#   The ONLY difference between baseline and treatment is whether BUYERS can communicate.
-#   Seller communication and constraints are identical across all 4 conditions.
-
-
-echo ""
-echo "Running Rep + Both Comm + Real + Pressure-Quick-Profits (RQ3 Treatment)..."
-python ./example/run_single_config_experiment.py \
-    --experiment-id ${MODEL_TYPE}/parapurchase/rq3/r_both_R_pqp \
-    --market-type reputation_only \
-    --communication both \
-    --communication-channel-type Real \
-    --config "${CONFIG_FILE}" \
-    --Posts4Seller pressure_quickprofits
-
-echo ""
-echo "Running Rep+Warrant + Both Comm + Real + Pressure-Quick-Profits (RQ3 Treatment)..."
-python ./example/run_single_config_experiment.py \
-    --experiment-id ${MODEL_TYPE}/parapurchase/rq3/rw_both_R_pqp \
-    --market-type reputation_and_warrant \
-    --communication both \
-    --communication-channel-type Real \
-    --config "${CONFIG_FILE}" \
-    --Posts4Seller pressure_quickprofits
+    python ./example/run_single_config_experiment.py \
+        --experiment-id "${EXP_ROOT}/rq3_resilience/${PREFIX}_wsc_R_psychological-based-attack" \
+        --market-type "${MARKET}" \
+        --communication seller \
+        --communication-channel-type Real \
+        --config "${CONFIG_FILE}" \
+        --Posts4Seller psychological-based-attack
+done
 
 echo ""
 echo "=========================================="
-echo "All parapurchase ablation experiments submitted!"
+echo "All experiments submitted for new RQ1/RQ2/RQ3 framing."
 echo "=========================================="

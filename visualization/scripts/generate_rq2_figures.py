@@ -121,7 +121,7 @@ def _load_cond_all_constraints(base_dir: str, cond: str) -> pd.DataFrame:
 # Figure 4 : Deceptions per condition × constraint
 # ─────────────────────────────────────────────────────────────────────────────
 
-def fig4_deception_by_constraint(base_dir: str, output_dir: Path) -> None:
+def fig4_deception_by_constraint(base_dir: str, output_dir: Path, file_prefix: str = "rq2") -> None:
     n_cols = len(CONSTRAINTS)
     fig, axes = plt.subplots(
         1, n_cols, figsize=(4.5 * n_cols, 3.8),
@@ -189,7 +189,7 @@ def fig4_deception_by_constraint(base_dir: str, output_dir: Path) -> None:
                                      h_frac=0.08, fontsize=9)
 
     fig.subplots_adjust(bottom=0.22)
-    save_figure(fig, output_dir / "rq2_seller_comm_deception_by_constraint.png")
+    save_figure(fig, output_dir / f"{file_prefix}_seller_comm_deception_by_constraint.png")
     print("  [Fig4] Deception facet figure saved.")
 
 
@@ -197,7 +197,7 @@ def fig4_deception_by_constraint(base_dir: str, output_dir: Path) -> None:
 # Figure 5 : Profit decomposition (honest / dishonest stacked)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def fig5_profit_decomposition(base_dir: str, output_dir: Path) -> None:
+def fig5_profit_decomposition(base_dir: str, output_dir: Path, file_prefix: str = "rq2") -> None:
     n_cols = len(CONSTRAINTS)
     fig, axes = plt.subplots(
         1, n_cols, figsize=(4.5 * n_cols, 3.8),
@@ -291,7 +291,7 @@ def fig5_profit_decomposition(base_dir: str, output_dir: Path) -> None:
             ax.legend(frameon=False, fontsize=8, loc="upper left")
 
     fig.subplots_adjust(bottom=0.22)
-    save_figure(fig, output_dir / "rq2_profit_decomposition_honest_vs_dishonest.png")
+    save_figure(fig, output_dir / f"{file_prefix}_profit_decomposition_honest_vs_dishonest.png")
     print("  [Fig5] Profit decomposition figure saved.")
 
 
@@ -299,7 +299,7 @@ def fig5_profit_decomposition(base_dir: str, output_dir: Path) -> None:
 # Figure 6 (appendix) : Product mix per constraint
 # ─────────────────────────────────────────────────────────────────────────────
 
-def fig6_product_mix(base_dir: str, output_dir: Path) -> None:
+def fig6_product_mix(base_dir: str, output_dir: Path, file_prefix: str = "rq2") -> None:
     n_cols = len(CONSTRAINTS)
     fig, axes = plt.subplots(
         1, n_cols, figsize=(4.5 * n_cols, 3.8),
@@ -355,7 +355,7 @@ def fig6_product_mix(base_dir: str, output_dir: Path) -> None:
                bbox_to_anchor=(0.5, 0.01), ncol=3,
                frameon=False, fontsize=8)
     fig.subplots_adjust(bottom=0.22)
-    save_figure(fig, output_dir / "rq2_product_mix_appendix.png")
+    save_figure(fig, output_dir / f"{file_prefix}_product_mix_appendix.png")
     print("  [Fig6] Product mix appendix figure saved.")
 
 
@@ -363,7 +363,7 @@ def fig6_product_mix(base_dir: str, output_dir: Path) -> None:
 # Figure 7 : Buyer Utility decomposition (honest vs fraud) × constraint
 # ─────────────────────────────────────────────────────────────────────────────
 
-def fig7_buyer_utility_by_constraint(base_dir: str, output_dir: Path) -> None:
+def fig7_buyer_utility_by_constraint(base_dir: str, output_dir: Path, file_prefix: str = "rq2") -> None:
     """Stacked bar: honest buyer utility (green, above 0) + fraud-induced loss
     (red, below 0) per condition × constraint.
 
@@ -469,7 +469,7 @@ def fig7_buyer_utility_by_constraint(base_dir: str, output_dir: Path) -> None:
                bbox_to_anchor=(0.5, 0.01), ncol=2,
                frameon=False, fontsize=8)
     fig.subplots_adjust(bottom=0.22)
-    save_figure(fig, output_dir / "rq2_buyer_utility_by_constraint.png")
+    save_figure(fig, output_dir / f"{file_prefix}_buyer_utility_by_constraint.png")
     print("  [Fig7] Buyer utility decomposition figure saved.")
 
 
@@ -477,7 +477,7 @@ def fig7_buyer_utility_by_constraint(base_dir: str, output_dir: Path) -> None:
 # Figure All : Aggregate all constraints into one 2x2 summary figure
 # ─────────────────────────────────────────────────────────────────────────────
 
-def fig_all_constraints_summary(base_dir: str, output_dir: Path) -> None:
+def fig_all_constraints_summary(base_dir: str, output_dir: Path, file_prefix: str = "rq2") -> None:
     """Aggregate samples across all three constraints and render 4 RQ2 views in one figure."""
     df_by_cond = {cond: _load_cond_all_constraints(base_dir, cond) for cond in CONDITIONS_ORDER}
     xs = np.arange(len(CONDITIONS_ORDER))
@@ -607,11 +607,13 @@ def fig_all_constraints_summary(base_dir: str, output_dir: Path) -> None:
         add_significance_bracket(ax_util, xs[ia], xs[ib], y_top, p, h_frac=0.06, fontsize=9)
 
     fig.subplots_adjust(bottom=0.14)
-    save_figure(fig, output_dir / "rq2_All_constraints_combined.png")
+    save_figure(fig, output_dir / f"{file_prefix}_All_constraints_combined.png")
     print("  [RQ2-All] Aggregated 2x2 summary figure saved.")
 
 
-def fig_rq2_all_markettype_dual_metrics(base_dir: str, output_dir: Path) -> None:
+def fig_rq2_all_markettype_dual_metrics(
+    base_dir: str, output_dir: Path, file_prefix: str = "rq2", baseline_dir: str | None = None
+) -> None:
     """RQ2 ALL figure requested by user:
     - Left: counterfeit HQ count
     - Right: buyer utility per transaction
@@ -619,7 +621,10 @@ def fig_rq2_all_markettype_dual_metrics(base_dir: str, output_dir: Path) -> None
     Within each market type: baseline / policy-making / pressure / psychology
     """
     base_path = Path(base_dir)
-    rq1_dir = base_path.parent / "rq1"
+    if baseline_dir is None:
+        baseline_dir_path = base_path.parent / "rq1"
+    else:
+        baseline_dir_path = Path(baseline_dir)
 
     constraints = [
         ("baseline", "Baseline"),
@@ -628,10 +633,10 @@ def fig_rq2_all_markettype_dual_metrics(base_dir: str, output_dir: Path) -> None
         ("psychological-based-attack", "Psychology"),
     ]
     market_types = [
-        ("rep", "Rep", "r_wsc_F", rq1_dir / "r_wo"),
-        ("rep_comm", "Rep Comm", "r_wsc_R", rq1_dir / "r_wo"),
-        ("rw", "Rep+Warrant", "rw_wsc_F", rq1_dir / "rw_wo"),
-        ("rw_comm", "Rep+Warrant Comm", "rw_wsc_R", rq1_dir / "rw_wo"),
+        ("rep", "Rep", "r_wsc_F", baseline_dir_path / "r_wo"),
+        ("rep_comm", "Rep Comm", "r_wsc_R", baseline_dir_path / "r_wo"),
+        ("rw", "Rep+Warrant", "rw_wsc_F", baseline_dir_path / "rw_wo"),
+        ("rw_comm", "Rep+Warrant Comm", "rw_wsc_R", baseline_dir_path / "rw_wo"),
     ]
     bar_colors = {
         "baseline": COLORS["neutral"],
@@ -779,7 +784,7 @@ def fig_rq2_all_markettype_dual_metrics(base_dir: str, output_dir: Path) -> None
         fontsize=9,
     )
     fig.subplots_adjust(bottom=0.22)
-    save_figure(fig, output_dir / "rq2_ALL_markettype_hqfake_profit.png")
+    save_figure(fig, output_dir / f"{file_prefix}_ALL_markettype_hqfake_profit.png")
     print("  [RQ2_ALL] Market-type grouped dual-metric figure saved.")
 
 
@@ -793,6 +798,10 @@ def main():
                         default="experiments/gpt-4o-mini/paper/rq2")
     parser.add_argument("--output-dir",
                         default="visualization/figs/paper/rq2")
+    parser.add_argument("--file-prefix", default="rq2",
+                        help="Prefix for output figure file names.")
+    parser.add_argument("--baseline-dir", default=None,
+                        help="Optional baseline directory containing r_wo and rw_wo (for ALL markettype figure).")
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
@@ -803,22 +812,27 @@ def main():
     print("=" * 60)
 
     print("\n[Fig4] Deception by Constraint…")
-    fig4_deception_by_constraint(args.base_dir, output_dir)
+    fig4_deception_by_constraint(args.base_dir, output_dir, file_prefix=args.file_prefix)
 
     print("\n[Fig5] Profit Decomposition…")
-    fig5_profit_decomposition(args.base_dir, output_dir)
+    fig5_profit_decomposition(args.base_dir, output_dir, file_prefix=args.file_prefix)
 
     print("\n[Fig6] Product Mix (appendix)…")
-    fig6_product_mix(args.base_dir, output_dir)
+    fig6_product_mix(args.base_dir, output_dir, file_prefix=args.file_prefix)
 
     print("\n[Fig7] Buyer Utility by Constraint…")
-    fig7_buyer_utility_by_constraint(args.base_dir, output_dir)
+    fig7_buyer_utility_by_constraint(args.base_dir, output_dir, file_prefix=args.file_prefix)
 
     print("\n[RQ2-All] Aggregated Summary Across Constraints…")
-    fig_all_constraints_summary(args.base_dir, output_dir)
+    fig_all_constraints_summary(args.base_dir, output_dir, file_prefix=args.file_prefix)
 
     print("\n[RQ2_ALL] Market-Type Grouped Figure (HQ fake + Profit)…")
-    fig_rq2_all_markettype_dual_metrics(args.base_dir, output_dir)
+    fig_rq2_all_markettype_dual_metrics(
+        args.base_dir,
+        output_dir,
+        file_prefix=args.file_prefix,
+        baseline_dir=args.baseline_dir,
+    )
 
     print("\n✅  RQ2 figures saved to:", output_dir)
 

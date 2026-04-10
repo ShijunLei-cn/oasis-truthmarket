@@ -6,7 +6,7 @@ Provides the main simulation runner and orchestration logic
 import asyncio
 import sqlite3
 import os
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from datetime import datetime
 
 from .database import MarketDatabase
@@ -25,6 +25,7 @@ from prompt import (
 )
 
 from utils import print_simulation_summary
+from oasis_market.probing import VulnerabilityProbe, run_cognitive_probes, VulnerabilityType
 
 
 class MarketSimulation:
@@ -46,6 +47,10 @@ class MarketSimulation:
         self.env = None
         self.agent_graph = None
         self.model = None
+        self.prober: Optional[VulnerabilityProbe] = None
+        self.cognitive_probe_results = []
+        self.cognitive_probe_output_path: Optional[str] = None
+        self.cognitive_probe_summary: Dict[str, Any] = {}
     
     def setup_environment(self):
         """Set up environment variables and clean up existing data"""
@@ -319,7 +324,9 @@ class MarketSimulation:
         SimulationLogger.print_round_footer(round_num)
     
     async def run(self, market_type: Optional[str] = None, communication_type: Optional[str] = None,
-                 posts4seller: Optional[str] = None):
+                 posts4seller: Optional[str] = None, enable_cognitive_probing: Optional[bool] = None,
+                 probe_interval: Optional[int] = None,
+                 probe_types: Optional[List[VulnerabilityType]] = None):
         """
         Run the complete market simulation
         
@@ -327,6 +334,9 @@ class MarketSimulation:
             market_type: Type of market (uses config default if not specified)
             communication_type: Type of communication (uses config default if not specified)
             posts4seller: Type of initial posts for sellers ('policy_making', 'pressure_quickprofits', 'psychological-based-attack')
+            enable_cognitive_probing: Enable RQ1-style cognitive probing interviews
+            probe_interval: Probe every N rounds
+            probe_types: Optional list of probe types
         """
         print("Starting market simulation initialization...")
         
@@ -335,6 +345,10 @@ class MarketSimulation:
             market_type = self.config.MARKET_TYPE
         if communication_type is None:
             communication_type = getattr(self.config, 'COMMUNICATION_TYPE', 'none')
+        if enable_cognitive_probing is None:
+            enable_cognitive_probing = getattr(self.config, 'COGNITIVE_PROBING_ENABLED', False)
+        if probe_interval is None:
+            probe_interval = getattr(self.config, 'COGNITIVE_PROBING_INTERVAL', 1)
         
         # Setup environment
         self.setup_environment()
@@ -363,8 +377,25 @@ class MarketSimulation:
         # Initialize seller history
         self.sellers_history = {i+1: [] for i in range(self.config.NUM_SELLERS)}
         
+        # Initialize cognitive probing system (optional)
+        self.prober = VulnerabilityProbe(self.database_path, self.config) if enable_cognitive_probing else None
+        self.cognitive_probe_results = []
+        self.cognitive_probe_output_path = None
+        self.cognitive_probe_summary = {}
+        
         # Run simulation rounds
         for round_num in range(1, self.config.SIMULATION_ROUNDS + 1):
+            if self.prober is not None and (round_num % probe_interval == 0 or round_num <= 2):
+                print(f"  [Probing] Running cognitive probes for round {round_num}...")
+                probe_results = await run_cognitive_probes(
+                    self.env,
+                    self.agent_graph,
+                    round_num,
+                    self.prober,
+                    probe_types=probe_types,
+                )
+                self.cognitive_probe_results.extend(probe_results)
+                print(f"  [Probing] Round {round_num}: {len(probe_results)} probe results collected")
             await self.run_round(round_num, market_type, communication_type)
         
         # # Run vulnerability detection
@@ -372,6 +403,33 @@ class MarketSimulation:
         # run_detection(self.config.SIMULATION_ROUNDS, self.database_path)
         # print("Manipulation analysis completed.")
         
+        # Save probing results
+        if self.prober is not None:
+            try:
+                self.cognitive_probe_output_path = self.prober.save_results()
+                self.cognitive_probe_summary = {
+                    "enabled": True,
+                    "probe_interval": probe_interval,
+                    "probe_results_path": self.cognitive_probe_output_path,
+                    "total_probes": len(self.cognitive_probe_results),
+                    "manipulation_detected": sum(
+                        1 for p in self.cognitive_probe_results if p.manipulation_detected
+                    ),
+                }
+                print(f"  [Probing] Saved probe results to: {self.cognitive_probe_output_path}")
+            except Exception as e:
+                print(f"  [Probing] Failed to save probe results: {e}")
+                self.cognitive_probe_summary = {
+                    "enabled": True,
+                    "probe_interval": probe_interval,
+                    "probe_results_path": None,
+                    "total_probes": len(self.cognitive_probe_results),
+                    "manipulation_detected": sum(
+                        1 for p in self.cognitive_probe_results if p.manipulation_detected
+                    ),
+                    "error": str(e),
+                }
+
         # Close environment
         await self.env.close()
         
@@ -445,7 +503,8 @@ class MarketSimulation:
 # Convenience function for backward compatibility
 async def run_single_simulation(database_path: str, market_type: Optional[str] = None,
     communication_type: str = 'none', communication_channel_type: str = "Fake",
-    posts4seller: Optional[str] = None):
+    posts4seller: Optional[str] = None, enable_cognitive_probing: bool = False,
+    probe_interval: int = 1, probe_types: Optional[List[VulnerabilityType]] = None):
     """
     Run a single market simulation (backward compatibility wrapper)
     
@@ -455,6 +514,9 @@ async def run_single_simulation(database_path: str, market_type: Optional[str] =
         communication_type: Type of communication
         communication_channel_type: Type of communication channel ("Fake" or "Real")
         posts4seller: Type of initial posts for sellers ('policy_making', 'pressure_quickprofits', 'psychological-based-attack')
+        enable_cognitive_probing: Enable RQ1-style cognitive probing interviews
+        probe_interval: Probe every N rounds
+        probe_types: Optional list of probe types
     """
     from config import SimulationConfig  #NOTE：The imported class will be loaded from the cache, and the configuration of yaml will be passed in normally.  
     
@@ -465,7 +527,14 @@ async def run_single_simulation(database_path: str, market_type: Optional[str] =
     SimulationConfig.COMMUNICATION_CHANNEL_TYPE = communication_channel_type
     
     simulation = MarketSimulation(database_path, SimulationConfig)
-    await simulation.run(market_type, communication_type, posts4seller)
+    await simulation.run(
+        market_type,
+        communication_type,
+        posts4seller,
+        enable_cognitive_probing=enable_cognitive_probing,
+        probe_interval=probe_interval,
+        probe_types=probe_types,
+    )
     
     # Restore original communication type
     SimulationConfig.COMMUNICATION_TYPE = original_comm_type

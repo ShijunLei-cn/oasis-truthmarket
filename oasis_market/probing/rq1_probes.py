@@ -1,5 +1,5 @@
 """
-Cognitive Probing Module for RQ1: Reputation Manipulation Behavior
+Vulnerability probing module for market simulations.
 
 This module implements 5 vulnerability probes to detect manipulation strategies:
 1. Reputation Lag - Exploiting delayed feedback
@@ -52,9 +52,9 @@ class ProbeResult:
             self.timestamp = datetime.now().isoformat()
 
 
-class RQ1CognitiveProbes:
+class VulnerabilityProbe:
     """
-    Cognitive probing system for RQ1: Reputation Manipulation Behavior
+    Cognitive probing system for vulnerability intention analysis.
     """
 
     # ==================== PROBE PROMPTS ====================
@@ -722,7 +722,7 @@ async def run_cognitive_probes(
     env,
     agent_graph,
     round_num: int,
-    prober: RQ1CognitiveProbes,
+    prober: VulnerabilityProbe,
     probe_types: List[VulnerabilityType] = None,
 ) -> List[ProbeResult]:
     """
@@ -732,7 +732,7 @@ async def run_cognitive_probes(
         env: Environment instance
         agent_graph: Agent graph
         round_num: Current round number
-        prober: RQ1CognitiveProbes instance
+        prober: VulnerabilityProbe instance
         probe_types: Optional list of specific probe types to run
 
     Returns:

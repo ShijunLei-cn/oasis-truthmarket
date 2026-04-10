@@ -1,11 +1,11 @@
-# RQ2 Experiment Configuration
-# Configuration file for RQ2 experiments comparing Reputation-Only vs Reputation+Warrant markets
+# Market Simulation Configuration Profile
+# Profile metadata is encoded in filename (model, scale, runs, profile).
 
 experiment:
-  runs: 5
-  num_sellers: 10
-  num_buyers: 10
-  simulation_rounds: 10
+  runs: 3
+  num_sellers: 20
+  num_buyers: 20
+  simulation_rounds: 20
 
 market_params:
   # Production costs

@@ -50,6 +50,8 @@ class Seller_prompt:
                 f"  - Example 2 (single type): list_products([{{{{\"advertised_quality\": \"HQ\", \"product_quality\": \"LQ\", \"quantity\": 5}}}}])\n"
                 f"  - Production Costs: HQ products cost ${hq_cost:.1f} to produce, LQ products cost ${lq_cost:.1f} to produce\n"
                 f"  - Fixed Prices: HQ products are priced at ${hq_price:.1f}, LQ products are priced at ${lq_price:.1f}. You cannot change the price.\n"
+                "- `reenter_market()`: Refresh your brand reputation and re-enter market activity.\n"
+                "  - This action is available from Round {reentry_round} onward under market rules.\n"
         ),
         "reputation_and_warrant": (
             "Available Actions:\n"
@@ -80,6 +82,8 @@ class Seller_prompt:
                 f"  - Example 2 (fraudulent with and without warrant): list_products([{{{{\"advertised_quality\": \"HQ\", \"product_quality\": \"LQ\", \"has_warrant\": True, \"quantity\": 2}}}}, {{{{ \"advertised_quality\": \"HQ\", \"product_quality\": \"LQ\", \"has_warrant\": False, \"quantity\": 5}}}}])\n"
                 f"  - Production Costs: HQ products cost ${hq_cost:.1f} to produce, LQ products cost ${lq_cost:.1f} to produce\n"
                 f"  - Fixed Prices: HQ products are priced at ${hq_price:.1f}, LQ products are priced at ${lq_price:.1f}. You cannot change the price.\n"
+                "- `reenter_market()`: Refresh your brand reputation and re-enter market activity.\n"
+                "  - This action is available from Round {reentry_round} onward under market rules.\n"
         ),
     }
 

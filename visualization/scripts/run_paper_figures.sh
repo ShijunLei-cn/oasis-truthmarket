@@ -1,11 +1,10 @@
 #!/bin/bash
 # ============================================================
 # run_paper_figures.sh
-# One-command script to generate all paper figures (RQ1/2/3).
-# Run from the project root directory.
+# Figure generation entrypoint aligned with the NEW 3-RQ framing.
 # ============================================================
 
-set -e
+set -euo pipefail
 
 MODEL_TYPE="${MODEL_TYPE:-gpt-4o-mini}"
 EXPERIMENT_PREFIX="experiments/${MODEL_TYPE}/paper_important_results"
@@ -14,70 +13,67 @@ OUTPUT_BASE="visualization/figs/${MODEL_TYPE}/paper_important_results"
 export PYTHONPATH="${PYTHONPATH}:$(pwd)"
 
 echo "=========================================="
-echo "Paper Figure Generation"
+echo "Paper Figure Generation (New RQ Mapping)"
 echo "Model   : ${MODEL_TYPE}"
 echo "Data    : ${EXPERIMENT_PREFIX}"
 echo "Output  : ${OUTPUT_BASE}"
 echo "=========================================="
 
-# ── RQ1 ──────────────────────────────────────────────────────
+# ------------------------------------------------------------------
+# RQ1: Vulnerability intention in reputation-only market
+# ------------------------------------------------------------------
 echo ""
-echo "── RQ1: Warrant vs. Reputation-Only ──────────────────"
+echo "── RQ1: Rep-only Vulnerability Intention ─────────────"
 python3 visualization/scripts/generate_rq1_figures.py \
-    --r-dir  "${EXPERIMENT_PREFIX}/rq1/r_wo" \
-    --rw-dir "${EXPERIMENT_PREFIX}/rq1/rw_wo" \
-    --output-dir "${OUTPUT_BASE}/rq1"
+    --r-dir  "${EXPERIMENT_PREFIX}/rq1_intent/r_wo" \
+    --output-dir "${OUTPUT_BASE}/rq1" \
+    --rep-only-only
 
-# ── RQ2 ──────────────────────────────────────────────────────
+if [ -f "${OUTPUT_BASE}/rq1/rq1_2_rep_only_manipulation_detection.png" ]; then
+    cp "${OUTPUT_BASE}/rq1/rq1_2_rep_only_manipulation_detection.png" \
+       "${OUTPUT_BASE}/rq1/rq1_intent_rep_only_manipulation_detection.png"
+fi
+
+# ------------------------------------------------------------------
+# RQ2: Warrant welfare (rep vs rep+warrant, no communication)
+# Uses original generator_rq1 pipeline then renames outputs to rq2_*
+# ------------------------------------------------------------------
 echo ""
-echo "── RQ2: Seller Communication under Constraints ───────"
-python3 visualization/scripts/generate_rq2_figures.py \
-    --base-dir   "${EXPERIMENT_PREFIX}/rq2" \
+echo "── RQ2: Warrant Welfare ──────────────────────────────"
+python3 visualization/scripts/generate_rq1_figures.py \
+    --r-dir  "${EXPERIMENT_PREFIX}/rq2_welfare/r_wo" \
+    --rw-dir "${EXPERIMENT_PREFIX}/rq2_welfare/rw_wo" \
     --output-dir "${OUTPUT_BASE}/rq2"
 
-# ── RQ3 ──────────────────────────────────────────────────────
-echo ""
-echo "── RQ3: Buyer Communication & Collective Defense ─────"
-python3 visualization/scripts/generate_rq3_figures.py \
-    --base-dir   "${EXPERIMENT_PREFIX}/rq3" \
-    --output-dir "${OUTPUT_BASE}/rq3"
+for src in "${OUTPUT_BASE}/rq2"/rq1_*.png; do
+    if [ -f "${src}" ]; then
+        dst="${src/rq1_/rq2_}"
+        cp "${src}" "${dst}"
+    fi
+done
 
+# ------------------------------------------------------------------
+# RQ3: Communication interference & resistance (old rq2 setting)
+# ------------------------------------------------------------------
 echo ""
-echo "── RQ3: Tables ───────────────────────────────────────"
-python3 visualization/scripts/generate_rq3_tables.py \
-    --base-dir   "${EXPERIMENT_PREFIX}" \
-    --output-dir "visualization/table/paper_important_results/rq3"
+echo "── RQ3: Communication Interference & Resistance ─────"
+python3 visualization/scripts/generate_rq2_figures.py \
+    --base-dir   "${EXPERIMENT_PREFIX}/rq3_resilience" \
+    --baseline-dir "${EXPERIMENT_PREFIX}/rq2_welfare" \
+    --output-dir "${OUTPUT_BASE}/rq3" \
+    --file-prefix "rq3"
 
-# ── Statistical Significance Report ─────────────────────────
-echo ""
-echo "── Statistical Significance Report ───────────────────"
-python3 visualization/scripts/generate_paper_stats_report.py \
-    --base-dir   "${EXPERIMENT_PREFIX}" \
-    --output-dir "${OUTPUT_BASE}/stats"
-
-# ── Summary ──────────────────────────────────────────────────
 echo ""
 echo "=========================================="
-echo "All figures and statistics generated!"
+echo "All figures generated with new RQ1/RQ2/RQ3 mapping."
 echo "=========================================="
 echo ""
-echo "Main paper figures:"
-echo "  ${OUTPUT_BASE}/rq1/rq1_warrant_vs_rep_deception_and_profit.png"
-echo "  ${OUTPUT_BASE}/rq1/rq1_1_manipulation_detection.png"
-echo "  ${OUTPUT_BASE}/rq1/rq1_2_rep_only_manipulation_detection.png"
-echo "  ${OUTPUT_BASE}/rq1/rq1_exit_loophole_vulnerability.png"
-echo "  ${OUTPUT_BASE}/rq2/rq2_seller_comm_deception_by_constraint.png"
-echo "  ${OUTPUT_BASE}/rq2/rq2_profit_decomposition_honest_vs_dishonest.png"
-echo "  ${OUTPUT_BASE}/rq2/rq2_All_constraints_combined.png"
-echo "  ${OUTPUT_BASE}/rq2/rq2_ALL_markettype_hqfake_profit.png"
-echo "  ${OUTPUT_BASE}/rq3/rq3_buyer_comm_market_outcomes.png"
-echo ""
-echo "Appendix figures:"
-echo "  ${OUTPUT_BASE}/rq1/rq1_product_mix_appendix.png"
-echo "  ${OUTPUT_BASE}/rq2/rq2_product_mix_appendix.png"
-echo "  ${OUTPUT_BASE}/rq3/rq3_round_adaptation_appendix.png"
-echo ""
-echo "Statistical reports:"
-echo "  ${OUTPUT_BASE}/stats/stats_report.txt   (human-readable p-values)"
-echo "  ${OUTPUT_BASE}/stats/stats_report.tex   (LaTeX table for appendix)"
-echo "  ${OUTPUT_BASE}/stats/stats_report.csv   (CSV for manual inspection)"
+echo "RQ1:"
+echo "  ${OUTPUT_BASE}/rq1/rq1_intent_rep_only_manipulation_detection.png"
+echo "RQ2:"
+echo "  ${OUTPUT_BASE}/rq2/rq2_warrant_vs_rep_deception_and_profit.png"
+echo "  ${OUTPUT_BASE}/rq2/rq2_exit_loophole_vulnerability.png"
+echo "RQ3:"
+echo "  ${OUTPUT_BASE}/rq3/rq3_seller_comm_deception_by_constraint.png"
+echo "  ${OUTPUT_BASE}/rq3/rq3_profit_decomposition_honest_vs_dishonest.png"
+echo "  ${OUTPUT_BASE}/rq3/rq3_ALL_markettype_hqfake_profit.png"

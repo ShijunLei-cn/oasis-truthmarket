@@ -1,8 +1,8 @@
-# RQ1 Experiment Configuration
-# Configuration file for RQ1 experiments: Cognitive Probing for Reputation Manipulation
+# Market Simulation Configuration Profile
+# Profile metadata is encoded in filename (model, scale, runs, profile).
 
 experiment:
-  runs: 10
+  runs: 5
   num_sellers: 5
   num_buyers: 5
   simulation_rounds: 10
@@ -23,10 +23,8 @@ market_params:
   # Challenge mechanism
   challenge_cost: 1.0
   # Budget configuration (refreshed at the start of each round)
-  seller_budget: 18.0
+  seller_budget: 30.0
   buyer_budget: 60.0
-  # Initial reputation configuration
-  initial_seller_reputation: 0.0
 
 market_rules:
   reputation_lag: null
@@ -34,7 +32,7 @@ market_rules:
   initial_window_rounds: []
   exit_round: null
   market_type: reputation_only  # Will be overridden by command line argument
-  communication_type: none
+  communication_type: none  # Will be overridden by command line argument
   communication_channel_type: Fake
 
 model:

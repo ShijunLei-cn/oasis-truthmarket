@@ -91,7 +91,8 @@ class SellerListingPhase(MarketPhase):
                 )
                 
                 # Tools available for sellers
-                listing_tools = ['list_products']
+                # `reenter_market` is used to refresh brand reputation under configured market rules.
+                listing_tools = ['list_products', 'reenter_market']
                 
                 seller_actions[agent] = LLMAction(
                     extra_action=listing_tools,

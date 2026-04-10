@@ -8,7 +8,7 @@ echo "Comparing Reputation-Only vs Reputation+Warrant markets"
 echo "=========================================="
 
 # Configuration file path (optional - if not provided, uses default config.py)
-CONFIG_FILE="${CONFIG_FILE:-configs/rq2_experiment_0.yaml}"
+CONFIG_FILE="${CONFIG_FILE:-configs/sim_gpt4omini_5s_5b_10r_runs5_base.yaml}"
 
 # Reputation only market (no communication)
 echo ""
@@ -43,7 +43,7 @@ echo "  - experiments/rw_wo/"
 echo "=========================================="
 
 # Different Setting: Run with custom YAML config
-CONFIG_FILE=configs/rq2_experiment_1.yaml 
+CONFIG_FILE=configs/sim_gpt4omini_5s_5b_10r_runs5_sellerbudget30.yaml 
 
 # Example: Run without YAML config (uses default config.py)
 # python ./example/run_single_config_experiment.py \
@@ -65,7 +65,7 @@ python ./example/run_single_config_experiment.py \
 
 
 # Different Setting: Run with custom YAML config
-CONFIG_FILE=configs/rq2_experiment_2.yaml 
+CONFIG_FILE=configs/sim_gpt4omini_5s_5b_10r_runs5_altpayoff.yaml 
 
 # python ./example/run_single_config_experiment.py \
 #     --experiment-id rq2_2/r_wo \

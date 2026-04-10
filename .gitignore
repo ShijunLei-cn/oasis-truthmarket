@@ -223,11 +223,11 @@ comparisions
 analysis/bkp
 
 analysis/exp**
-visualization/bkp
-visualization/table/
-visualization/figs/
-visualization/cache/
-**/cache/
+# visualization/bkp
+# visualization/table/
+# visualization/figs/
+# visualization/cache/
+# **/cache/
 paper/*
 .github/
 .claude/

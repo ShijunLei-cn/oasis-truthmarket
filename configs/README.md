@@ -1,6 +1,8 @@
 # Configuration Files
 
 This directory contains YAML configuration files for market simulation experiments.
+File names are organized by **configuration semantics** (model + scale + key parameter profile),
+not by RQ number.
 
 ## Usage
 
@@ -16,7 +18,7 @@ python ./example/run_single_config_experiment.py \
     --communication none \
     --communication-channel-type Fake \
     --runs 5 \
-    --config configs/rq2_experiment.yaml
+    --config configs/sim_gpt4omini_5s_5b_10r_runs5_base.yaml
 
 # Run without YAML config (uses default config.py)
 python ./example/run_single_config_experiment.py \
@@ -69,10 +71,29 @@ paths:
   base_analysis_path: analysis
 ```
 
+### Naming Convention
+
+Config files follow this pattern:
+
+`sim_<model>_<Ns>s_<Nb>b_<Nr>r_runs<R>_<profile>.yaml`
+
+Examples:
+- `sim_gpt4omini_5s_5b_10r_runs5_base.yaml`
+- `sim_gpt4omini_5s_5b_10r_runs5_sellerbudget30.yaml`
+- `sim_gpt4omini_5s_5b_10r_runs5_altpayoff.yaml`
+- `sim_gpt4omini_20s_20b_20r_runs3_base.yaml`
+
 ### Available Configuration Files
 
-- `default.yaml`: Default configuration matching config.py defaults
-- `rq2_experiment.yaml`: Configuration for RQ2 experiments
+- `default.yaml`: baseline config matching `config.py`
+- `sim_gpt4omini_5s_5b_10r_runs10_base.yaml`: 5x5x10, 10 runs (probe-heavy baseline)
+- `sim_gpt4omini_5s_5b_10r_runs5_base.yaml`: 5x5x10, 5 runs baseline
+- `sim_gpt4omini_5s_5b_10r_runs5_sellerbudget30.yaml`: same as baseline, seller budget = 30
+- `sim_gpt4omini_5s_5b_10r_runs5_altpayoff.yaml`: alternate payoff/cost matrix
+- `sim_gpt4omini_10s_10b_10r_runs5_base.yaml`: medium scale baseline for gpt-4o-mini
+- `sim_gpt4o_10s_10b_10r_runs5_base.yaml`: medium scale baseline for gpt-4o
+- `sim_gpt4omini_20s_20b_20r_runs3_base.yaml`: large-scale baseline
+- `sim_gpt4omini_50s_50b_10r_runs5_base.yaml`: very large population baseline
 
 ### Notes
 
@@ -80,4 +101,3 @@ paths:
 - YAML configuration values override default `config.py` values
 - Command-line arguments (like `--market-type`, `--communication`) still override YAML values
 - All sections in YAML are optional - missing sections will use defaults from `config.py`
-

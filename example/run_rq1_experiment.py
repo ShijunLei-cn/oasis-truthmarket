@@ -30,17 +30,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config import SimulationConfig
 from oasis_market.simulation import MarketSimulation
-from oasis_market.phases import (
-    SellerListingPhase,
-    BuyerPurchasePhase,
-    BuyerRatingPhase,
-    CommunicationPhase,
-)
-from cognitive_probing import (
-    RQ1CognitiveProbes,
-    VulnerabilityType,
-    run_cognitive_probes,
-)
 
 
 async def run_single_simulation_with_probing(
@@ -63,79 +52,23 @@ async def run_single_simulation_with_probing(
     print(f"Database: {db_path}")
     print(f"{'='*70}")
 
-    # Initialize simulation
+    # Initialize simulation and run probing inside the unified framework
     simulation = MarketSimulation(db_path, config)
-    simulation.setup_environment()
-
-    # Create model
-    from camel.models import ModelFactory
-
-    model = ModelFactory.create(
-        model_platform=config.MODEL_PLATFORM,
-        model_type=config.MODEL_TYPE,
-        api_key=os.getenv("MODEL_API_KEY"),
-        url=os.getenv("MODEL_BASE_URL"),
-    )
-
-    # Initialize agents
     market_type = config.MARKET_TYPE
-    agent_graph, env = await simulation.initialize_agents(model, market_type)
-    simulation.agent_graph = agent_graph
-    simulation.env = env
-    simulation.model = model
-
-    # Initialize probing system
-    prober = RQ1CognitiveProbes(db_path, config)
-
-    # Initialize seller history
-    simulation.sellers_history = {i + 1: [] for i in range(config.NUM_SELLERS)}
-
-    # Track all probe results
-    all_probe_results = []
-
-    # Run simulation with probing
-    for round_num in range(1, config.SIMULATION_ROUNDS + 1):
-        print(f"\n--- Round {round_num}/{config.SIMULATION_ROUNDS} ---")
-
-        # Synchronize platform round counter
-        env.platform.sandbox_clock.round_step = round_num
-        env.current_round = round_num
-
-        # ============ COGNITIVE PROBING PHASE ============
-        if (
-            round_num % probe_interval == 0 or round_num <= 2
-        ):  # Always probe first 2 rounds
-            print(f"  [Probing] Running cognitive probes for round {round_num}...")
-            probe_results = await run_cognitive_probes(
-                env, agent_graph, round_num, prober
-            )
-            all_probe_results.extend(probe_results)
-            print(f"  [Probing] Round {round_num}: {len(probe_results)} probe results collected")
-            print(f"  [Probing] Total probe results in prober: {len(prober.probe_results)}")
-
-        # ============ NORMAL SIMULATION PHASES ============
-        await simulation.run_round(round_num, market_type, "none")
+    await simulation.run(
+        market_type=market_type,
+        communication_type="none",
+        enable_cognitive_probing=True,
+        probe_interval=probe_interval,
+    )
 
     # Run vulnerability detection
     from oasis.environment.processing.valunerability import run_detection
 
     run_detection(config.SIMULATION_ROUNDS, db_path)
 
-    # Save probe results
-    print(f"\n[Probing] Preparing to save probe results...")
-    print(f"  Total probe results collected: {len(all_probe_results)}")
-    print(f"  Probe results in prober object: {len(prober.probe_results)}")
-    try:
-        probe_output_path = prober.save_results()
-        print(f"  ✓ Probe results saved to: {probe_output_path}")
-    except Exception as e:
-        print(f"  ❌ Error saving probe results: {e}")
-        import traceback
-        traceback.print_exc()
-        probe_output_path = None
-
-    # Close environment
-    await env.close()
+    probe_output_path = simulation.cognitive_probe_output_path
+    all_probe_results = simulation.cognitive_probe_results
 
     # Collect summary
     summary = {

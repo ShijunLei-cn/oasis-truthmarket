@@ -7,7 +7,7 @@ echo "Paper Experiments: Comprehensive Run"
 echo "=========================================="
 
 # Default configuration file (can be overridden via CONFIG_FILE environment variable)
-CONFIG_FILE="${CONFIG_FILE:-configs/rq2_experiment_0_gpt_4o_mini.yaml}"
+CONFIG_FILE="${CONFIG_FILE:-configs/sim_gpt4omini_10s_10b_10r_runs5_base.yaml}"
 
 MODEL_TYPE="${MODEL_TYPE:-gpt-4o-mini}"
 echo "Using config file: ${CONFIG_FILE}"

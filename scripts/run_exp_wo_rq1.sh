@@ -9,7 +9,7 @@ echo "Comparing Reputation-Only vs Reputation+Warrant markets"
 echo "=========================================="
 
 # Configuration file path (optional - if not provided, uses default config.py)
-CONFIG_FILE="${CONFIG_FILE:-configs/rq1_experiment_0.yaml}"
+CONFIG_FILE="${CONFIG_FILE:-configs/sim_gpt4omini_5s_5b_10r_runs10_base.yaml}"
 
 # Experiment configuration
 RUNS=5

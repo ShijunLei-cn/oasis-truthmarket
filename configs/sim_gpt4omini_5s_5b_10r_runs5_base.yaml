@@ -1,5 +1,5 @@
-# RQ2 Experiment Configuration
-# Configuration file for RQ2 experiments comparing Reputation-Only vs Reputation+Warrant markets
+# Market Simulation Configuration Profile
+# Profile metadata is encoded in filename (model, scale, runs, profile).
 
 experiment:
   runs: 5
@@ -23,7 +23,7 @@ market_params:
   # Challenge mechanism
   challenge_cost: 1.0
   # Budget configuration (refreshed at the start of each round)
-  seller_budget: 30.0
+  seller_budget: 18.0
   buyer_budget: 60.0
 
 market_rules:
@@ -33,7 +33,7 @@ market_rules:
   exit_round: null
   market_type: reputation_only  # Will be overridden by command line argument
   communication_type: none  # Will be overridden by command line argument
-  communication_channel_type: Fake
+  communication_channel_type: Fake # Will be overridden by command line argument
 
 model:
   platform: openai
