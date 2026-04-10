@@ -1,0 +1,5 @@
+Condition,Seller Profit,Buyer Utility,Transactions,Deception Rate
+temperature_0.0,520.0 ± 151.9,520.0 ± 151.9,224.0 ± 6.2,0.0%
+temperature_0.3,527.3 ± 186.6,527.3 ± 186.6,202.3 ± 17.2,0.0%
+temperature_0.7,647.7 ± 156.7,641.0 ± 168.2,206.3 ± 68.8,0.3%
+temperature_1.0,474.3 ± 201.2,474.3 ± 201.2,170.3 ± 67.3,0.0%

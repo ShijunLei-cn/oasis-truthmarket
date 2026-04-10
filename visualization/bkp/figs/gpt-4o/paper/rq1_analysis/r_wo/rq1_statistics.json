@@ -1,0 +1,129 @@
+{
+  "total_probes": 1250,
+  "total_manipulation_detected": 80,
+  "overall_manipulation_rate": 0.064,
+  "unique_agents": 5,
+  "unique_rounds": 10,
+  "by_vulnerability_type": {
+    "reputation_lag": {
+      "total_probes": 250,
+      "manipulation_detected": 10,
+      "manipulation_rate": 0.04,
+      "agents_manipulating": [
+        "2",
+        "3"
+      ],
+      "avg_expected_lag": 2.5,
+      "max_expected_lag": 10.0
+    },
+    "value_imbalance": {
+      "total_probes": 250,
+      "manipulation_detected": 0,
+      "manipulation_rate": 0.0,
+      "agents_manipulating": []
+    },
+    "reentry": {
+      "total_probes": 250,
+      "manipulation_detected": 0,
+      "manipulation_rate": 0.0,
+      "agents_manipulating": []
+    },
+    "initial_window": {
+      "total_probes": 250,
+      "manipulation_detected": 10,
+      "manipulation_rate": 0.04,
+      "agents_manipulating": [
+        "1"
+      ]
+    },
+    "exit_strategy": {
+      "total_probes": 250,
+      "manipulation_detected": 60,
+      "manipulation_rate": 0.24,
+      "agents_manipulating": [
+        "2",
+        "4",
+        "3"
+      ]
+    }
+  },
+  "by_round": {
+    "1": {
+      "total_probes": 125,
+      "manipulation_detected": 10,
+      "manipulation_rate": 0.08
+    },
+    "2": {
+      "total_probes": 125,
+      "manipulation_detected": 10,
+      "manipulation_rate": 0.08
+    },
+    "3": {
+      "total_probes": 125,
+      "manipulation_detected": 15,
+      "manipulation_rate": 0.12
+    },
+    "4": {
+      "total_probes": 125,
+      "manipulation_detected": 0,
+      "manipulation_rate": 0.0
+    },
+    "5": {
+      "total_probes": 125,
+      "manipulation_detected": 5,
+      "manipulation_rate": 0.04
+    },
+    "6": {
+      "total_probes": 125,
+      "manipulation_detected": 15,
+      "manipulation_rate": 0.12
+    },
+    "7": {
+      "total_probes": 125,
+      "manipulation_detected": 5,
+      "manipulation_rate": 0.04
+    },
+    "8": {
+      "total_probes": 125,
+      "manipulation_detected": 10,
+      "manipulation_rate": 0.08
+    },
+    "9": {
+      "total_probes": 125,
+      "manipulation_detected": 5,
+      "manipulation_rate": 0.04
+    },
+    "10": {
+      "total_probes": 125,
+      "manipulation_detected": 5,
+      "manipulation_rate": 0.04
+    }
+  },
+  "by_agent": {
+    "1": {
+      "total_probes": 250,
+      "manipulation_detected": 10,
+      "manipulation_rate": 0.04
+    },
+    "2": {
+      "total_probes": 250,
+      "manipulation_detected": 50,
+      "manipulation_rate": 0.2
+    },
+    "3": {
+      "total_probes": 250,
+      "manipulation_detected": 15,
+      "manipulation_rate": 0.06
+    },
+    "4": {
+      "total_probes": 250,
+      "manipulation_detected": 5,
+      "manipulation_rate": 0.02
+    },
+    "5": {
+      "total_probes": 250,
+      "manipulation_detected": 0,
+      "manipulation_rate": 0.0
+    }
+  }
+}

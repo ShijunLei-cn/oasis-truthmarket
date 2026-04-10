@@ -1,0 +1,433 @@
+{
+  "total_probes": 12500,
+  "total_manipulation_detected": 1206,
+  "overall_manipulation_rate": 0.09648,
+  "unique_agents": 50,
+  "unique_rounds": 10,
+  "by_vulnerability_type": {
+    "reputation_lag": {
+      "total_probes": 2500,
+      "manipulation_detected": 15,
+      "manipulation_rate": 0.006,
+      "agents_manipulating": [
+        "2",
+        "29",
+        "25",
+        "17",
+        "31",
+        "38",
+        "40"
+      ]
+    },
+    "value_imbalance": {
+      "total_probes": 2500,
+      "manipulation_detected": 48,
+      "manipulation_rate": 0.0192,
+      "agents_manipulating": [
+        "2",
+        "17",
+        "18",
+        "23",
+        "31",
+        "9",
+        "25",
+        "38",
+        "40",
+        "13",
+        "46",
+        "7",
+        "29"
+      ]
+    },
+    "reentry": {
+      "total_probes": 2500,
+      "manipulation_detected": 0,
+      "manipulation_rate": 0.0,
+      "agents_manipulating": []
+    },
+    "initial_window": {
+      "total_probes": 2500,
+      "manipulation_detected": 53,
+      "manipulation_rate": 0.0212,
+      "agents_manipulating": [
+        "2",
+        "3",
+        "9",
+        "14",
+        "18",
+        "29",
+        "31",
+        "33",
+        "40",
+        "46",
+        "47",
+        "41",
+        "45",
+        "23",
+        "28",
+        "50",
+        "25",
+        "7",
+        "13",
+        "12"
+      ]
+    },
+    "exit_strategy": {
+      "total_probes": 2500,
+      "manipulation_detected": 1090,
+      "manipulation_rate": 0.436,
+      "agents_manipulating": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "7",
+        "9",
+        "12",
+        "13",
+        "16",
+        "17",
+        "18",
+        "20",
+        "22",
+        "23",
+        "25",
+        "28",
+        "29",
+        "31",
+        "32",
+        "33",
+        "35",
+        "36",
+        "38",
+        "40",
+        "43",
+        "48",
+        "50",
+        "14",
+        "27",
+        "39",
+        "41",
+        "42",
+        "45",
+        "46",
+        "6",
+        "47",
+        "49",
+        "34",
+        "15",
+        "44",
+        "10",
+        "21",
+        "30",
+        "37",
+        "8",
+        "5"
+      ]
+    }
+  },
+  "by_round": {
+    "1": {
+      "total_probes": 1250,
+      "manipulation_detected": 188,
+      "manipulation_rate": 0.1504
+    },
+    "2": {
+      "total_probes": 1250,
+      "manipulation_detected": 154,
+      "manipulation_rate": 0.1232
+    },
+    "3": {
+      "total_probes": 1250,
+      "manipulation_detected": 193,
+      "manipulation_rate": 0.1544
+    },
+    "4": {
+      "total_probes": 1250,
+      "manipulation_detected": 141,
+      "manipulation_rate": 0.1128
+    },
+    "5": {
+      "total_probes": 1250,
+      "manipulation_detected": 109,
+      "manipulation_rate": 0.0872
+    },
+    "6": {
+      "total_probes": 1250,
+      "manipulation_detected": 107,
+      "manipulation_rate": 0.0856
+    },
+    "7": {
+      "total_probes": 1250,
+      "manipulation_detected": 86,
+      "manipulation_rate": 0.0688
+    },
+    "8": {
+      "total_probes": 1250,
+      "manipulation_detected": 79,
+      "manipulation_rate": 0.0632
+    },
+    "9": {
+      "total_probes": 1250,
+      "manipulation_detected": 81,
+      "manipulation_rate": 0.0648
+    },
+    "10": {
+      "total_probes": 1250,
+      "manipulation_detected": 68,
+      "manipulation_rate": 0.0544
+    }
+  },
+  "by_agent": {
+    "1": {
+      "total_probes": 250,
+      "manipulation_detected": 11,
+      "manipulation_rate": 0.044
+    },
+    "2": {
+      "total_probes": 250,
+      "manipulation_detected": 52,
+      "manipulation_rate": 0.208
+    },
+    "3": {
+      "total_probes": 250,
+      "manipulation_detected": 13,
+      "manipulation_rate": 0.052
+    },
+    "4": {
+      "total_probes": 250,
+      "manipulation_detected": 31,
+      "manipulation_rate": 0.124
+    },
+    "5": {
+      "total_probes": 250,
+      "manipulation_detected": 3,
+      "manipulation_rate": 0.012
+    },
+    "6": {
+      "total_probes": 250,
+      "manipulation_detected": 9,
+      "manipulation_rate": 0.036
+    },
+    "7": {
+      "total_probes": 250,
+      "manipulation_detected": 30,
+      "manipulation_rate": 0.12
+    },
+    "8": {
+      "total_probes": 250,
+      "manipulation_detected": 1,
+      "manipulation_rate": 0.004
+    },
+    "9": {
+      "total_probes": 250,
+      "manipulation_detected": 44,
+      "manipulation_rate": 0.176
+    },
+    "10": {
+      "total_probes": 250,
+      "manipulation_detected": 3,
+      "manipulation_rate": 0.012
+    },
+    "11": {
+      "total_probes": 250,
+      "manipulation_detected": 0,
+      "manipulation_rate": 0.0
+    },
+    "12": {
+      "total_probes": 250,
+      "manipulation_detected": 39,
+      "manipulation_rate": 0.156
+    },
+    "13": {
+      "total_probes": 250,
+      "manipulation_detected": 52,
+      "manipulation_rate": 0.208
+    },
+    "14": {
+      "total_probes": 250,
+      "manipulation_detected": 2,
+      "manipulation_rate": 0.008
+    },
+    "15": {
+      "total_probes": 250,
+      "manipulation_detected": 11,
+      "manipulation_rate": 0.044
+    },
+    "16": {
+      "total_probes": 250,
+      "manipulation_detected": 7,
+      "manipulation_rate": 0.028
+    },
+    "17": {
+      "total_probes": 250,
+      "manipulation_detected": 47,
+      "manipulation_rate": 0.188
+    },
+    "18": {
+      "total_probes": 250,
+      "manipulation_detected": 52,
+      "manipulation_rate": 0.208
+    },
+    "19": {
+      "total_probes": 250,
+      "manipulation_detected": 0,
+      "manipulation_rate": 0.0
+    },
+    "20": {
+      "total_probes": 250,
+      "manipulation_detected": 42,
+      "manipulation_rate": 0.168
+    },
+    "21": {
+      "total_probes": 250,
+      "manipulation_detected": 1,
+      "manipulation_rate": 0.004
+    },
+    "22": {
+      "total_probes": 250,
+      "manipulation_detected": 33,
+      "manipulation_rate": 0.132
+    },
+    "23": {
+      "total_probes": 250,
+      "manipulation_detected": 47,
+      "manipulation_rate": 0.188
+    },
+    "24": {
+      "total_probes": 250,
+      "manipulation_detected": 0,
+      "manipulation_rate": 0.0
+    },
+    "25": {
+      "total_probes": 250,
+      "manipulation_detected": 53,
+      "manipulation_rate": 0.212
+    },
+    "26": {
+      "total_probes": 250,
+      "manipulation_detected": 0,
+      "manipulation_rate": 0.0
+    },
+    "27": {
+      "total_probes": 250,
+      "manipulation_detected": 9,
+      "manipulation_rate": 0.036
+    },
+    "28": {
+      "total_probes": 250,
+      "manipulation_detected": 32,
+      "manipulation_rate": 0.128
+    },
+    "29": {
+      "total_probes": 250,
+      "manipulation_detected": 39,
+      "manipulation_rate": 0.156
+    },
+    "30": {
+      "total_probes": 250,
+      "manipulation_detected": 9,
+      "manipulation_rate": 0.036
+    },
+    "31": {
+      "total_probes": 250,
+      "manipulation_detected": 59,
+      "manipulation_rate": 0.236
+    },
+    "32": {
+      "total_probes": 250,
+      "manipulation_detected": 26,
+      "manipulation_rate": 0.104
+    },
+    "33": {
+      "total_probes": 250,
+      "manipulation_detected": 32,
+      "manipulation_rate": 0.128
+    },
+    "34": {
+      "total_probes": 250,
+      "manipulation_detected": 12,
+      "manipulation_rate": 0.048
+    },
+    "35": {
+      "total_probes": 250,
+      "manipulation_detected": 36,
+      "manipulation_rate": 0.144
+    },
+    "36": {
+      "total_probes": 250,
+      "manipulation_detected": 32,
+      "manipulation_rate": 0.128
+    },
+    "37": {
+      "total_probes": 250,
+      "manipulation_detected": 10,
+      "manipulation_rate": 0.04
+    },
+    "38": {
+      "total_probes": 250,
+      "manipulation_detected": 46,
+      "manipulation_rate": 0.184
+    },
+    "39": {
+      "total_probes": 250,
+      "manipulation_detected": 24,
+      "manipulation_rate": 0.096
+    },
+    "40": {
+      "total_probes": 250,
+      "manipulation_detected": 55,
+      "manipulation_rate": 0.22
+    },
+    "41": {
+      "total_probes": 250,
+      "manipulation_detected": 13,
+      "manipulation_rate": 0.052
+    },
+    "42": {
+      "total_probes": 250,
+      "manipulation_detected": 10,
+      "manipulation_rate": 0.04
+    },
+    "43": {
+      "total_probes": 250,
+      "manipulation_detected": 37,
+      "manipulation_rate": 0.148
+    },
+    "44": {
+      "total_probes": 250,
+      "manipulation_detected": 4,
+      "manipulation_rate": 0.016
+    },
+    "45": {
+      "total_probes": 250,
+      "manipulation_detected": 34,
+      "manipulation_rate": 0.136
+    },
+    "46": {
+      "total_probes": 250,
+      "manipulation_detected": 30,
+      "manipulation_rate": 0.12
+    },
+    "47": {
+      "total_probes": 250,
+      "manipulation_detected": 11,
+      "manipulation_rate": 0.044
+    },
+    "48": {
+      "total_probes": 250,
+      "manipulation_detected": 25,
+      "manipulation_rate": 0.1
+    },
+    "49": {
+      "total_probes": 250,
+      "manipulation_detected": 6,
+      "manipulation_rate": 0.024
+    },
+    "50": {
+      "total_probes": 250,
+      "manipulation_detected": 32,
+      "manipulation_rate": 0.128
+    }
+  }
+}

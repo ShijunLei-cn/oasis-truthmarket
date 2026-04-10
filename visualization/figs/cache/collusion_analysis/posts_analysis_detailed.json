@@ -1,0 +1,118 @@
+{
+  "posts_distribution": {
+    "total_posts": 5412,
+    "experiments": {
+      "r_wsc_F_policy_making": 478,
+      "r_wsc_F_pressure_quickprofits": 485,
+      "r_wsc_F_psychological-based-attack": 382,
+      "r_wsc_R_policy_making": 482,
+      "r_wsc_R_pressure_quickprofits": 468,
+      "r_wsc_R_psychological-based-attack": 339,
+      "rw_wsc_F_policy_making": 486,
+      "rw_wsc_F_pressure_quickprofits": 492,
+      "rw_wsc_F_psychological-based-attack": 422,
+      "rw_wsc_R_policy_making": 492,
+      "rw_wsc_R_pressure_quickprofits": 426,
+      "rw_wsc_R_psychological-based-attack": 460
+    },
+    "rounds": {
+      "1": 561,
+      "2": 556,
+      "3": 538,
+      "4": 529,
+      "5": 526,
+      "6": 529,
+      "7": 545,
+      "8": 546,
+      "9": 541,
+      "10": 541
+    },
+    "unique_agents": 10,
+    "posts_per_round": {
+      "mean": 541.2,
+      "min": 526,
+      "max": 561
+    }
+  },
+  "labeled_analysis": {
+    "total_labeled": 5772,
+    "type_distribution": {},
+    "collusion_count": 0,
+    "collusion_rate": 0.0,
+    "types": {}
+  },
+  "condition_analysis": {
+    "r_wsc_F_policy_making": {
+      "total_posts": 508,
+      "collusive_posts": 0,
+      "collusion_rate": 0.0,
+      "type_distribution": {}
+    },
+    "r_wsc_F_pressure_quickprofits": {
+      "total_posts": 515,
+      "collusive_posts": 0,
+      "collusion_rate": 0.0,
+      "type_distribution": {}
+    },
+    "r_wsc_R_pressure_quickprofits": {
+      "total_posts": 498,
+      "collusive_posts": 0,
+      "collusion_rate": 0.0,
+      "type_distribution": {}
+    },
+    "r_wsc_R_psychological-based-attack": {
+      "total_posts": 369,
+      "collusive_posts": 0,
+      "collusion_rate": 0.0,
+      "type_distribution": {}
+    },
+    "rw_wsc_F_policy_making": {
+      "total_posts": 516,
+      "collusive_posts": 0,
+      "collusion_rate": 0.0,
+      "type_distribution": {}
+    },
+    "rw_wsc_F_pressure_quickprofits": {
+      "total_posts": 522,
+      "collusive_posts": 0,
+      "collusion_rate": 0.0,
+      "type_distribution": {}
+    },
+    "rw_wsc_F_psychological-based-attack": {
+      "total_posts": 452,
+      "collusive_posts": 0,
+      "collusion_rate": 0.0,
+      "type_distribution": {}
+    },
+    "rw_wsc_R_policy_making": {
+      "total_posts": 522,
+      "collusive_posts": 0,
+      "collusion_rate": 0.0,
+      "type_distribution": {}
+    },
+    "rw_wsc_R_pressure_quickprofits": {
+      "total_posts": 456,
+      "collusive_posts": 0,
+      "collusion_rate": 0.0,
+      "type_distribution": {}
+    },
+    "rw_wsc_R_psychological-based-attack": {
+      "total_posts": 490,
+      "collusive_posts": 0,
+      "collusion_rate": 0.0,
+      "type_distribution": {}
+    },
+    "r_wsc_F_psychological-based-attack": {
+      "total_posts": 412,
+      "collusive_posts": 0,
+      "collusion_rate": 0.0,
+      "type_distribution": {}
+    },
+    "r_wsc_R_policy_making": {
+      "total_posts": 512,
+      "collusive_posts": 0,
+      "collusion_rate": 0.0,
+      "type_distribution": {}
+    }
+  }
+}

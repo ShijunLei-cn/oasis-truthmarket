@@ -1,0 +1,52 @@
+RQ,Comparison,Metric,Rep (mean±std),Rep+Warrant (mean±std),p-value,Sig,Cohen's d,n (Rep),n (RW),Constraint,n_a,n_b,"Rep, Comm (mean±std)","Rep+Warrant, Comm (mean±std)"
+RQ1,Rep vs Rep+Warrant,Seller Profit,979.0±418.7,1523.4±84.1,0.0159,*,-1.80,5.0,5.0,,,,,
+RQ1,Rep vs Rep+Warrant,Buyer Utility,967.0±422.9,1523.4±84.1,0.0159,*,-1.82,5.0,5.0,,,,,
+RQ1,Rep vs Rep+Warrant,Deceptions,26.6±30.2,0.0±0.0,0.0254,*,1.25,5.0,5.0,,,,,
+RQ2,Rep vs Rep+Warrant (no comm),Seller Profit,1147.0±349.8,1510.0±74.5,0.0556,ns,-1.44,,,Policy-Making,5.0,5.0,,
+RQ2,Rep vs Rep+Warrant (no comm),Buyer Utility,1101.0±369.5,1466.0±74.8,0.0952,ns,-1.37,,,Policy-Making,5.0,5.0,,
+RQ2,Rep vs Rep+Warrant (no comm),Deceptions,10.4±12.0,4.8±5.1,0.5888,ns,0.61,,,Policy-Making,5.0,5.0,,
+RQ2,Rep vs Rep+Warrant (no comm),Dishonest Profit,27.6±40.6,26.4±27.0,0.8231,ns,0.03,,,Policy-Making,5.0,5.0,,
+RQ2,"Rep,Comm vs Rep+Warrant,Comm",Seller Profit,,,0.0079,**,-3.01,,,Policy-Making,5.0,5.0,1106.8±190.1,1525.4±50.7
+RQ2,"Rep,Comm vs Rep+Warrant,Comm",Buyer Utility,,,0.0079,**,-4.88,,,Policy-Making,5.0,5.0,1030.8±123.8,1509.4±62.5
+RQ2,"Rep,Comm vs Rep+Warrant,Comm",Deceptions,,,0.1579,ns,1.25,,,Policy-Making,5.0,5.0,18.4±17.2,2.4±5.4
+RQ2,"Rep,Comm vs Rep+Warrant,Comm",Dishonest Profit,,,0.3465,ns,0.58,,,Policy-Making,5.0,5.0,45.6±85.8,9.6±21.5
+RQ2,Rep: no-comm vs comm,Seller Profit,1147.0±349.8,,0.6905,ns,0.14,,,Policy-Making,5.0,5.0,1106.8±190.1,
+RQ2,Rep: no-comm vs comm,Buyer Utility,1101.0±369.5,,0.6905,ns,0.25,,,Policy-Making,5.0,5.0,1030.8±123.8,
+RQ2,Rep: no-comm vs comm,Deceptions,10.4±12.0,,0.5179,ns,-0.54,,,Policy-Making,5.0,5.0,18.4±17.2,
+RQ2,Rep: no-comm vs comm,Dishonest Profit,27.6±40.6,,0.8237,ns,-0.27,,,Policy-Making,5.0,5.0,45.6±85.8,
+RQ2,Rep+Warrant: no-comm vs comm,Seller Profit,,1510.0±74.5,1.0000,ns,-0.24,,,Policy-Making,5.0,5.0,,1525.4±50.7
+RQ2,Rep+Warrant: no-comm vs comm,Buyer Utility,,1466.0±74.8,0.5476,ns,-0.63,,,Policy-Making,5.0,5.0,,1509.4±62.5
+RQ2,Rep+Warrant: no-comm vs comm,Deceptions,,4.8±5.1,0.4802,ns,0.46,,,Policy-Making,5.0,5.0,,2.4±5.4
+RQ2,Rep+Warrant: no-comm vs comm,Dishonest Profit,,26.4±27.0,0.2375,ns,0.69,,,Policy-Making,5.0,5.0,,9.6±21.5
+RQ2,Rep vs Rep+Warrant (no comm),Seller Profit,1117.4±281.3,1554.2±33.0,0.0079,**,-2.18,,,Pressure-Quick-Profits,5.0,5.0,,
+RQ2,Rep vs Rep+Warrant (no comm),Buyer Utility,989.4±215.5,1328.2±122.6,0.0159,*,-1.93,,,Pressure-Quick-Profits,5.0,5.0,,
+RQ2,Rep vs Rep+Warrant (no comm),Deceptions,37.8±27.7,25.8±16.0,0.6905,ns,0.53,,,Pressure-Quick-Profits,5.0,5.0,,
+RQ2,Rep vs Rep+Warrant (no comm),Dishonest Profit,76.8±57.5,135.6±83.4,0.3457,ns,-0.82,,,Pressure-Quick-Profits,5.0,5.0,,
+RQ2,"Rep,Comm vs Rep+Warrant,Comm",Seller Profit,,,0.2222,ns,-1.19,,,Pressure-Quick-Profits,5.0,5.0,1173.4±403.1,1516.0±46.7
+RQ2,"Rep,Comm vs Rep+Warrant,Comm",Buyer Utility,,,0.1508,ns,-1.16,,,Pressure-Quick-Profits,5.0,5.0,1035.4±333.9,1332.0±141.6
+RQ2,"Rep,Comm vs Rep+Warrant,Comm",Deceptions,,,0.2087,ns,1.10,,,Pressure-Quick-Profits,5.0,5.0,45.4±27.3,23.0±8.8
+RQ2,"Rep,Comm vs Rep+Warrant,Comm",Dishonest Profit,,,0.6905,ns,-0.48,,,Pressure-Quick-Profits,5.0,5.0,82.8±50.4,110.4±64.4
+RQ2,Rep: no-comm vs comm,Seller Profit,1117.4±281.3,,0.6905,ns,-0.16,,,Pressure-Quick-Profits,5.0,5.0,1173.4±403.1,
+RQ2,Rep: no-comm vs comm,Buyer Utility,989.4±215.5,,0.8413,ns,-0.16,,,Pressure-Quick-Profits,5.0,5.0,1035.4±333.9,
+RQ2,Rep: no-comm vs comm,Deceptions,37.8±27.7,,0.6905,ns,-0.28,,,Pressure-Quick-Profits,5.0,5.0,45.4±27.3,
+RQ2,Rep: no-comm vs comm,Dishonest Profit,76.8±57.5,,1.0000,ns,-0.11,,,Pressure-Quick-Profits,5.0,5.0,82.8±50.4,
+RQ2,Rep+Warrant: no-comm vs comm,Seller Profit,,1554.2±33.0,0.2222,ns,0.94,,,Pressure-Quick-Profits,5.0,5.0,,1516.0±46.7
+RQ2,Rep+Warrant: no-comm vs comm,Buyer Utility,,1328.2±122.6,0.8413,ns,-0.03,,,Pressure-Quick-Profits,5.0,5.0,,1332.0±141.6
+RQ2,Rep+Warrant: no-comm vs comm,Deceptions,,25.8±16.0,1.0000,ns,0.22,,,Pressure-Quick-Profits,5.0,5.0,,23.0±8.8
+RQ2,Rep+Warrant: no-comm vs comm,Dishonest Profit,,135.6±83.4,0.9166,ns,0.34,,,Pressure-Quick-Profits,5.0,5.0,,110.4±64.4
+RQ2,Rep vs Rep+Warrant (no comm),Seller Profit,1109.2±190.4,1501.4±50.2,0.0079,**,-2.82,,,Psychological-Attack,5.0,5.0,,
+RQ2,Rep vs Rep+Warrant (no comm),Buyer Utility,979.2±203.6,1381.4±84.9,0.0159,*,-2.58,,,Psychological-Attack,5.0,5.0,,
+RQ2,Rep vs Rep+Warrant (no comm),Deceptions,52.2±48.9,16.0±19.8,0.1425,ns,0.97,,,Psychological-Attack,5.0,5.0,,
+RQ2,Rep vs Rep+Warrant (no comm),Dishonest Profit,79.0±75.4,72.0±78.6,0.6905,ns,0.09,,,Psychological-Attack,5.0,5.0,,
+RQ2,"Rep,Comm vs Rep+Warrant,Comm",Seller Profit,,,0.0079,**,-3.08,,,Psychological-Attack,5.0,5.0,962.2±237.8,1527.6±103.8
+RQ2,"Rep,Comm vs Rep+Warrant,Comm",Buyer Utility,,,0.0079,**,-3.00,,,Psychological-Attack,5.0,5.0,890.2±232.5,1395.6±52.8
+RQ2,"Rep,Comm vs Rep+Warrant,Comm",Deceptions,,,0.1732,ns,1.06,,,Psychological-Attack,5.0,5.0,47.4±39.4,17.0±10.1
+RQ2,"Rep,Comm vs Rep+Warrant,Comm",Dishonest Profit,,,0.2948,ns,-0.81,,,Psychological-Attack,5.0,5.0,44.2±22.3,79.2±56.7
+RQ2,Rep: no-comm vs comm,Seller Profit,1109.2±190.4,,0.5476,ns,0.68,,,Psychological-Attack,5.0,5.0,962.2±237.8,
+RQ2,Rep: no-comm vs comm,Buyer Utility,979.2±203.6,,1.0000,ns,0.41,,,Psychological-Attack,5.0,5.0,890.2±232.5,
+RQ2,Rep: no-comm vs comm,Deceptions,52.2±48.9,,1.0000,ns,0.11,,,Psychological-Attack,5.0,5.0,47.4±39.4,
+RQ2,Rep: no-comm vs comm,Dishonest Profit,79.0±75.4,,0.6004,ns,0.63,,,Psychological-Attack,5.0,5.0,44.2±22.3,
+RQ2,Rep+Warrant: no-comm vs comm,Seller Profit,,1501.4±50.2,0.8413,ns,-0.32,,,Psychological-Attack,5.0,5.0,,1527.6±103.8
+RQ2,Rep+Warrant: no-comm vs comm,Buyer Utility,,1381.4±84.9,0.6905,ns,-0.20,,,Psychological-Attack,5.0,5.0,,1395.6±52.8
+RQ2,Rep+Warrant: no-comm vs comm,Deceptions,,16.0±19.8,0.5476,ns,-0.06,,,Psychological-Attack,5.0,5.0,,17.0±10.1
+RQ2,Rep+Warrant: no-comm vs comm,Dishonest Profit,,72.0±78.6,0.7526,ns,-0.11,,,Psychological-Attack,5.0,5.0,,79.2±56.7
