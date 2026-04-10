@@ -2,10 +2,10 @@
 """
 Shared utilities for paper figure generation.
 
-Design principles (per proposal):
-- Green = good outcomes (honest profit, authentic HQ, buyer utility gain)
-- Red   = bad outcomes (deceptions, counterfeit, dishonest profit)
-- Gray  = neutral baseline / no-comm conditions
+Design principles (paper palette refresh):
+- Sage / teal = positive outcomes and coordination improvements
+- Orange / sand = deceptive or harmful outcomes
+- Lavender = neutral baseline and low-emphasis comparison
 - Line style distinguishes condition variants; hue carries semantic meaning
 - Every comparison figure must include statistical significance markers
 """
@@ -26,41 +26,54 @@ from scipy import stats
 # ─── Semantic Color Palette ──────────────────────────────────────────────────
 
 COLORS = {
-    # Good-outcome greens (muted, Nature-quality)
-    "good_dark":    "#1D6B3A",   # deep forest green — Rep+Warrant positive
-    "good_mid":     "#52B788",   # sage green — Rep positive
-    "good_light":   "#C8E6C9",   # pale mint — honest segment fill
+    # Positive outcomes: image-inspired sage / teal palette
+    "good_dark":    "#6BBFD0",   # teal — stronger positive / warrant-enhanced
+    "good_mid":     "#A9C89E",   # sage — baseline positive
+    "good_light":   "#C6C9DC",   # lavender mist — light positive fill
     # Product quality colors
-    "hq_auth":      "#2D6A4F",   # dark teal green — HQ authentic
-    "lq_auth":      "#74C69D",   # lighter teal green — LQ authentic
-    # Bad-outcome reds (muted brick/terracotta)
-    "bad_dark":     "#AE2012",   # deep brick red — deception (欺诈)
-    "bad_mid":      "#D4866A",   # terracotta — lighter deception
-    "bad_light":    "#F4C9BA",   # pale peach — dishonest segment fill
-    "counterfeit":  "#9B2226",   # dark burgundy — counterfeit product (假冒)
-    # Neutral grays
-    "neutral":      "#6B6B6B",   # cool gray — neutral baseline
-    "neutral_dark": "#2D2D2D",   # charcoal — annotation text
-    "neutral_light":"#EEEEEE",   # silver — light background
+    "hq_auth":      "#6BBFD0",   # teal — HQ authentic
+    "lq_auth":      "#A9C89E",   # sage — LQ authentic
+    # Negative outcomes: orange / sand palette
+    "bad_dark":     "#F39030",   # vivid orange — deception
+    "bad_mid":      "#F3D28A",   # warm sand — lighter deception
+    "bad_light":    "#F3D28A",   # sand — dishonest segment fill
+    "counterfeit":  "#CFBED3",   # soft lilac — counterfeit / third stacked segment
+    # Neutral and low-emphasis tones
+    "neutral":      "#C6C9DC",   # lavender gray — neutral baseline
+    "neutral_dark": "#4F5D73",   # desaturated slate — annotation text
+    "neutral_light":"#F4F3F7",   # paper-like background tint
     # Accent for annotations
-    "accent":       "#1A4E8A",   # steel blue — annotation arrows/borders
-    # Buyer Communication colors (蓝色调)
-    "comm_dark":    "#1565c0",   # dark blue — Rep+Warrant + Comm
-    "comm_mid":     "#64b5f6",   # light blue — Rep + Comm
-    "comm_baseline":"#90caf9",   # pale blue — baseline for comm comparison
+    "accent":       "#6BBFD0",   # teal accent — annotation arrows/borders
+    # Communication / mechanism colors
+    "comm_dark":    "#6BBFD0",   # teal — comm-enhanced condition
+    "comm_mid":     "#C6C9DC",   # lavender — lighter comm comparison
+    "comm_baseline":"#CFBED3",   # lilac — baseline comm reference
     # Mechanism colors
-    "rep_dark":     "#1a7a3a",   # dark green — Rep only
-    "rep_mid":      "#4caf72",   # lighter green — Rep
-    "warrant_dark": "#1565c0",   # dark blue — Rep+Warrant
-    "warrant_mid":  "#64b5f6",   # light blue — Rep+Warrant
+    "rep_dark":     "#6BBFD0",   # teal — Rep with communication or emphasis
+    "rep_mid":      "#A9C89E",   # sage — Rep baseline
+    "warrant_dark": "#CFBED3",   # lilac — Rep+Warrant emphasized
+    "warrant_mid":  "#C6C9DC",   # lavender — Rep+Warrant baseline
+}
+
+METRIC_COLORS = {
+    "seller_profit_primary": COLORS["good_dark"],
+    "seller_profit_secondary": COLORS["good_mid"],
+    "buyer_utility_primary": COLORS["accent"],
+    "buyer_utility_secondary": COLORS["comm_mid"],
+    "deception_primary": COLORS["bad_dark"],
+    "deception_secondary": COLORS["bad_mid"],
+    "transactions_primary": COLORS["neutral_dark"],
+    "transactions_secondary": COLORS["neutral"],
+    "honest_component": COLORS["good_light"],
+    "dishonest_component": COLORS["bad_light"],
 }
 
 # Consistent condition colors for line charts (RQ3 round evolution)
 CONDITION_COLORS = {
-    "Rep":                 "#AAAAAA",   # medium gray
-    "Rep, Comm":           "#52B788",   # sage green
-    "Rep+Warrant":         "#2B6CB0",   # steel blue
-    "Rep+Warrant, Comm":   "#1A4E8A",   # deep navy
+    "Rep":                 "#C6C9DC",
+    "Rep, Comm":           "#A9C89E",
+    "Rep+Warrant":         "#C6C9DC",
+    "Rep+Warrant, Comm":   "#6BBFD0",
 }
 CONDITION_LS = {
     "Rep":                 "-",
@@ -216,8 +229,8 @@ def add_text_box(
     y: float,
     text: str,
     fontsize: int = 8,
-    color: str = "#1a7a3a",
-    boxcolor: str = "#e8f5e9",
+    color: str = COLORS["good_dark"],
+    boxcolor: str = COLORS["neutral_light"],
 ) -> None:
     """Add a highlighted annotation text box."""
     ax.annotate(

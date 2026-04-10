@@ -724,7 +724,7 @@ def fig1_1_sankey_by_condition(data_dir: str, output_dir: Path,
         return
 
     df = pd.DataFrame(posts)
-    df["post_collusion"] = df["primary_type"].isin([1, 2, 3, 4])
+    df["post_collusion"] = df["type"].isin([1, 2, 3, 4])
     df["behavior_deception"] = df["deceptive_listing"].astype(bool)
 
     COND_GROUPS = [
@@ -1134,7 +1134,7 @@ def fig1_3_2x2_stacked_bar(data_dir: str, output_dir: Path) -> None:
         return
     
     df = pd.DataFrame(posts)
-    df["post_collusion"] = df["primary_type"].isin([1, 2, 3, 4])
+    df["post_collusion"] = df["type"].isin([1, 2, 3, 4])
     df["behavior_deception"] = df["deceptive_listing"].astype(bool)
     
     def get_condition_group(exp_id: str) -> str:

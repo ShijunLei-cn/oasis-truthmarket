@@ -20,8 +20,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 
 # Default paths
-DATA_DIR="${PROJECT_ROOT}/data"
-OUTPUT_DIR="${PROJECT_ROOT}/visualization/figs/paper/collusion_analysis"
+DATA_DIR="${PROJECT_ROOT}/experiments/gpt-4o-mini/paper_important_results/data"
+OUTPUT_DIR="${PROJECT_ROOT}/visualization/figs/gpt-4o-mini/paper_important_results/collusion_analysis"
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -106,7 +106,7 @@ echo ""
 echo "----------------------------------------------------------------------------"
 echo "Running 2x2 collusion analysis..."
 echo "----------------------------------------------------------------------------"
-python3 "${SCRIPT_DIR}/analyze_2x2_collusion.py"
+python3 "${SCRIPT_DIR}/analyze_2x2_collusion.py" --data-dir "${DATA_DIR}/case_analysis"
 
 # Check if figures were generated
 echo ""

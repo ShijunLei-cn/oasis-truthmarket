@@ -31,6 +31,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).parent))
 from fig_utils import (
     COLORS,
+    METRIC_COLORS,
     setup_style,
     label_panel,
     load_results_df,
@@ -48,7 +49,6 @@ from fig_utils import (
     sig_marker_display,
     add_significance_bracket,
     add_text_box,
-    add_sig_footnote,
     save_figure,
 )
 
@@ -76,19 +76,19 @@ DIR_PREFIXES: Dict[str, str] = {
     "Rep+Warrant, Comm":  "rw_wsc_R",
 }
 
-# X-axis label colors: Rep = dark gray, Rep+Warrant = blue (for Comm)
+# X-axis label colors follow the refreshed paper palette
 COND_XCOLORS = {
-    "Rep":                "#444444",
-    "Rep, Comm":          "#4caf72",   # green for Comm
-    "Rep+Warrant":        "#1565c0",   # blue for warrant
-    "Rep+Warrant, Comm":  "#1565c0",
+    "Rep":                COLORS["neutral_dark"],
+    "Rep, Comm":          COLORS["neutral_dark"],
+    "Rep+Warrant":        COLORS["neutral_dark"],
+    "Rep+Warrant, Comm":  COLORS["neutral_dark"],
 }
 
 _UTIL_COLORS = {
-    "Rep":                "#AAAAAA",
-    "Rep, Comm":          "#52B788",
-    "Rep+Warrant":        "#2B6CB0",
-    "Rep+Warrant, Comm":  "#1D6B3A",
+    "Rep":                METRIC_COLORS["buyer_utility_secondary"],
+    "Rep, Comm":          METRIC_COLORS["buyer_utility_primary"],
+    "Rep+Warrant":        METRIC_COLORS["buyer_utility_secondary"],
+    "Rep+Warrant, Comm":  METRIC_COLORS["buyer_utility_primary"],
 }
 
 
@@ -108,11 +108,6 @@ def fig4_deception_by_constraint(base_dir: str, output_dir: Path) -> None:
         gridspec_kw={"wspace": 0.38},
         sharey=False,
     )
-    fig.suptitle(
-        "Under Pressure, Seller Chat Amplifies Deception — Warrant Provides Robust Defense",
-        fontsize=11, fontweight="bold", y=1.02,
-    )
-
     xs = np.arange(len(CONDITIONS_ORDER))
     w = 0.52
     panel_letters = "abc"
@@ -134,15 +129,12 @@ def fig4_deception_by_constraint(base_dir: str, output_dir: Path) -> None:
     ):
         ax = axes[col_idx]
         label_panel(ax, panel_letters[col_idx])
-        ax.set_title(c_label, fontsize=10, fontweight="bold", pad=4)
-
-        # Red intensity encodes deception magnitude
-        global_max = max(means) if max(means) > 0 else 1.0
-        bar_colors = []
-        for m in means:
-            t = 0.28 + 0.65 * (m / global_max)
-            bar_colors.append((min(1.0, 0.72 + t * 0.20), 0.08 + (1 - t) * 0.20,
-                                0.08 + (1 - t) * 0.18))
+        bar_colors = [
+            METRIC_COLORS["deception_secondary"],
+            METRIC_COLORS["deception_primary"],
+            METRIC_COLORS["deception_secondary"],
+            METRIC_COLORS["deception_primary"],
+        ]
 
         ax.bar(xs, means, width=w, color=bar_colors,
                edgecolor="white", linewidth=0.4,
@@ -167,7 +159,7 @@ def fig4_deception_by_constraint(base_dir: str, output_dir: Path) -> None:
                 ax.text(xs[xi], m + s + max_bar_top * 0.03,
                         f"{m:.1f}",
                         ha="center", va="bottom", fontsize=7,
-                        color=COLORS["bad_dark"] if xi < 2 else "#1a7a3a")
+                        color=METRIC_COLORS["deception_primary"])
 
         # Significance brackets: Rep vs Rep+Warrant, Rep+Comm vs RW+Comm
         for (ci, cj) in [(0, 2), (1, 3)]:
@@ -177,7 +169,6 @@ def fig4_deception_by_constraint(base_dir: str, output_dir: Path) -> None:
                                      h_frac=0.08, fontsize=9)
 
     fig.subplots_adjust(bottom=0.22)
-    add_sig_footnote(fig)
     save_figure(fig, output_dir / "rq2_seller_comm_deception_by_constraint.png")
     print("  [Fig4] Deception facet figure saved.")
 
@@ -193,11 +184,6 @@ def fig5_profit_decomposition(base_dir: str, output_dir: Path) -> None:
         gridspec_kw={"wspace": 0.40},
         sharey=False,
     )
-    fig.suptitle(
-        "Warrant Ensures Profit Comes from Honest Trade, Not Deception",
-        fontsize=11, fontweight="bold", y=1.02,
-    )
-
     xs = np.arange(len(CONDITIONS_ORDER))
     w = 0.52
     panel_letters = "abc"
@@ -205,8 +191,6 @@ def fig5_profit_decomposition(base_dir: str, output_dir: Path) -> None:
     for col_idx, (c_key, c_label) in enumerate(CONSTRAINTS):
         ax = axes[col_idx]
         label_panel(ax, panel_letters[col_idx])
-        ax.set_title(c_label, fontsize=10, fontweight="bold", pad=4)
-
         h_means, h_stds = [], []
         d_means, d_stds = [], []
 
@@ -224,9 +208,9 @@ def fig5_profit_decomposition(base_dir: str, output_dir: Path) -> None:
             d_stds.append(np.std(d_vals, ddof=1) if len(d_vals) > 1 else 0.0)
 
         # Stacked bars — darker borders for legibility
-        ax.bar(xs, h_means, width=w, color=COLORS["good_light"],
+        ax.bar(xs, h_means, width=w, color=METRIC_COLORS["honest_component"],
                edgecolor="#aaaaaa", linewidth=0.5, label="Honest profit", zorder=3)
-        ax.bar(xs, d_means, width=w, bottom=h_means, color=COLORS["bad_light"],
+        ax.bar(xs, d_means, width=w, bottom=h_means, color=METRIC_COLORS["dishonest_component"],
                edgecolor="#aaaaaa", linewidth=0.5, label="Dishonest profit", zorder=3)
 
         # Percentage labels inside bars
@@ -239,18 +223,18 @@ def fig5_profit_decomposition(base_dir: str, output_dir: Path) -> None:
                 ax.text(xs[xi], h_means[xi] / 2,
                         f"{hp:.0f}%\nhonest",
                         ha="center", va="center", fontsize=7,
-                        color="#1a5e20", fontweight="bold")
+                        color=METRIC_COLORS["seller_profit_primary"], fontweight="bold")
             dp = d_means[xi] / total * 100
             if d_means[xi] > 30:
                 ax.text(xs[xi], h_means[xi] + d_means[xi] / 2,
                         f"{dp:.0f}%\nfraud",
                         ha="center", va="center", fontsize=7,
-                        color=COLORS["bad_dark"], fontweight="bold")
+                        color=METRIC_COLORS["deception_primary"], fontweight="bold")
             elif d_means[xi] > 0:
                 ax.text(xs[xi], total + total * 0.02,
                         f"{dp:.0f}% fraud",
                         ha="center", va="bottom", fontsize=7,
-                        color=COLORS["bad_dark"])
+                        color=METRIC_COLORS["deception_primary"])
 
         # Significance brackets — stagger heights to prevent overlap
         bracket_pairs = [("Rep", "Rep+Warrant", 0), ("Rep, Comm", "Rep+Warrant, Comm", 1)]
@@ -287,7 +271,6 @@ def fig5_profit_decomposition(base_dir: str, output_dir: Path) -> None:
             ax.legend(frameon=False, fontsize=8, loc="upper left")
 
     fig.subplots_adjust(bottom=0.22)
-    add_sig_footnote(fig, extra="z-score proportion test for honest-profit share")
     save_figure(fig, output_dir / "rq2_profit_decomposition_honest_vs_dishonest.png")
     print("  [Fig5] Profit decomposition figure saved.")
 
@@ -303,11 +286,6 @@ def fig6_product_mix(base_dir: str, output_dir: Path) -> None:
         gridspec_kw={"wspace": 0.38},
         sharey=True,
     )
-    fig.suptitle(
-        "Product Mix Shifts: Warrant Removes Counterfeit Supply (All Listed Products)",
-        fontsize=11, fontweight="bold", y=1.02,
-    )
-
     xs = np.arange(len(CONDITIONS_ORDER))
     w = 0.52
     seg_colors = [COLORS["hq_auth"], COLORS["lq_auth"], COLORS["counterfeit"]]
@@ -317,8 +295,6 @@ def fig6_product_mix(base_dir: str, output_dir: Path) -> None:
     for col_idx, (c_key, c_label) in enumerate(CONSTRAINTS):
         ax = axes[col_idx]
         label_panel(ax, panel_letters[col_idx])
-        ax.set_title(c_label, fontsize=10, fontweight="bold", pad=4)
-
         segs: List[List[float]] = [[], [], []]
         for cond in CONDITIONS_ORDER:
             df = _load_cond(base_dir, c_key, cond)
@@ -381,11 +357,6 @@ def fig7_buyer_utility_by_constraint(base_dir: str, output_dir: Path) -> None:
         gridspec_kw={"wspace": 0.40},
         sharey=False,
     )
-    fig.suptitle(
-        "Warrant Shifts Buyer Utility: Honest Gains Rise, Fraud Losses Disappear",
-        fontsize=11, fontweight="bold", y=1.02,
-    )
-
     xs = np.arange(len(CONDITIONS_ORDER))
     w = 0.52
     panel_letters = "abc"
@@ -393,8 +364,6 @@ def fig7_buyer_utility_by_constraint(base_dir: str, output_dir: Path) -> None:
     for col_idx, (c_key, c_label) in enumerate(CONSTRAINTS):
         ax = axes[col_idx]
         label_panel(ax, panel_letters[col_idx])
-        ax.set_title(c_label, fontsize=10, fontweight="bold", pad=4)
-
         h_means, h_stds = [], []
         d_means, d_stds = [], []
         per_runs_total = []
@@ -417,7 +386,7 @@ def fig7_buyer_utility_by_constraint(base_dir: str, output_dir: Path) -> None:
 
         # Honest utility: positive bars above 0
         ax.bar(xs, h_means, width=w,
-               color=COLORS["good_light"], edgecolor="#aaaaaa", linewidth=0.5,
+               color=METRIC_COLORS["honest_component"], edgecolor="#aaaaaa", linewidth=0.5,
                label="Honest utility" if col_idx == 0 else "_", zorder=3)
 
         # Dishonest utility: typically negative — draw below 0
@@ -426,7 +395,7 @@ def fig7_buyer_utility_by_constraint(base_dir: str, output_dir: Path) -> None:
         d_heights = [abs(dm) if dm < 0 else dm for dm in d_means]
         ax.bar(xs, [dm if dm >= 0 else -dm for dm in d_means],
                width=w, bottom=d_bottoms,
-               color=COLORS["bad_light"], edgecolor="#aaaaaa", linewidth=0.5,
+               color=METRIC_COLORS["dishonest_component"], edgecolor="#aaaaaa", linewidth=0.5,
                label="Fraud-induced loss" if col_idx == 0 else "_", zorder=3)
 
         # Inline percentage labels
@@ -440,14 +409,14 @@ def fig7_buyer_utility_by_constraint(base_dir: str, output_dir: Path) -> None:
                 ax.text(xs[xi], h_means[xi] / 2,
                         f"{hp:.0f}%\nhonest",
                         ha="center", va="center", fontsize=7,
-                        color="#1a5e20", fontweight="bold")
+                        color=METRIC_COLORS["buyer_utility_primary"], fontweight="bold")
             # fraud loss label inside or below red bar
             if d_means[xi] < -20:
                 dp = abs(d_means[xi]) / total_abs * 100
                 ax.text(xs[xi], d_means[xi] / 2,
                         f"{dp:.0f}%\nfraud",
                         ha="center", va="center", fontsize=7,
-                        color=COLORS["bad_dark"], fontweight="bold")
+                        color=METRIC_COLORS["deception_primary"], fontweight="bold")
 
         # Horizontal zero line
         ax.axhline(0, color="#888888", lw=0.8, zorder=2)
@@ -480,7 +449,6 @@ def fig7_buyer_utility_by_constraint(base_dir: str, output_dir: Path) -> None:
                bbox_to_anchor=(0.5, 0.01), ncol=2,
                frameon=False, fontsize=8)
     fig.subplots_adjust(bottom=0.22)
-    add_sig_footnote(fig, extra="stacked: green=honest utility, red=fraud-induced loss (below 0)")
     save_figure(fig, output_dir / "rq2_buyer_utility_by_constraint.png")
     print("  [Fig7] Buyer utility decomposition figure saved.")
 

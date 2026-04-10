@@ -38,6 +38,7 @@ from scipy.stats import gaussian_kde
 sys.path.insert(0, str(Path(__file__).parent))
 from fig_utils import (
     COLORS,
+    METRIC_COLORS,
     setup_style,
     label_panel,
     load_results_df,
@@ -54,7 +55,6 @@ from fig_utils import (
     add_significance_bracket,
     add_text_box,
     highlight_bar_group,
-    add_sig_footnote,
     save_figure,
 )
 
@@ -99,7 +99,10 @@ def _kde_panel(
         (arr_b, color_b, label_b),
     ]:
         kde_arr = arr.copy()
-        if np.std(kde_arr) < 0.1:
+        if len(kde_arr) == 1:
+            # single element — duplicate it so KDE has at least 2 points
+            kde_arr = np.append(kde_arr, kde_arr[0] + rng.normal(0, max(span * 0.01, 0.1), 1))
+        elif np.std(kde_arr) < 0.1:
             # degenerate (all zeros) — add tiny noise so KDE is a narrow spike
             kde_arr = kde_arr + rng.normal(0, max(span * 0.02, 0.3), len(kde_arr))
         kde = gaussian_kde(kde_arr, bw_method=0.7)
@@ -137,12 +140,11 @@ def _kde_panel(
         ax.text(0.97, 0.80, annotation,
                 transform=ax.transAxes, ha="right", va="top",
                 fontsize=7, color=COLORS["good_dark"],
-                bbox=dict(boxstyle="round,pad=0.3", facecolor="#e8f5e9",
+                bbox=dict(boxstyle="round,pad=0.3", facecolor=COLORS["neutral_light"],
                           edgecolor=COLORS["good_dark"], alpha=0.9, linewidth=0.8))
 
     ax.set_xlabel(xlabel, fontsize=10)
     ax.set_ylabel("Density", fontsize=10)
-    ax.set_title(title, fontsize=10, pad=5, loc="left")
     ax.set_ylim(rug_y * 2.2, y_max * 1.32)
     ax.set_xlim(x_lo, x_hi)
     ax.legend(frameon=False, fontsize=8, loc="upper left")
@@ -181,16 +183,11 @@ def fig1_profit_and_deceptions(
 
     fig, (ax_p, ax_d, ax_u) = plt.subplots(1, 3, figsize=(11.0, 3.8),
                                              gridspec_kw={"wspace": 0.42})
-    fig.suptitle(
-        "Warrant Eliminates Deception; Honest Trade Rises by 55%",
-        fontsize=11, fontweight="bold", y=1.02,
-    )
-
     _kde_panel(
         ax_p,
         profit_r, profit_rw,
         LABEL_R, LABEL_RW,
-        COLORS["good_mid"], COLORS["good_dark"],
+        METRIC_COLORS["seller_profit_secondary"], METRIC_COLORS["seller_profit_primary"],
         xlabel="Total Seller Profit (per run)",
         title="(a) Seller Profit",
         p_val=p_profit,
@@ -202,7 +199,7 @@ def fig1_profit_and_deceptions(
         ax_d,
         dec_r, dec_rw,
         LABEL_R, LABEL_RW,
-        COLORS["bad_dark"], COLORS["neutral"],
+        METRIC_COLORS["deception_primary"], METRIC_COLORS["deception_secondary"],
         xlabel="Deceptive Transactions (per run)",
         title="(b) Deceptions",
         p_val=p_dec,
@@ -214,14 +211,13 @@ def fig1_profit_and_deceptions(
         ax_u,
         util_r, util_rw,
         LABEL_R, LABEL_RW,
-        COLORS["good_mid"], COLORS["good_dark"],
+        METRIC_COLORS["buyer_utility_secondary"], METRIC_COLORS["buyer_utility_primary"],
         xlabel="Total Buyer Utility (per run)",
         title="(c) Buyer Utility",
         p_val=p_utility,
         annotation=f"{util_sign}{util_lift:.0f}% mean utility",
     )
 
-    add_sig_footnote(fig)
     save_figure(fig, output_dir / "rq1_warrant_vs_rep_deception_and_profit.png")
     print(f"  [Fig1] p_profit={p_profit:.4f}, p_dec={p_dec:.4f}, p_utility={p_utility:.4f}")
 
@@ -322,14 +318,7 @@ def fig2_probe_and_product_mix(
         1, 2, figsize=(10.5, 4.0),
         gridspec_kw={"wspace": 0.38, "width_ratios": [2, 1]},
     )
-    fig.suptitle(
-        "Vulnerability Exploitation & Listed Product Mix Under Rep vs Rep+Warrant",
-        fontsize=11, fontweight="bold", y=1.02,
-    )
-
     # ── (a) Vulnerability probe ────────────────────────────────────────────
-    ax_probe.set_title("(a) Manipulation Detection Rate by Vulnerability",
-                       fontsize=10, pad=5, loc="left")
     n_groups = len(VULN_KEYS)
     x = np.arange(n_groups)
     w = 0.32
@@ -360,7 +349,7 @@ def fig2_probe_and_product_mix(
     es_idx = VULN_KEYS.index("exit_strategy")
     es_y   = bracket_tops[es_idx] * 1.24
     add_text_box(ax_probe, x[es_idx], es_y, "Primary\nvulnerability",
-                 fontsize=8, color=COLORS["bad_dark"], boxcolor="#fdecea")
+                 fontsize=8, color=COLORS["bad_dark"], boxcolor=COLORS["neutral_light"])
     ax_probe.text(x[es_idx] - w / 2, means_r[es_idx]  + stds_r[es_idx]  + 1.0,
                   f"{means_r[es_idx]:.1f}%",  ha="center", va="bottom",
                   fontsize=7, color=COLORS["bad_dark"])
@@ -370,8 +359,6 @@ def fig2_probe_and_product_mix(
     ax_probe.legend(frameon=False, fontsize=8, loc="upper left")
 
     # ── (b) Product mix stacked bar (ALL listed products) ───────────────────────
-    ax_mix.set_title("(b) Listed Product Mix (incl. Unsold)",
-                     fontsize=10, pad=5, loc="left")
     xm = np.array([0.0, 1.0])
     wm = 0.45
     seg_colors = [COLORS["hq_auth"], COLORS["lq_auth"], COLORS["counterfeit"]]
@@ -399,20 +386,6 @@ def fig2_probe_and_product_mix(
     ax_mix.legend(frameon=False, fontsize=7, loc="lower center",
                   bbox_to_anchor=(0.5, -0.28), ncol=1)
 
-    # Significance note below x-axis
-    note_parts = []
-    m_cf  = sig_marker_display(p_counterfeit)
-    m_hqa = sig_marker_display(p_hq_auth)
-    if m_cf:
-        note_parts.append(f"Counterfeit {m_cf}")
-    if m_hqa:
-        note_parts.append(f"HQ Auth {m_hqa}")
-    if note_parts:
-        ax_mix.text(0.5, -0.38, "  |  ".join(note_parts),
-                    transform=ax_mix.transAxes,
-                    ha="center", va="top", fontsize=7, color="#555555")
-
-    add_sig_footnote(fig, extra="z-score proportion test per vulnerability / product segment")
     fig.subplots_adjust(bottom=0.26)
     save_figure(fig, output_dir / "rq1_exit_loophole_vulnerability.png")
     print(f"  [Fig2] p_vals per vulnerability: "

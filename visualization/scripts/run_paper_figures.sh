@@ -8,8 +8,8 @@
 set -e
 
 MODEL_TYPE="${MODEL_TYPE:-gpt-4o-mini}"
-EXPERIMENT_PREFIX="experiments/${MODEL_TYPE}/paper"
-OUTPUT_BASE="visualization/figs/${MODEL_TYPE}/paper"
+EXPERIMENT_PREFIX="experiments/${MODEL_TYPE}/paper_important_results"
+OUTPUT_BASE="visualization/figs/${MODEL_TYPE}/paper_important_results"
 
 export PYTHONPATH="${PYTHONPATH}:$(pwd)"
 
@@ -46,7 +46,7 @@ echo ""
 echo "── RQ3: Tables ───────────────────────────────────────"
 python3 visualization/scripts/generate_rq3_tables.py \
     --base-dir   "${EXPERIMENT_PREFIX}" \
-    --output-dir "visualization/table/paper/rq3"
+    --output-dir "visualization/table/0410/rq3"
 
 # ── Statistical Significance Report ─────────────────────────
 echo ""

@@ -8,12 +8,12 @@ Key findings from data:
   - Rep+Warrant+Comm achieves the highest combined outcome.
 
 Color convention (consistent with RQ1/RQ2):
-  - COLORS["good_mid"]  (#4caf72) = Rep bars (lighter green, same as RQ1)
-  - COLORS["good_dark"] (#1a7a3a) = Rep+Warrant bars (darker green, same as RQ1)
+  - COLORS["good_mid"]  (#A9C89E) = Rep bars (sage)
+  - COLORS["good_dark"] (#6BBFD0) = emphasized positive bars (teal)
   - Hatching (///)                = with buyer communication ("+BComm")
   - No hatch                      = without buyer communication (baseline)
-  - COLORS["bad_dark"]            = Rep deception bars (red, same as RQ1)
-  - COLORS["neutral"]             = Rep+Warrant deception bars (gray, near-zero)
+  - COLORS["bad_dark"]            = Rep deception bars (orange)
+  - COLORS["neutral"]             = Rep+Warrant deception bars (lavender, near-zero)
 
 Figure 7 : rq3_buyer_comm_market_outcomes.png
     Headline: "Buyer Communication Boosts Market Utility in Both Mechanisms"
@@ -39,6 +39,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).parent))
 from fig_utils import (
     COLORS,
+    METRIC_COLORS,
     setup_style,
     label_panel,
     load_results_df,
@@ -49,7 +50,6 @@ from fig_utils import (
     mannwhitney_p,
     sig_marker_display,
     add_significance_bracket,
-    add_sig_footnote,
     save_figure,
 )
 
@@ -71,28 +71,16 @@ PAIRS: List[Tuple[str, str, str]] = [
     ("Rep+Warrant", "Rep+Warrant, +BComm", "Rep+Warrant"),
 ]
 
-# Per COLOR_GUIDE.md RQ3 section - use unified colors from fig_utils:
-#   Rep mechanism  → green (rep_mid, rep_dark)
-#   Rep+Warrant    → blue (warrant_mid, warrant_dark)
-from fig_utils import (
-    COLORS,
-    setup_style,
-    label_panel,
-    load_results_df,
-    per_run_values,
-    count_deceptions,
-    sum_seller_profit,
-    sum_buyer_utility,
-    mannwhitney_p,
-    sig_marker_display,
-    add_significance_bracket,
-    add_sig_footnote,
-    save_figure,
-)
-
-# Use unified colors from COLORS
-MECH_COLORS_BASE = [COLORS["rep_mid"], COLORS["warrant_mid"]]   # Rep (green), RW (blue)
-MECH_COLORS_COMM = [COLORS["rep_dark"], COLORS["warrant_dark"]] # Rep+BComm, RW+BComm
+MECH_COLORS_BASE = [
+    METRIC_COLORS["seller_profit_secondary"],
+    METRIC_COLORS["seller_profit_secondary"],
+]
+MECH_COLORS_COMM = [
+    METRIC_COLORS["seller_profit_primary"],
+    METRIC_COLORS["seller_profit_primary"],
+]
+UTILITY_LINE_BASE = METRIC_COLORS["buyer_utility_secondary"]
+UTILITY_LINE_COMM = METRIC_COLORS["buyer_utility_primary"]
 
 # Hatch for +BComm bars
 HATCH_COMM = "///"
@@ -131,10 +119,6 @@ def fig7_market_outcomes(base_dir: str, output_dir: Path) -> None:
     # ── Layout ─────────────────────────────────────────────────────────────
     fig, axes = plt.subplots(2, 2, figsize=(8.5, 6.0),
                               gridspec_kw={"hspace": 0.52, "wspace": 0.38})
-    fig.suptitle(
-        "Adversarial Design: Buyer Communication vs Coordinated Seller Deception",
-        fontsize=11, fontweight="bold",
-    )
     fig.subplots_adjust(top=0.92, bottom=0.16)
 
     # Panel specs: (ax, metric, y-label, semantic role, panel letter)
@@ -152,7 +136,6 @@ def fig7_market_outcomes(base_dir: str, output_dir: Path) -> None:
     # Axis-fraction x-positions for group labels (computed once per axis below)
     for ax, metric, ylabel, role, letter in panels:
         label_panel(ax, letter)
-        ax.set_title(ylabel.split(" (")[0], fontsize=9, pad=4)
         all_tops: List[float] = []
 
         for gi, (no_lbl, comm_lbl, mech_name) in enumerate(PAIRS):
@@ -168,15 +151,27 @@ def fig7_market_outcomes(base_dir: str, output_dir: Path) -> None:
 
                 # Colors: per COLOR_GUIDE.md RQ3 section
                 if role == "bad":
-                    # Red for Rep, gray for Rep+Warrant (near-zero deceptions)
-                    fc = (COLORS["bad_dark"] if gi == 0 else COLORS["neutral"])
+                    fc = METRIC_COLORS["deception_primary"]
                     if use_hatch:
-                        fc = COLORS["bad_mid"] if gi == 0 else "#bdbdbd"
+                        fc = METRIC_COLORS["deception_secondary"]
                 elif role == "neutral":
-                    fc = "#90a4ae" if not use_hatch else "#546e7a"
+                    fc = (
+                        METRIC_COLORS["transactions_primary"]
+                        if use_hatch
+                        else METRIC_COLORS["transactions_secondary"]
+                    )
+                elif metric == "profit":
+                    fc = (
+                        METRIC_COLORS["seller_profit_primary"]
+                        if use_hatch
+                        else METRIC_COLORS["seller_profit_secondary"]
+                    )
                 else:
-                    # good role: green for Rep, blue for Rep+Warrant
-                    fc = MECH_COLORS_COMM[gi] if use_hatch else MECH_COLORS_BASE[gi]
+                    fc = (
+                        METRIC_COLORS["buyer_utility_primary"]
+                        if use_hatch
+                        else METRIC_COLORS["buyer_utility_secondary"]
+                    )
 
                 hatch = HATCH_COMM if use_hatch else None
                 ax.bar(bx, m, width=bar_w,
@@ -245,16 +240,10 @@ def fig7_market_outcomes(base_dir: str, output_dir: Path) -> None:
 
     # ── Global legend ─────────────────────────────────────────────────────
     legend_handles = [
-        mpatches.Patch(facecolor=MECH_COLORS_BASE[0], edgecolor="#555",
-                       label="Rep – Seller-Only (baseline)"),
-        mpatches.Patch(facecolor=MECH_COLORS_COMM[0], edgecolor="#555",
-                       hatch=HATCH_COMM,
-                       label="Rep – Both (+Buyer Comm)"),
-        mpatches.Patch(facecolor=MECH_COLORS_BASE[1], edgecolor="#555",
-                       label="Rep+Warrant – Seller-Only"),
-        mpatches.Patch(facecolor=MECH_COLORS_COMM[1], edgecolor="#555",
-                       hatch=HATCH_COMM,
-                       label="Rep+Warrant – Both (+Buyer Comm)"),
+        mpatches.Patch(facecolor="#FFFFFF", edgecolor="#555",
+                       label="Baseline"),
+        mpatches.Patch(facecolor="#FFFFFF", edgecolor="#555",
+                       hatch=HATCH_COMM, label="+Buyer Comm"),
     ]
     fig.legend(handles=legend_handles, loc="upper center", ncol=2,
                bbox_to_anchor=(0.5, 0.00), frameon=False, fontsize=8)
@@ -319,22 +308,17 @@ def fig8_round_utility(base_dir: str, output_dir: Path) -> None:
         gridspec_kw={"wspace": 0.30},
         sharey=True,
     )
-    fig.suptitle(
-        "Adversarial Design: Round-Level Buyer Utility (Seller-Only vs Both Comm)",
-        fontsize=11, fontweight="bold",
-    )
     fig.subplots_adjust(top=0.88)
 
     rounds = list(range(1, 11))
 
     # ── Left: Rep mechanism ───────────────────────────────────────────────
-    # Per COLOR_GUIDE.md: Rep base = light green #81c784; Rep+BComm = dark green #2e7d32
     (base_ms, base_ss), (comm_ms, comm_ss) = _plot_mechanism_lines(
         ax_rep,
         base_lbl="Rep", comm_lbl="Rep, +BComm",
         base_dir=base_dir,
-        base_color=MECH_COLORS_BASE[0],
-        comm_color=MECH_COLORS_COMM[0],
+        base_color=UTILITY_LINE_BASE,
+        comm_color=UTILITY_LINE_COMM,
     )
 
     # Per-round significance markers
@@ -354,7 +338,7 @@ def fig8_round_utility(base_dir: str, output_dir: Path) -> None:
                              comm_ms[r - 1] + comm_ss[r - 1])
                 ax_rep.text(float(r), y_mark + 1.0, sig,
                             ha="center", va="bottom", fontsize=7,
-                            color=MECH_COLORS_COMM[0])
+                            color=UTILITY_LINE_COMM)
 
     # Compact annotation above line end (no crossing arrow)
     if base_ms and comm_ms:
@@ -362,10 +346,8 @@ def fig8_round_utility(base_dir: str, output_dir: Path) -> None:
         ax_rep.text(9.8, comm_ms[-1] + 1.5,
                     f"+{lift:.0f} utility\nfrom buyer comm",
                     ha="right", va="bottom", fontsize=8,
-                    color=MECH_COLORS_COMM[0], fontweight="bold")
+                    color=UTILITY_LINE_COMM, fontweight="bold")
 
-    ax_rep.set_title("(a) Rep Mechanism: Seller-Only vs +Buyer Comm",
-                     fontsize=9, pad=4, loc="left")
     ax_rep.set_xlabel("Market Round", fontsize=9)
     ax_rep.set_ylabel("Buyer Utility (per round, mean ± std)", fontsize=9)
     ax_rep.set_xticks(rounds)
@@ -373,13 +355,12 @@ def fig8_round_utility(base_dir: str, output_dir: Path) -> None:
     ax_rep.legend(frameon=False, fontsize=8, loc="lower right")
 
     # ── Right: Rep+Warrant mechanism ─────────────────────────────────────
-    # Per COLOR_GUIDE.md: RW base = light blue #64b5f6; RW+BComm = dark blue #1565c0
     (rw_ms, rw_ss), (rwc_ms, rwc_ss) = _plot_mechanism_lines(
         ax_rw,
         base_lbl="Rep+Warrant", comm_lbl="Rep+Warrant, +BComm",
         base_dir=base_dir,
-        base_color=MECH_COLORS_BASE[1],
-        comm_color=MECH_COLORS_COMM[1],
+        base_color=UTILITY_LINE_BASE,
+        comm_color=UTILITY_LINE_COMM,
     )
 
     # Per-round significance: RW vs RW+Comm
@@ -399,7 +380,7 @@ def fig8_round_utility(base_dir: str, output_dir: Path) -> None:
                              rwc_ms[r - 1] + rwc_ss[r - 1])
                 ax_rw.text(float(r), y_mark + 1.0, sig,
                            ha="center", va="bottom", fontsize=7,
-                           color=MECH_COLORS_COMM[1])
+                           color=UTILITY_LINE_COMM)
 
     # Compact annotation above line end
     if rw_ms and rwc_ms:
@@ -408,10 +389,8 @@ def fig8_round_utility(base_dir: str, output_dir: Path) -> None:
             ax_rw.text(9.8, rwc_ms[-1] + 1.5,
                        f"+{lift2:.0f} utility\n(+BComm)",
                        ha="right", va="bottom", fontsize=8,
-                       color=MECH_COLORS_COMM[1], fontweight="bold")
+                       color=UTILITY_LINE_COMM, fontweight="bold")
 
-    ax_rw.set_title("(b) Rep+Warrant Mechanism: Seller-Only vs +Buyer Comm",
-                    fontsize=9, pad=4, loc="left")
     ax_rw.set_xlabel("Market Round", fontsize=9)
     ax_rw.set_xticks(rounds)
     ax_rw.set_xlim(0.5, 10.8)
@@ -422,7 +401,6 @@ def fig8_round_utility(base_dir: str, output_dir: Path) -> None:
     if all_ms:
         ax_rep.set_ylim(min(all_ms) * 0.92, max(all_ms) * 1.14)
 
-    add_sig_footnote(fig, extra="markers above line = Rep vs Rep+BComm significance per round")
     save_figure(fig, output_dir / "rq3_round_adaptation_appendix.png")
     print("  [Fig8] Round utility (split) figure saved.")
 

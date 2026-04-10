@@ -13,17 +13,21 @@ import numpy as np
 from pathlib import Path
 from collections import defaultdict
 from typing import Dict, Tuple
+import argparse
 
-DATA_DIR = Path("data/case_analysis")
-OUTPUT_DIR = Path("visualization/figs/paper/collusion_analysis")
+# Default paths
+DEFAULT_DATA_DIR = Path("experiments/gpt-4o-mini/paper_important_results/data/case_analysis")
+DEFAULT_OUTPUT_DIR = Path("visualization/figs/paper/collusion_analysis")
 
 # Ensure output directory exists
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+DEFAULT_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-def load_posts():
+def load_posts(data_dir=None):
     """Load labeled posts data."""
+    if data_dir is None:
+        data_dir = DEFAULT_DATA_DIR
     posts = []
-    with open(DATA_DIR / "posts_labeled.jsonl", 'r') as f:
+    with open(data_dir / "posts_labeled.jsonl", 'r') as f:
         for line in f:
             if line.strip():
                 posts.append(json.loads(line.strip()))
@@ -53,7 +57,7 @@ def get_2x2_category(post: dict) -> str:
     - Verbal Collusion: Collusive post + No deception
     - Coordinated Deception: Collusive post + Deception
     """
-    collusive_post = post['primary_type'] in [1, 2, 3, 4]
+    collusive_post = post['type'] in [1, 2, 3, 4]
     deceptive_behavior = bool(post['deceptive_listing'])
     
     if not collusive_post and not deceptive_behavior:
@@ -671,8 +675,22 @@ def create_fig5_1_hidden_deception_absolute(posts):
 
 
 def main():
+    global OUTPUT_DIR
+    
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Collusion 2x2 Analysis')
+    parser.add_argument('--data-dir', type=str, default=str(DEFAULT_DATA_DIR),
+                        help='Path to case_analysis data directory')
+    parser.add_argument('--output-dir', type=str, default=str(DEFAULT_OUTPUT_DIR),
+                        help='Path to output directory')
+    args = parser.parse_args()
+    
+    DATA_DIR = Path(args.data_dir)
+    OUTPUT_DIR = Path(args.output_dir)
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    
     print("Loading posts data...")
-    posts = load_posts()
+    posts = load_posts(DATA_DIR)
     print(f"Loaded {len(posts)} posts")
     
     print("\n" + "=" * 80)
