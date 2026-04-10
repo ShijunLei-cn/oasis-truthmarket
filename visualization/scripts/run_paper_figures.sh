@@ -19,49 +19,11 @@ echo "Data    : ${EXPERIMENT_PREFIX}"
 echo "Output  : ${OUTPUT_BASE}"
 echo "=========================================="
 
-# ------------------------------------------------------------------
-# RQ1: Vulnerability intention in reputation-only market
-# ------------------------------------------------------------------
 echo ""
-echo "── RQ1: Rep-only Vulnerability Intention ─────────────"
-python3 visualization/scripts/generate_rq1_figures.py \
-    --r-dir  "${EXPERIMENT_PREFIX}/rq1_intent/r_wo" \
-    --output-dir "${OUTPUT_BASE}/rq1" \
-    --rep-only-only
-
-if [ -f "${OUTPUT_BASE}/rq1/rq1_2_rep_only_manipulation_detection.png" ]; then
-    cp "${OUTPUT_BASE}/rq1/rq1_2_rep_only_manipulation_detection.png" \
-       "${OUTPUT_BASE}/rq1/rq1_intent_rep_only_manipulation_detection.png"
-fi
-
-# ------------------------------------------------------------------
-# RQ2: Warrant welfare (rep vs rep+warrant, no communication)
-# Uses original generator_rq1 pipeline then renames outputs to rq2_*
-# ------------------------------------------------------------------
-echo ""
-echo "── RQ2: Warrant Welfare ──────────────────────────────"
-python3 visualization/scripts/generate_rq1_figures.py \
-    --r-dir  "${EXPERIMENT_PREFIX}/rq2_welfare/r_wo" \
-    --rw-dir "${EXPERIMENT_PREFIX}/rq2_welfare/rw_wo" \
-    --output-dir "${OUTPUT_BASE}/rq2"
-
-for src in "${OUTPUT_BASE}/rq2"/rq1_*.png; do
-    if [ -f "${src}" ]; then
-        dst="${src/rq1_/rq2_}"
-        cp "${src}" "${dst}"
-    fi
-done
-
-# ------------------------------------------------------------------
-# RQ3: Communication interference & resistance (old rq2 setting)
-# ------------------------------------------------------------------
-echo ""
-echo "── RQ3: Communication Interference & Resistance ─────"
-python3 visualization/scripts/generate_rq2_figures.py \
-    --base-dir   "${EXPERIMENT_PREFIX}/rq3_resilience" \
-    --baseline-dir "${EXPERIMENT_PREFIX}/rq2_welfare" \
-    --output-dir "${OUTPUT_BASE}/rq3" \
-    --file-prefix "rq3"
+echo "── Generating RQ1/RQ2/RQ3 Figures ────────────────────"
+python3 visualization/scripts/generate_main_figures.py \
+    --base-dir "${EXPERIMENT_PREFIX}" \
+    --output-dir "${OUTPUT_BASE}"
 
 echo ""
 echo "=========================================="
