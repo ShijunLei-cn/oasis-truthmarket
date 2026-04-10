@@ -46,7 +46,7 @@ echo ""
 echo "── RQ3: Tables ───────────────────────────────────────"
 python3 visualization/scripts/generate_rq3_tables.py \
     --base-dir   "${EXPERIMENT_PREFIX}" \
-    --output-dir "visualization/table/0410/rq3"
+    --output-dir "visualization/table/paper_important_results/rq3"
 
 # ── Statistical Significance Report ─────────────────────────
 echo ""
@@ -63,9 +63,11 @@ echo "=========================================="
 echo ""
 echo "Main paper figures:"
 echo "  ${OUTPUT_BASE}/rq1/rq1_warrant_vs_rep_deception_and_profit.png"
+echo "  ${OUTPUT_BASE}/rq1/rq1_1_manipulation_detection.png"
 echo "  ${OUTPUT_BASE}/rq1/rq1_exit_loophole_vulnerability.png"
 echo "  ${OUTPUT_BASE}/rq2/rq2_seller_comm_deception_by_constraint.png"
 echo "  ${OUTPUT_BASE}/rq2/rq2_profit_decomposition_honest_vs_dishonest.png"
+echo "  ${OUTPUT_BASE}/rq2/rq2_All_constraints_combined.png"
 echo "  ${OUTPUT_BASE}/rq3/rq3_buyer_comm_market_outcomes.png"
 echo ""
 echo "Appendix figures:"

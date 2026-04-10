@@ -246,10 +246,99 @@ def _probe_rates_per_run(probe_df: pd.DataFrame):
     return rates_by_run
 
 
+def _compute_probe_panel_stats(probe_r: pd.DataFrame, probe_rw: pd.DataFrame):
+    rates_r = _probe_rates_per_run(probe_r)
+    rates_rw = _probe_rates_per_run(probe_rw)
+    means_r, stds_r, means_rw, stds_rw, p_vals = [], [], [], [], []
+    for vk in VULN_KEYS:
+        vals_r = [d[vk] * 100 for d in rates_r]
+        vals_rw = [d[vk] * 100 for d in rates_rw]
+        means_r.append(np.mean(vals_r))
+        stds_r.append(np.std(vals_r, ddof=1))
+        means_rw.append(np.mean(vals_rw))
+        stds_rw.append(np.std(vals_rw, ddof=1))
+        n_r_vk = len(probe_r[probe_r["vulnerability_type"] == vk])
+        n_rw_vk = len(probe_rw[probe_rw["vulnerability_type"] == vk])
+        cnt_r = probe_r[probe_r["vulnerability_type"] == vk]["manipulation_detected"].sum()
+        cnt_rw = probe_rw[probe_rw["vulnerability_type"] == vk]["manipulation_detected"].sum()
+        p_vals.append(
+            proportion_ztest_p(float(cnt_r), float(n_r_vk), float(cnt_rw), float(n_rw_vk))
+        )
+    return means_r, stds_r, means_rw, stds_rw, p_vals
+
+
+def _draw_probe_panel(
+    ax: plt.Axes,
+    means_r: list,
+    stds_r: list,
+    means_rw: list,
+    stds_rw: list,
+    p_vals: list,
+    show_ylabel: bool = True,
+    show_legend: bool = True,
+) -> None:
+    n_groups = len(VULN_KEYS)
+    x = np.arange(n_groups)
+    w = 0.32
+
+    ax.bar(x - w / 2, means_r, width=w, color=COLORS["bad_dark"],
+           label=LABEL_R, edgecolor="white", linewidth=0.5,
+           yerr=stds_r, capsize=3,
+           error_kw={"elinewidth": 1.0, "ecolor": "#555555"}, zorder=3)
+    ax.bar(x + w / 2, means_rw, width=w, color=COLORS["bad_mid"],
+           label=LABEL_RW, edgecolor="white", linewidth=0.5,
+           yerr=stds_rw, capsize=3,
+           error_kw={"elinewidth": 1.0, "ecolor": "#555555"}, zorder=3)
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(VULN_LABELS, fontsize=9)
+    if show_ylabel:
+        ax.set_ylabel("Manipulation Detection Rate (%)", fontsize=10)
+
+    bracket_tops = []
+    for i, p in enumerate(p_vals):
+        y_top = max(means_r[i] + stds_r[i], means_rw[i] + stds_rw[i])
+        bracket_tops.append(y_top)
+        add_significance_bracket(ax, x[i] - w / 2, x[i] + w / 2,
+                                 y_top, p, h_frac=0.07, fontsize=9)
+
+    global_top = max(bracket_tops) if bracket_tops else max(means_r + means_rw)
+    ax.set_ylim(0, global_top * 1.52)
+
+    es_idx = VULN_KEYS.index("exit_strategy")
+    es_y = bracket_tops[es_idx] * 1.24
+    add_text_box(ax, x[es_idx], es_y, "Primary\nvulnerability",
+                 fontsize=8, color=COLORS["bad_dark"], boxcolor=COLORS["neutral_light"])
+    ax.text(x[es_idx] - w / 2, means_r[es_idx] + stds_r[es_idx] + 1.0,
+            f"{means_r[es_idx]:.1f}%", ha="center", va="bottom",
+            fontsize=7, color=COLORS["bad_dark"])
+    ax.text(x[es_idx] + w / 2, means_rw[es_idx] + stds_rw[es_idx] + 1.0,
+            f"{means_rw[es_idx]:.1f}%", ha="center", va="bottom",
+            fontsize=7, color=COLORS["bad_mid"])
+    if show_legend:
+        ax.legend(frameon=False, fontsize=8, loc="upper left")
+
+
+def fig1_1_manipulation_detection(r_dir: str, rw_dir: str, output_dir: Path) -> None:
+    probe_r = load_probes_df(r_dir)
+    probe_rw = load_probes_df(rw_dir)
+    if probe_r.empty or probe_rw.empty:
+        print("[Fig1-1] No probe data found, skipping.")
+        return
+
+    means_r, stds_r, means_rw, stds_rw, p_vals = _compute_probe_panel_stats(probe_r, probe_rw)
+    fig, ax = plt.subplots(1, 1, figsize=(7.2, 4.2))
+    _draw_probe_panel(ax, means_r, stds_r, means_rw, stds_rw, p_vals,
+                      show_ylabel=True, show_legend=True)
+    fig.subplots_adjust(bottom=0.20)
+    save_figure(fig, output_dir / "rq1_1_manipulation_detection.png")
+    print("  [Fig1-1] Manipulation-detection standalone figure saved.")
+
+
 def fig2_probe_and_product_mix(
     r_dir: str, rw_dir: str, output_dir: Path
 ) -> None:
-    """1×2 combined figure: (a) vulnerability probe rates, (b) 100% product-mix stacked bar."""
+    """1×3 combined figure: probe, listed mix, and sold-out quality-combo counts."""
 
     # ── Load data ──────────────────────────────────────────────────────────
     probe_r  = load_probes_df(r_dir)
@@ -265,22 +354,7 @@ def fig2_probe_and_product_mix(
         return
 
     # ── Probe stats ────────────────────────────────────────────────────────
-    rates_r  = _probe_rates_per_run(probe_r)
-    rates_rw = _probe_rates_per_run(probe_rw)
-    means_r, stds_r, means_rw, stds_rw, p_vals = [], [], [], [], []
-    for vk in VULN_KEYS:
-        vals_r  = [d[vk] * 100 for d in rates_r]
-        vals_rw = [d[vk] * 100 for d in rates_rw]
-        means_r.append(np.mean(vals_r))
-        stds_r.append(np.std(vals_r,  ddof=1))
-        means_rw.append(np.mean(vals_rw))
-        stds_rw.append(np.std(vals_rw, ddof=1))
-        n_r_vk  = len(probe_r[probe_r["vulnerability_type"] == vk])
-        n_rw_vk = len(probe_rw[probe_rw["vulnerability_type"] == vk])
-        cnt_r   = probe_r[probe_r["vulnerability_type"] == vk]["manipulation_detected"].sum()
-        cnt_rw  = probe_rw[probe_rw["vulnerability_type"] == vk]["manipulation_detected"].sum()
-        p_vals.append(proportion_ztest_p(float(cnt_r), float(n_r_vk),
-                                          float(cnt_rw), float(n_rw_vk)))
+    means_r, stds_r, means_rw, stds_rw, p_vals = _compute_probe_panel_stats(probe_r, probe_rw)
 
     # ── Product-mix stats (ALL listed products, including unsold) ──────────────────
     pq_r  = per_run_values(df_r,  product_quality_counts_all)
@@ -313,50 +387,28 @@ def fig2_probe_and_product_mix(
     cnt_hqa_rw = sum(t[0] for t in pq_rw)
     p_hq_auth  = proportion_ztest_p(cnt_hqa_r, cnt_tot_r, cnt_hqa_rw, cnt_tot_rw)
 
+    # ── Sold-product quality-combo counts (mean per run) ──────────────────
+    pq_sold_r = per_run_values(df_r, product_quality_counts)
+    pq_sold_rw = per_run_values(df_rw, product_quality_counts)
+
+    def _means3(pq):
+        if not pq:
+            return [0.0, 0.0, 0.0]
+        return [float(np.mean([t[i] for t in pq])) for i in range(3)]
+
+    sold_counts = {
+        LABEL_R: _means3(pq_sold_r),
+        LABEL_RW: _means3(pq_sold_rw),
+    }
+
     # ── Layout ─────────────────────────────────────────────────────────────
-    fig, (ax_probe, ax_mix) = plt.subplots(
-        1, 2, figsize=(10.5, 4.0),
-        gridspec_kw={"wspace": 0.38, "width_ratios": [2, 1]},
+    fig, (ax_probe, ax_mix, ax_sold) = plt.subplots(
+        1, 3, figsize=(14.0, 4.1),
+        gridspec_kw={"wspace": 0.34, "width_ratios": [2.1, 1.0, 1.0]},
     )
     # ── (a) Vulnerability probe ────────────────────────────────────────────
-    n_groups = len(VULN_KEYS)
-    x = np.arange(n_groups)
-    w = 0.32
-
-    ax_probe.bar(x - w / 2, means_r,  width=w, color=COLORS["bad_dark"],
-                 label=LABEL_R,  edgecolor="white", linewidth=0.5,
-                 yerr=stds_r,  capsize=3,
-                 error_kw={"elinewidth": 1.0, "ecolor": "#555555"}, zorder=3)
-    ax_probe.bar(x + w / 2, means_rw, width=w, color=COLORS["bad_mid"],
-                 label=LABEL_RW, edgecolor="white", linewidth=0.5,
-                 yerr=stds_rw, capsize=3,
-                 error_kw={"elinewidth": 1.0, "ecolor": "#555555"}, zorder=3)
-
-    ax_probe.set_xticks(x)
-    ax_probe.set_xticklabels(VULN_LABELS, fontsize=9)
-    ax_probe.set_ylabel("Manipulation Detection Rate (%)", fontsize=10)
-
-    bracket_tops = []
-    for i, p in enumerate(p_vals):
-        y_top = max(means_r[i] + stds_r[i], means_rw[i] + stds_rw[i])
-        bracket_tops.append(y_top)
-        add_significance_bracket(ax_probe, x[i] - w / 2, x[i] + w / 2,
-                                  y_top, p, h_frac=0.07, fontsize=9)
-
-    global_top = max(bracket_tops) if bracket_tops else max(means_r + means_rw)
-    ax_probe.set_ylim(0, global_top * 1.52)
-
-    es_idx = VULN_KEYS.index("exit_strategy")
-    es_y   = bracket_tops[es_idx] * 1.24
-    add_text_box(ax_probe, x[es_idx], es_y, "Primary\nvulnerability",
-                 fontsize=8, color=COLORS["bad_dark"], boxcolor=COLORS["neutral_light"])
-    ax_probe.text(x[es_idx] - w / 2, means_r[es_idx]  + stds_r[es_idx]  + 1.0,
-                  f"{means_r[es_idx]:.1f}%",  ha="center", va="bottom",
-                  fontsize=7, color=COLORS["bad_dark"])
-    ax_probe.text(x[es_idx] + w / 2, means_rw[es_idx] + stds_rw[es_idx] + 1.0,
-                  f"{means_rw[es_idx]:.1f}%", ha="center", va="bottom",
-                  fontsize=7, color=COLORS["bad_mid"])
-    ax_probe.legend(frameon=False, fontsize=8, loc="upper left")
+    _draw_probe_panel(ax_probe, means_r, stds_r, means_rw, stds_rw, p_vals,
+                      show_ylabel=True, show_legend=True)
 
     # ── (b) Product mix stacked bar (ALL listed products) ───────────────────────
     xm = np.array([0.0, 1.0])
@@ -382,11 +434,32 @@ def fig2_probe_and_product_mix(
     ax_mix.set_ylabel("Share of Listed Products (%)", fontsize=10)
     ax_mix.set_ylim(0, 112)
 
-    # Legend below the axes to avoid overlap with bar labels
-    ax_mix.legend(frameon=False, fontsize=7, loc="lower center",
-                  bbox_to_anchor=(0.5, -0.28), ncol=1)
+    # ── (c) Sold-out product quality combos (absolute counts) ────────────
+    bottoms = [0.0, 0.0]
+    for si, col in enumerate(seg_colors):
+        heights = [sold_counts[LABEL_R][si], sold_counts[LABEL_RW][si]]
+        ax_sold.bar(xm, heights, width=wm, bottom=bottoms,
+                    color=col, edgecolor="white", linewidth=0.5, zorder=3)
+        for xi, (h, bot) in enumerate(zip(heights, bottoms)):
+            if h > 0.35:
+                ax_sold.text(xm[xi], bot + h / 2, f"{h:.1f}",
+                             ha="center", va="center", fontsize=8,
+                             color="white", fontweight="bold")
+        bottoms = [bottoms[j] + heights[j] for j in range(2)]
+    sold_ymax = max(bottoms) if bottoms else 0.0
+    ax_sold.set_xticks(xm)
+    ax_sold.set_xticklabels([LABEL_R, LABEL_RW], fontsize=10)
+    ax_sold.set_ylabel("Mean Sold Products per Run", fontsize=10)
+    ax_sold.set_ylim(0, max(1.0, sold_ymax * 1.18))
 
-    fig.subplots_adjust(bottom=0.26)
+    # Shared legend for both product-mix subplots
+    handles = [mpatches.Patch(facecolor=c, edgecolor="white", label=l)
+               for c, l in zip(seg_colors, seg_labels)]
+    fig.legend(handles=handles, loc="lower center",
+               bbox_to_anchor=(0.5, 0.03), ncol=3,
+               frameon=False, fontsize=8)
+
+    fig.subplots_adjust(bottom=0.20)
     save_figure(fig, output_dir / "rq1_exit_loophole_vulnerability.png")
     print(f"  [Fig2] p_vals per vulnerability: "
           + ", ".join(f"{VULN_SHORT[i]}={p_vals[i]:.4f}" for i in range(len(VULN_KEYS))))
@@ -418,6 +491,9 @@ def main():
 
     print("\n[Fig1] Seller Profit & Deceptions…")
     fig1_profit_and_deceptions(args.r_dir, args.rw_dir, output_dir)
+
+    print("\n[Fig1-1] Manipulation Detection (standalone)…")
+    fig1_1_manipulation_detection(args.r_dir, args.rw_dir, output_dir)
 
     print("\n[Fig2] Vulnerability Probe + Product Mix (combined)…")
     fig2_probe_and_product_mix(args.r_dir, args.rw_dir, output_dir)
