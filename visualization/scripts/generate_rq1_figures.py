@@ -267,6 +267,17 @@ def _compute_probe_panel_stats(probe_r: pd.DataFrame, probe_rw: pd.DataFrame):
     return means_r, stds_r, means_rw, stds_rw, p_vals
 
 
+def _compute_probe_single_stats(probe_df: pd.DataFrame):
+    """Single-condition probe stats (mean/std over runs, in %)."""
+    rates = _probe_rates_per_run(probe_df)
+    means, stds = [], []
+    for vk in VULN_KEYS:
+        vals = [d[vk] * 100 for d in rates]
+        means.append(float(np.mean(vals)) if vals else 0.0)
+        stds.append(float(np.std(vals, ddof=1)) if len(vals) > 1 else 0.0)
+    return means, stds
+
+
 def _draw_probe_panel(
     ax: plt.Axes,
     means_r: list,
@@ -317,6 +328,44 @@ def _draw_probe_panel(
             fontsize=7, color=COLORS["bad_mid"])
     if show_legend:
         ax.legend(frameon=False, fontsize=8, loc="upper left")
+
+
+def fig1_2_manipulation_detection_rep_only(r_dir: str, output_dir: Path) -> None:
+    """Standalone manipulation detection figure for reputation-only market."""
+    probe_r = load_probes_df(r_dir)
+    if probe_r.empty:
+        print("[Fig1-2] No probe data found for reputation-only, skipping.")
+        return
+
+    means_r, stds_r = _compute_probe_single_stats(probe_r)
+    x = np.arange(len(VULN_KEYS))
+    w = 0.52
+
+    fig, ax = plt.subplots(1, 1, figsize=(7.0, 4.1))
+    ax.bar(
+        x, means_r, width=w, color=COLORS["bad_dark"],
+        edgecolor="white", linewidth=0.5,
+        yerr=stds_r, capsize=3,
+        error_kw={"elinewidth": 1.0, "ecolor": "#555555"},
+        zorder=3
+    )
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(VULN_LABELS, fontsize=9)
+    ax.set_ylabel("Manipulation Detection Rate (%)", fontsize=10)
+    ax.grid(axis="y", alpha=0.25, zorder=0)
+    ax.set_axisbelow(True)
+
+    y_tops = [m + s for m, s in zip(means_r, stds_r)]
+    ylim_top = max(y_tops) * 1.35 if y_tops else 100.0
+    ax.set_ylim(0, max(100.0, ylim_top))
+
+    for i, (m, s) in enumerate(zip(means_r, stds_r)):
+        ax.text(x[i], m + s + 1.0, f"{m:.1f}%", ha="center", va="bottom",
+                fontsize=8, color=COLORS["bad_dark"])
+
+    save_figure(fig, output_dir / "rq1_2_rep_only_manipulation_detection.png")
+    print("  [Fig1-2] Rep-only manipulation-detection figure saved.")
 
 
 def fig1_1_manipulation_detection(r_dir: str, rw_dir: str, output_dir: Path) -> None:
@@ -494,6 +543,9 @@ def main():
 
     print("\n[Fig1-1] Manipulation Detection (standalone)…")
     fig1_1_manipulation_detection(args.r_dir, args.rw_dir, output_dir)
+
+    print("\n[Fig1-2] Manipulation Detection (Rep-only standalone)…")
+    fig1_2_manipulation_detection_rep_only(args.r_dir, output_dir)
 
     print("\n[Fig2] Vulnerability Probe + Product Mix (combined)…")
     fig2_probe_and_product_mix(args.r_dir, args.rw_dir, output_dir)

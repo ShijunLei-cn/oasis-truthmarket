@@ -37,6 +37,7 @@ from fig_utils import (
     load_results_df,
     per_run_values,
     count_deceptions,
+    sum_seller_profit,
     sum_buyer_utility,
     honest_buyer_utility,
     dishonest_buyer_utility,
@@ -610,6 +611,178 @@ def fig_all_constraints_summary(base_dir: str, output_dir: Path) -> None:
     print("  [RQ2-All] Aggregated 2x2 summary figure saved.")
 
 
+def fig_rq2_all_markettype_dual_metrics(base_dir: str, output_dir: Path) -> None:
+    """RQ2 ALL figure requested by user:
+    - Left: counterfeit HQ count
+    - Right: buyer utility per transaction
+    X-axis market types: rep / rep comm / rep+warrant / rep+warrant comm
+    Within each market type: baseline / policy-making / pressure / psychology
+    """
+    base_path = Path(base_dir)
+    rq1_dir = base_path.parent / "rq1"
+
+    constraints = [
+        ("baseline", "Baseline"),
+        ("policy_making", "Policy-Making"),
+        ("pressure_quickprofits", "Pressure"),
+        ("psychological-based-attack", "Psychology"),
+    ]
+    market_types = [
+        ("rep", "Rep", "r_wsc_F", rq1_dir / "r_wo"),
+        ("rep_comm", "Rep Comm", "r_wsc_R", rq1_dir / "r_wo"),
+        ("rw", "Rep+Warrant", "rw_wsc_F", rq1_dir / "rw_wo"),
+        ("rw_comm", "Rep+Warrant Comm", "rw_wsc_R", rq1_dir / "rw_wo"),
+    ]
+    bar_colors = {
+        "baseline": COLORS["neutral"],
+        "policy_making": COLORS["good_mid"],
+        "pressure_quickprofits": COLORS["accent"],
+        "psychological-based-attack": COLORS["bad_mid"],
+    }
+
+    def _sem(vals: List[float]) -> float:
+        n = len(vals)
+        if n <= 1:
+            return 0.0
+        return float(np.std(vals, ddof=1) / np.sqrt(n))
+
+    def _buyer_utility_per_transaction(run_df: pd.DataFrame) -> float:
+        tx_count = len(run_df)
+        if tx_count <= 0:
+            return 0.0
+        return float(run_df["buyer_utility"].sum() / tx_count)
+
+    # metrics[(metric_name, market_type_key)] = [baseline, policy, pressure, psychology]
+    metrics_mean: Dict[str, Dict[str, List[float]]] = {"hq_fake": {}, "buyer_utility": {}}
+    metrics_std: Dict[str, Dict[str, List[float]]] = {"hq_fake": {}, "buyer_utility": {}}
+
+    for mt_key, _, dir_prefix, baseline_dir in market_types:
+        # Baseline from RQ1 corresponding mechanism
+        baseline_df = load_results_df(str(baseline_dir))
+        baseline_hq_runs = per_run_values(baseline_df, count_deceptions) if not baseline_df.empty else [0.0]
+        baseline_utility_runs = (
+            per_run_values(baseline_df, _buyer_utility_per_transaction)
+            if not baseline_df.empty else [0.0]
+        )
+        if not baseline_hq_runs:
+            baseline_hq_runs = [0.0]
+        if not baseline_utility_runs:
+            baseline_utility_runs = [0.0]
+
+        hq_fake_means = []
+        hq_fake_stds = []
+        utility_means = []
+        utility_stds = []
+        for c_key, _ in constraints:
+            if c_key == "baseline":
+                hq_fake_means.append(float(np.mean(baseline_hq_runs)))
+                hq_fake_stds.append(_sem(baseline_hq_runs))
+                utility_means.append(float(np.mean(baseline_utility_runs)))
+                utility_stds.append(_sem(baseline_utility_runs))
+                continue
+
+            df = load_results_df(str(base_path / f"{dir_prefix}_{c_key}"))
+            if df.empty:
+                hq_runs = [0.0]
+                utility_runs = [0.0]
+            else:
+                hq_runs = per_run_values(df, count_deceptions)
+                utility_runs = per_run_values(df, _buyer_utility_per_transaction)
+                if not hq_runs:
+                    hq_runs = [0.0]
+                if not utility_runs:
+                    utility_runs = [0.0]
+
+            hq_fake_means.append(float(np.mean(hq_runs)))
+            hq_fake_stds.append(_sem(hq_runs))
+            utility_means.append(float(np.mean(utility_runs)))
+            utility_stds.append(_sem(utility_runs))
+
+        metrics_mean["hq_fake"][mt_key] = hq_fake_means
+        metrics_std["hq_fake"][mt_key] = hq_fake_stds
+        metrics_mean["buyer_utility"][mt_key] = utility_means
+        metrics_std["buyer_utility"][mt_key] = utility_stds
+
+    # Plot
+    fig, (ax_left, ax_right) = plt.subplots(
+        1, 2, figsize=(13.2, 4.8), gridspec_kw={"wspace": 0.24}
+    )
+    label_panel(ax_left, "a")
+    label_panel(ax_right, "b")
+
+    group_x = np.arange(len(market_types))
+    bw = 0.18
+    offsets = np.array([-1.5, -0.5, 0.5, 1.5]) * bw
+
+    left_positions = []
+    left_values = []
+    right_positions = []
+    right_values = []
+
+    for idx, (c_key, c_label) in enumerate(constraints):
+        vals_left = [metrics_mean["hq_fake"][mt_key][idx] for mt_key, *_ in market_types]
+        errs_left = [metrics_std["hq_fake"][mt_key][idx] for mt_key, *_ in market_types]
+        vals_right = [metrics_mean["buyer_utility"][mt_key][idx] for mt_key, *_ in market_types]
+        errs_right = [metrics_std["buyer_utility"][mt_key][idx] for mt_key, *_ in market_types]
+        x_pos = group_x + offsets[idx]
+        color = bar_colors[c_key]
+
+        ax_left.bar(
+            x_pos, vals_left, width=bw, color=color, edgecolor="white", linewidth=0.5,
+            yerr=errs_left, capsize=3, error_kw={"elinewidth": 1.0, "ecolor": "#666"},
+            label=c_label, zorder=3
+        )
+        ax_right.bar(
+            x_pos, vals_right, width=bw, color=color, edgecolor="white", linewidth=0.5,
+            yerr=errs_right, capsize=3, error_kw={"elinewidth": 1.0, "ecolor": "#666"},
+            label=c_label, zorder=3
+        )
+
+        left_positions.extend(x_pos.tolist())
+        left_values.extend(vals_left)
+        right_positions.extend(x_pos.tolist())
+        right_values.extend(vals_right)
+
+    xlabels = [mt_label for _, mt_label, _, _ in market_types]
+    ax_left.set_xticks(group_x)
+    ax_left.set_xticklabels(xlabels, fontsize=9)
+    ax_left.set_ylabel("HQ Counterfeit Count per Run", fontsize=10)
+
+    ax_right.set_xticks(group_x)
+    ax_right.set_xticklabels(xlabels, fontsize=9)
+    ax_right.set_ylabel("Buyer Utility / Transactions Count", fontsize=10)
+
+    # Unified style
+    for ax in (ax_left, ax_right):
+        ax.grid(axis="y", alpha=0.25, zorder=0)
+        ax.set_axisbelow(True)
+
+    # Add explicit zero markers so zero-height bars are visible.
+    def _mark_zero_bars(ax, x_positions, values):
+        for x, v in zip(x_positions, values):
+            if abs(v) < 1e-12:
+                ax.scatter([x], [0], s=22, facecolors="none", edgecolors="#555", linewidths=0.9, zorder=5)
+
+    _mark_zero_bars(ax_left, left_positions, left_values)
+    _mark_zero_bars(ax_right, right_positions, right_values)
+
+    handles = [
+        mpatches.Patch(facecolor=bar_colors[c_key], edgecolor="white", label=c_label)
+        for c_key, c_label in constraints
+    ]
+    fig.legend(
+        handles=handles,
+        loc="lower center",
+        bbox_to_anchor=(0.5, -0.02),
+        ncol=4,
+        frameon=False,
+        fontsize=9,
+    )
+    fig.subplots_adjust(bottom=0.22)
+    save_figure(fig, output_dir / "rq2_ALL_markettype_hqfake_profit.png")
+    print("  [RQ2_ALL] Market-type grouped dual-metric figure saved.")
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Entry point
 # ─────────────────────────────────────────────────────────────────────────────
@@ -643,6 +816,9 @@ def main():
 
     print("\n[RQ2-All] Aggregated Summary Across Constraints…")
     fig_all_constraints_summary(args.base_dir, output_dir)
+
+    print("\n[RQ2_ALL] Market-Type Grouped Figure (HQ fake + Profit)…")
+    fig_rq2_all_markettype_dual_metrics(args.base_dir, output_dir)
 
     print("\n✅  RQ2 figures saved to:", output_dir)
 

@@ -47,7 +47,7 @@ def analyze_by_mechanism_and_communication(df_condition):
         'type_4': 'Social Normalization',
         'type_5': 'Neutral Info',
         'type_6': 'Anti-Collusion'
-    }
+    }  #TODO: 直接使用标签名，不要用序列号type_x
     
     for col in type_cols:
         print(f"{type_names[col]:<25} {rep_no_comm[col]*100:>8.2f}% {rep_comm[col]*100:>8.2f}% {warrant_no_comm[col]*100:>8.2f}% {warrant_comm[col]*100:>8.2f}%")

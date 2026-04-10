@@ -21,13 +21,18 @@ from typing import Dict, List, Any
 from collections import defaultdict
 
 
-def extract_posts_from_actions(actions_file: Path, experiment_id: str, run_id: int) -> List[Dict]:
+def extract_posts_from_actions(actions_file: Path, experiment_id: str, run_id: int,
+                               market_type: str = "", channel_type: str = "", 
+                               post_prompt_type: str = "") -> List[Dict]:
     """Extract seller posts from a single run's actions file.
     
     Args:
         actions_file: Path to run_*_actions.json
         experiment_id: Experiment identifier (e.g., "r_wsc_R_policy_making")
         run_id: Run number
+        market_type: Market mechanism type
+        channel_type: Communication channel type
+        post_prompt_type: Post prompt type
         
     Returns:
         List of post dictionaries
@@ -40,7 +45,59 @@ def extract_posts_from_actions(actions_file: Path, experiment_id: str, run_id: i
         print(f"  ERROR loading {actions_file}: {e}")
         return posts
     
+    # Build listing_map: round -> agent_name -> deceptive_listing
+    # This tracks if a seller listed any deceptive (HQ-advertised/LQ-produced) products
+    listing_map: dict = {}
+    
+    # First pass: collect seller listing decisions
     for round_data in data:
+        if not isinstance(round_data, dict):
+            continue
+            
+        round_num = round_data.get("round", 0)
+        phase = round_data.get("phase", "")
+        
+        if phase == "seller_listing":
+            if round_num not in listing_map:
+                listing_map[round_num] = {}
+            
+            for agent_info in round_data.get("agent_infos", []):
+                agent_name = agent_info.get("agent_name", "")
+                if not agent_name.startswith("seller"):
+                    continue
+                
+                action_info = agent_info.get("agent_action_info", {})
+                if not isinstance(action_info, dict):
+                    continue
+                
+                action_name = action_info.get("action_name", "")
+                if action_name == "list_products":
+                    try:
+                        action_args = action_info.get("action_args", "{}")
+                        if isinstance(action_args, str):
+                            args_dict = json.loads(action_args)
+                        elif isinstance(action_args, dict):
+                            args_dict = action_args
+                        else:
+                            args_dict = {}
+                        
+                        products = args_dict.get("products", [])
+                        # Check if any product is deceptive (HQ advertised but LQ produced)
+                        is_dec = any(
+                            p.get("advertised_quality") == "HQ" and p.get("product_quality") == "LQ"
+                            for p in products
+                        )
+                        listing_map[round_num][agent_name] = is_dec
+                    except (json.JSONDecodeError, KeyError):
+                        listing_map[round_num][agent_name] = False
+    
+    # Second pass: extract posts and attach deceptive_listing
+    posts_map: dict = {}  # round -> list of posts for context
+    
+    for round_data in data:
+        if not isinstance(round_data, dict):
+            continue
+            
         round_num = round_data.get("round", 0)
         phase = round_data.get("phase", "")
         agent_infos = round_data.get("agent_infos", [])
@@ -59,7 +116,6 @@ def extract_posts_from_actions(actions_file: Path, experiment_id: str, run_id: i
             action_name = action_info.get("action_name", "")
             
             # Look for communication actions (posts)
-            # Based on diagnostic: action_name is "create_post"
             if action_name in ["create_post", "post_to_forum", "post_to_social_media", 
                               "social_media_post", "forum_post", "make_post", "post"]:
                 
@@ -78,25 +134,38 @@ def extract_posts_from_actions(actions_file: Path, experiment_id: str, run_id: i
                 
                 # Fallback to direct content field
                 if not post_content:
-                    post_content = action_info.get("post_content", "") or \
-                                   action_info.get("message", "") or \
-                                   action_info.get("content", "")
+                    post_content = action_info.get("content", "")
                 
-                if post_content and isinstance(post_content, str):
-                    # Extract reasoning if available
-                    action_reasoning = action_info.get("action_reasoning", "")
-                    
-                    posts.append({
-                        "experiment_id": experiment_id,
-                        "run_id": run_id,
-                        "round": round_num,
-                        "phase": phase,
-                        "agent_name": agent_name,
-                        "action_type": action_name,
-                        "post_content": post_content,
-                        "action_reasoning": action_reasoning[:500] if action_reasoning else "",
-                        "post_length": len(post_content),
-                    })
+                if not post_content:
+                    continue
+                
+                # Get reasoning
+                reasoning = action_info.get("action_reasoning", "")
+                
+                # Get deceptive_listing from listing_map
+                deceptive_this_round = listing_map.get(round_num, {}).get(agent_name, False)
+                
+                # Get post length
+                post_length = len(post_content)
+                
+                # Build post record matching old format
+                post_record = {
+                    "experiment_id": experiment_id,
+                    "run_id": run_id,
+                    "round": round_num,
+                    "phase": phase,
+                    "agent_name": agent_name,
+                    "action_type": action_name,
+                    "market_type": market_type,
+                    "channel_type": channel_type,
+                    "post_prompt_type": post_prompt_type,
+                    "post_content": post_content,
+                    "action_reasoning": reasoning,
+                    "post_length": post_length,
+                    "deceptive_listing": deceptive_this_round,
+                }
+                
+                posts.append(post_record)
     
     return posts
 
@@ -169,6 +238,21 @@ def extract_all_posts(experiment_dir: str, experiment_id: str) -> List[Dict]:
         print(f"  WARNING: Experiment directory not found: {experiment_dir}")
         return []
     
+    # Load experiment config for market_type, channel_type, post_prompt_type
+    config_path = path / "experiment_config.json"
+    market_type = ""
+    channel_type = ""
+    post_prompt_type = ""
+    
+    if config_path.exists():
+        try:
+            config = json.loads(config_path.read_text(encoding="utf-8"))
+            market_type = config.get("market_type", "")
+            channel_type = config.get("communication_channel_type", "")
+            post_prompt_type = config.get("posts4seller", "")
+        except Exception as e:
+            print(f"  WARNING: Could not load config: {e}")
+    
     all_posts = []
     
     # Find all action files
@@ -176,7 +260,12 @@ def extract_all_posts(experiment_dir: str, experiment_id: str) -> List[Dict]:
     
     for action_file in action_files:
         run_id = int(action_file.stem.split("_")[1])
-        posts = extract_posts_from_actions(action_file, experiment_id, run_id)
+        posts = extract_posts_from_actions(
+            action_file, experiment_id, run_id,
+            market_type=market_type,
+            channel_type=channel_type,
+            post_prompt_type=post_prompt_type
+        )
         all_posts.extend(posts)
         print(f"  Run {run_id}: {len(posts)} posts extracted")
     

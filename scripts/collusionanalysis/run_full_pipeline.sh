@@ -230,15 +230,19 @@ echo ""
 
 VIZ_SCRIPT="${PROJECT_ROOT}/visualization/scripts/collusionanalysis/collusion_analysis.py"
 
+# Note: OUTPUT_DIR is already the case_analysis directory, so for visualization
+# we need to pass the parent directory and let the script append "case_analysis"
+VIZ_DATA_DIR="${PROJECT_ROOT}/experiments/gpt-4o-mini/paper_important_results/data"
+
 if [ -f "$VIZ_SCRIPT" ]; then
     if [ "$DRY_RUN" = true ]; then
         echo "[DRY RUN] Would run:"
         echo "  python3 ${VIZ_SCRIPT} \\"
-        echo "    --data-dir ${OUTPUT_DIR} \\"
+        echo "    --data-dir ${VIZ_DATA_DIR} \\"
         echo "    --output-dir ${OUTPUT_DIR}"
     else
         python3 "${VIZ_SCRIPT}" \
-            --data-dir "${OUTPUT_DIR}" \
+            --data-dir "${VIZ_DATA_DIR}" \
             --output-dir "${OUTPUT_DIR}"
     fi
 else
