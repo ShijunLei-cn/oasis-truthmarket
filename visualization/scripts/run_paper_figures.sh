@@ -7,10 +7,21 @@
 set -euo pipefail
 
 MODEL_TYPE="${MODEL_TYPE:-gpt-4o-mini}"
-EXPERIMENT_PREFIX="experiments/${MODEL_TYPE}/paper_important_results"
-OUTPUT_BASE="visualization/figs/${MODEL_TYPE}/paper_important_results"
+LOCKED_EXPERIMENT_PREFIX="./experiments/paper_important_results"
+if [ -n "${EXPERIMENT_PREFIX:-}" ] && [ "${EXPERIMENT_PREFIX}" != "${LOCKED_EXPERIMENT_PREFIX}" ]; then
+    echo "ERROR: EXPERIMENT_PREFIX is locked for this stage."
+    echo "Allowed only: ${LOCKED_EXPERIMENT_PREFIX}"
+    echo "Received    : ${EXPERIMENT_PREFIX}"
+    exit 1
+fi
+EXPERIMENT_PREFIX="${LOCKED_EXPERIMENT_PREFIX}"
+if [ ! -d "${EXPERIMENT_PREFIX}" ]; then
+    echo "ERROR: experiment directory not found: ${EXPERIMENT_PREFIX}"
+    exit 1
+fi
+OUTPUT_BASE="./figs/${MODEL_TYPE}/paper_important_results"
 
-export PYTHONPATH="${PYTHONPATH}:$(pwd)"
+export PYTHONPATH="${PYTHONPATH:-}:$(pwd)"
 
 echo "=========================================="
 echo "Paper Figure Generation (New RQ Mapping)"

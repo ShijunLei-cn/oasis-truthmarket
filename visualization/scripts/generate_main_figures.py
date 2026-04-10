@@ -85,15 +85,37 @@ def main() -> None:
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    # Preflight check for new 3-RQ directory layout.
+    required_dirs = [
+        base_dir / "rq1_intent" / "r_wo",
+        base_dir / "rq2_welfare" / "r_wo",
+        base_dir / "rq2_welfare" / "rw_wo",
+        base_dir / "rq3_resilience",
+    ]
+    missing = [str(p) for p in required_dirs if not p.exists()]
+    if len(missing) == len(required_dirs):
+        raise SystemExit(
+            "No compatible experiment data found for new 3-RQ layout.\n"
+            + "\n".join(f"- {m}" for m in missing)
+        )
+
     print("Generating RQ1 figures...")
-    generate_rq1(base_dir, output_dir / "rq1")
+    if (base_dir / "rq1_intent" / "r_wo").exists():
+        generate_rq1(base_dir, output_dir / "rq1")
+    else:
+        print("Skip RQ1: missing rq1_intent/r_wo")
     print("Generating RQ2 figures...")
-    generate_rq2(base_dir, output_dir / "rq2")
+    if (base_dir / "rq2_welfare" / "r_wo").exists() and (base_dir / "rq2_welfare" / "rw_wo").exists():
+        generate_rq2(base_dir, output_dir / "rq2")
+    else:
+        print("Skip RQ2: missing rq2_welfare baseline dirs")
     print("Generating RQ3 figures...")
-    generate_rq3(base_dir, output_dir / "rq3")
+    if (base_dir / "rq3_resilience").exists():
+        generate_rq3(base_dir, output_dir / "rq3")
+    else:
+        print("Skip RQ3: missing rq3_resilience")
     print(f"✓ All figures saved to: {output_dir}")
 
 
 if __name__ == "__main__":
     main()
-
