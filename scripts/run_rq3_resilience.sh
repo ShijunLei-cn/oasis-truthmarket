@@ -6,7 +6,7 @@ set -euo pipefail
 
 CONFIG_FILE="${CONFIG_FILE:-configs/sim_gpt4omini_10s_10b_10r_runs5_base.yaml}"
 MODEL_TYPE="${MODEL_TYPE:-gpt-4o-mini}"
-EXP_ROOT="${EXP_ROOT:-${MODEL_TYPE}/paper_important_results}"
+EXP_ROOT="${EXP_ROOT:-${MODEL_TYPE}/newresults}"
 
 echo "=========================================="
 echo "RQ3: Communication Interference & Resistance"

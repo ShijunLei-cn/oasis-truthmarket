@@ -70,16 +70,24 @@ METRIC_COLORS = {
 
 # Consistent condition colors for line charts (RQ3 round evolution)
 CONDITION_COLORS = {
-    "Rep":                 "#C6C9DC",
-    "Rep, Comm":           "#A9C89E",
-    "Rep+Warrant":         "#C6C9DC",
-    "Rep+Warrant, Comm":   "#6BBFD0",
+    "Rep":                 COLORS["neutral"],
+    "Rep, Comm":           COLORS["good_mid"],
+    "Rep+Warrant":         COLORS["neutral"],
+    "Rep+Warrant, Comm":   COLORS["good_dark"],
 }
 CONDITION_LS = {
     "Rep":                 "-",
     "Rep, Comm":           "--",
     "Rep+Warrant":         "-",
     "Rep+Warrant, Comm":   "--",
+}
+
+# Consistent colors for interference constraints (baseline/policy/pressure/psychology)
+INTERFERENCE_CONDITION_COLORS = {
+    "baseline": COLORS["neutral"],
+    "policy_making": COLORS["good_mid"],
+    "pressure_quickprofits": COLORS["accent"],
+    "psychological-based-attack": COLORS["bad_mid"],
 }
 
 

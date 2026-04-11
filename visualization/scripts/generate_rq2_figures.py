@@ -32,6 +32,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 from fig_utils import (
     COLORS,
     METRIC_COLORS,
+    CONDITION_COLORS,
+    INTERFERENCE_CONDITION_COLORS,
     setup_style,
     label_panel,
     load_results_df,
@@ -49,7 +51,6 @@ from fig_utils import (
     proportion_ztest_p,
     sig_marker_display,
     add_significance_bracket,
-    add_text_box,
     save_figure,
 )
 
@@ -84,14 +85,6 @@ COND_XCOLORS = {
     "Rep+Warrant":        COLORS["neutral_dark"],
     "Rep+Warrant, Comm":  COLORS["neutral_dark"],
 }
-
-_UTIL_COLORS = {
-    "Rep":                METRIC_COLORS["buyer_utility_secondary"],
-    "Rep, Comm":          METRIC_COLORS["buyer_utility_primary"],
-    "Rep+Warrant":        METRIC_COLORS["buyer_utility_secondary"],
-    "Rep+Warrant, Comm":  METRIC_COLORS["buyer_utility_primary"],
-}
-
 
 def _set_dynamic_ylim_positive(
     ax: plt.Axes,
@@ -209,12 +202,7 @@ def fig4_deception_by_constraint(base_dir: str, output_dir: Path, file_prefix: s
     ):
         ax = axes[col_idx]
         label_panel(ax, panel_letters[col_idx])
-        bar_colors = [
-            METRIC_COLORS["deception_secondary"],
-            METRIC_COLORS["deception_primary"],
-            METRIC_COLORS["deception_secondary"],
-            METRIC_COLORS["deception_primary"],
-        ]
+        bar_colors = [CONDITION_COLORS[c] for c in CONDITIONS_ORDER]
 
         ax.bar(xs, means, width=w, color=bar_colors,
                edgecolor="white", linewidth=0.4,
@@ -363,12 +351,7 @@ def fig6_product_mix(base_dir: str, output_dir: Path, file_prefix: str = "rq2") 
     base_path = Path(base_dir)
     baseline_dir = base_path.parent / "rq2_welfare"
     market_types = _rq3_market_types(baseline_dir)
-    bar_colors = {
-        "baseline": COLORS["neutral"],
-        "policy_making": COLORS["good_mid"],
-        "pressure_quickprofits": COLORS["accent"],
-        "psychological-based-attack": COLORS["bad_mid"],
-    }
+    bar_colors = INTERFERENCE_CONDITION_COLORS
 
     def _share_metric(idx: int):
         out: Dict[str, List[float]] = {}
@@ -564,12 +547,7 @@ def fig_all_constraints_summary(base_dir: str, output_dir: Path, file_prefix: st
     baseline_dir = base_path.parent / "rq2_welfare"
     constraints = _rq3_constraints_with_baseline()
     market_types = _rq3_market_types(baseline_dir)
-    bar_colors = {
-        "baseline": COLORS["neutral"],
-        "policy_making": COLORS["good_mid"],
-        "pressure_quickprofits": COLORS["accent"],
-        "psychological-based-attack": COLORS["bad_mid"],
-    }
+    bar_colors = INTERFERENCE_CONDITION_COLORS
 
     def _transaction_count(run_df: pd.DataFrame) -> float:
         return float(len(run_df))
@@ -665,12 +643,7 @@ def fig_rq2_all_markettype_dual_metrics(
         ("rw", "Rep+Warrant", "rw_wsc_F", baseline_dir_path / "rw_wo"),
         ("rw_comm", "Rep+Warrant Comm", "rw_wsc_R", baseline_dir_path / "rw_wo"),
     ]
-    bar_colors = {
-        "baseline": COLORS["neutral"],
-        "policy_making": COLORS["good_mid"],
-        "pressure_quickprofits": COLORS["accent"],
-        "psychological-based-attack": COLORS["bad_mid"],
-    }
+    bar_colors = INTERFERENCE_CONDITION_COLORS
 
     def _sem(vals: List[float]) -> float:
         n = len(vals)
@@ -859,12 +832,7 @@ def _rq3_grouped_metric(
     baseline_path = Path(baseline_dir)
     constraints = _rq3_constraints_with_baseline()
     market_types = _rq3_market_types(baseline_path)
-    bar_colors = {
-        "baseline": COLORS["neutral"],
-        "policy_making": COLORS["good_mid"],
-        "pressure_quickprofits": COLORS["accent"],
-        "psychological-based-attack": COLORS["bad_mid"],
-    }
+    bar_colors = INTERFERENCE_CONDITION_COLORS
 
     means: Dict[str, List[float]] = {}
     sems: Dict[str, List[float]] = {}
@@ -918,12 +886,7 @@ def fig_rq3_welfare_overview(base_dir: str, output_dir: Path, baseline_dir: str,
     baseline_path = Path(baseline_dir)
     constraints = _rq3_constraints_with_baseline()
     market_types = _rq3_market_types(baseline_path)
-    bar_colors = {
-        "baseline": COLORS["neutral"],
-        "policy_making": COLORS["good_mid"],
-        "pressure_quickprofits": COLORS["accent"],
-        "psychological-based-attack": COLORS["bad_mid"],
-    }
+    bar_colors = INTERFERENCE_CONDITION_COLORS
 
     def _transaction_count(run_df: pd.DataFrame) -> float:
         return float(len(run_df))
@@ -1002,12 +965,7 @@ def fig_rq3_profit_decomposition_grouped(
     baseline_path = Path(baseline_dir)
     constraints = _rq3_constraints_with_baseline()
     market_types = _rq3_market_types(baseline_path)
-    bar_colors = {
-        "baseline": COLORS["neutral"],
-        "policy_making": COLORS["good_mid"],
-        "pressure_quickprofits": COLORS["accent"],
-        "psychological-based-attack": COLORS["bad_mid"],
-    }
+    bar_colors = INTERFERENCE_CONDITION_COLORS
 
     def _collect(metric_fn):
         means: Dict[str, List[float]] = {}

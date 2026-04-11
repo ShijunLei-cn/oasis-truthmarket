@@ -24,15 +24,23 @@ Usage
 
 import argparse
 import sys
+import json
+import re
 from pathlib import Path
+from collections import Counter, defaultdict
 
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
+from matplotlib.lines import Line2D
 import numpy as np
 import pandas as pd
 from scipy.stats import gaussian_kde
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.cluster import KMeans
+from sklearn.decomposition import TruncatedSVD
+from wordcloud import WordCloud
 
 # Allow running from project root
 sys.path.insert(0, str(Path(__file__).parent))
@@ -63,6 +71,8 @@ setup_style()
 # ── Condition labels ──────────────────────────────────────────────────────────
 LABEL_R  = "Rep"
 LABEL_RW = "Rep+Warrant"
+REP_COLOR = COLORS["neutral_dark"]
+RW_COLOR = COLORS["good_dark"]
 
 
 def _set_dynamic_ylim_positive(
@@ -89,6 +99,7 @@ def _kde_panel(
     p_val: float,
     annotation: str = "",
     show_significance: bool = True,
+    show_legend: bool = False,
 ) -> None:
     """Overlapping KDE distribution panel for two conditions.
 
@@ -160,7 +171,8 @@ def _kde_panel(
     ax.set_ylabel("Density", fontsize=10)
     ax.set_ylim(rug_y * 2.2, y_max * 1.32)
     ax.set_xlim(x_lo, x_hi)
-    ax.legend(frameon=False, fontsize=8, loc="upper left")
+    if show_legend:
+        ax.legend(frameon=False, fontsize=8, loc="upper left")
 
 
 def fig1_profit_and_deceptions(
@@ -217,24 +229,26 @@ def fig1_profit_and_deceptions(
         ax_p,
         profit_r, profit_rw,
         LABEL_R, LABEL_RW,
-        METRIC_COLORS["seller_profit_secondary"], METRIC_COLORS["seller_profit_primary"],
+        REP_COLOR, RW_COLOR,
         xlabel="Total Seller Profit (per run)",
         title="(a) Seller Profit",
         p_val=p_profit,
         annotation=f"+{lift_pct:.0f}% mean profit",
         show_significance=show_significance,
+        show_legend=False,
     )
 
     _kde_panel(
         ax_hq,
         hq_r, hq_rw,
         LABEL_R, LABEL_RW,
-        COLORS["hq_auth"], COLORS["good_mid"],
+        REP_COLOR, RW_COLOR,
         xlabel="HQ Products Counts (per run)",
         title="(b) HQ Products",
         p_val=p_hq,
         annotation=f"+{hq_lift:.0f}% HQ products",
         show_significance=show_significance,
+        show_legend=False,
     )
 
     util_sign = "+" if util_lift >= 0 else ""
@@ -242,24 +256,40 @@ def fig1_profit_and_deceptions(
         ax_u,
         util_r, util_rw,
         LABEL_R, LABEL_RW,
-        METRIC_COLORS["buyer_utility_secondary"], METRIC_COLORS["buyer_utility_primary"],
+        REP_COLOR, RW_COLOR,
         xlabel="Total Buyer Utility (per run)",
         title="(c) Buyer Utility",
         p_val=p_utility,
         annotation=f"{util_sign}{util_lift:.0f}% mean utility",
         show_significance=show_significance,
+        show_legend=False,
     )
     _kde_panel(
         ax_t,
         tx_r, tx_rw,
         LABEL_R, LABEL_RW,
-        METRIC_COLORS["transactions_secondary"], METRIC_COLORS["transactions_primary"],
+        REP_COLOR, RW_COLOR,
         xlabel="Transaction Count (per run)",
         title="(d) Transactions",
         p_val=p_tx,
         annotation=f"+{tx_lift:.0f}% transactions",
         show_significance=show_significance,
+        show_legend=False,
     )
+
+    shared_handles = [
+        Line2D([0], [0], color=REP_COLOR, lw=1.8, label=LABEL_R),
+        Line2D([0], [0], color=RW_COLOR, lw=1.8, label=LABEL_RW),
+    ]
+    fig.legend(
+        handles=shared_handles,
+        loc="lower center",
+        bbox_to_anchor=(0.5, 0.0),
+        ncol=2,
+        frameon=False,
+        fontsize=9,
+    )
+    fig.subplots_adjust(bottom=0.18)
 
     save_figure(fig, output_dir / "rq1_warrant_vs_rep_deception_and_profit.png")
     if show_significance:
@@ -274,7 +304,7 @@ def fig1_profit_and_deceptions(
 def fig_rq2_product_quality_over_rounds(
     r_dir: str, rw_dir: str, output_dir: Path
 ) -> None:
-    """RQ2: round-wise trend for three product-quality categories (Rep vs Rep+Warrant)."""
+    """RQ2: round-wise trend for true-quality counts (HQ vs LQ; Rep vs Rep+Warrant)."""
     df_r = load_results_df(r_dir)
     df_rw = load_results_df(rw_dir)
     if df_r.empty or df_rw.empty:
@@ -284,25 +314,28 @@ def fig_rq2_product_quality_over_rounds(
     def _round_stats(df: pd.DataFrame) -> dict[str, tuple[np.ndarray, np.ndarray, np.ndarray]]:
         dfx = df.copy()
         sold_col = "sold" if "sold" in dfx.columns else "is_sold"
+        round_col = "round_num" if "round_num" in dfx.columns else "round"
+        quality_col = (
+            "quality" if "quality" in dfx.columns
+            else ("true_quality" if "true_quality" in dfx.columns else "actual_quality")
+        )
         dfx = dfx[dfx[sold_col] == True]  # noqa: E712
-        dfx["quality"] = dfx["quality"].astype(str).str.upper().str.strip()
-        dfx["advertised_quality"] = dfx["advertised_quality"].astype(str).str.upper().str.strip()
+        dfx["quality"] = dfx[quality_col].astype(str).str.upper().str.strip()
 
         cats = {
-            "HQ Authentic": (dfx["advertised_quality"] == "HQ") & (dfx["quality"] == "HQ"),
-            "LQ Authentic": (dfx["advertised_quality"] == "LQ") & (dfx["quality"] == "LQ"),
-            "HQ Counterfeit": (dfx["advertised_quality"] == "HQ") & (dfx["quality"] == "LQ"),
+            "HQ True Quality": (dfx["quality"] == "HQ"),
+            "LQ True Quality": (dfx["quality"] == "LQ"),
         }
-        rounds = sorted(int(r) for r in dfx["round_num"].dropna().unique())
+        rounds = sorted(int(r) for r in dfx[round_col].dropna().unique())
         out = {}
         for cat_name, mask in cats.items():
             cdf = dfx[mask]
             run_round = (
-                cdf.groupby(["run_id", "round_num"]).size().rename("count").reset_index()
+                cdf.groupby(["run_id", round_col]).size().rename("count").reset_index()
             )
             means, sems = [], []
             for r in rounds:
-                vals = run_round.loc[run_round["round_num"] == r, "count"].astype(float).tolist()
+                vals = run_round.loc[run_round[round_col] == r, "count"].astype(float).tolist()
                 if not vals:
                     means.append(0.0)
                     sems.append(0.0)
@@ -315,23 +348,34 @@ def fig_rq2_product_quality_over_rounds(
     stats_r = _round_stats(df_r)
     stats_rw = _round_stats(df_rw)
 
-    fig, axes = plt.subplots(1, 3, figsize=(13.0, 4.0), gridspec_kw={"wspace": 0.30}, sharex=True)
-    for ax, cat_name, color in zip(
+    fig, axes = plt.subplots(1, 2, figsize=(9.6, 4.0), gridspec_kw={"wspace": 0.28}, sharex=True)
+    for ax, cat_name in zip(
         axes,
-        ["HQ Authentic", "LQ Authentic", "HQ Counterfeit"],
-        [COLORS["hq_auth"], COLORS["lq_auth"], COLORS["counterfeit"]],
+        ["HQ True Quality", "LQ True Quality"],
     ):
         xr, mr, sr = stats_r[cat_name]
         xw, mw, sw = stats_rw[cat_name]
-        ax.plot(xr, mr, color=COLORS["neutral_dark"], lw=1.8, label="Rep")
+        ax.plot(xr, mr, color=REP_COLOR, lw=1.8, label="Rep")
         ax.fill_between(xr, mr - sr, mr + sr, color=COLORS["neutral"], alpha=0.22)
-        ax.plot(xw, mw, color=color, lw=1.8, label="Rep+Warrant")
-        ax.fill_between(xw, mw - sw, mw + sw, color=color, alpha=0.18)
+        ax.plot(xw, mw, color=RW_COLOR, lw=1.8, label="Rep+Warrant")
+        ax.fill_between(xw, mw - sw, mw + sw, color=RW_COLOR, alpha=0.18)
         ax.set_title(cat_name, fontsize=10)
         ax.set_xlabel("Round", fontsize=9)
         ax.grid(axis="y", alpha=0.25)
     axes[0].set_ylabel("Mean Sold Count per Round", fontsize=10)
-    axes[0].legend(frameon=False, fontsize=8, loc="upper left")
+    shared_handles = [
+        Line2D([0], [0], color=REP_COLOR, lw=1.8, label="Rep"),
+        Line2D([0], [0], color=RW_COLOR, lw=1.8, label="Rep+Warrant"),
+    ]
+    fig.legend(
+        handles=shared_handles,
+        loc="lower center",
+        bbox_to_anchor=(0.5, 0.0),
+        ncol=2,
+        frameon=False,
+        fontsize=9,
+    )
+    fig.subplots_adjust(bottom=0.18)
     save_figure(fig, output_dir / "rq2_product_quality_over_rounds.png")
     print("  [RQ2-RoundQuality] Product-quality round trend figure saved.")
 
@@ -474,10 +518,6 @@ def fig1_2_manipulation_detection_rep_only(r_dir: str, output_dir: Path) -> None
 
     y_tops = [m + s for m, s in zip(means_r, stds_r)]
     _set_dynamic_ylim_positive(ax, y_tops, pad_ratio=0.22, min_top=1.0)
-
-    for i, (m, s) in enumerate(zip(means_r, stds_r)):
-        ax.text(x[i], m + s + 1.0, f"{m:.1f}%", ha="center", va="bottom",
-                fontsize=8, color=COLORS["bad_dark"])
 
     save_figure(fig, output_dir / "rq1_2_rep_only_manipulation_detection.png")
     print("  [Fig1-2] Rep-only manipulation-detection figure saved.")
@@ -637,9 +677,10 @@ def fig2_probe_and_product_mix(
 def fig_rq2_listed_vs_sold_quality(
     r_dir: str, rw_dir: str, output_dir: Path
 ) -> None:
-    """RQ2 quality figure: listed quality vs sold-out quality (Rep vs Rep+Warrant).
+    """RQ2 quality figure with 3 panels by category.
 
-    Each panel shows category shares with SEM error bars.
+    Panels: HQ Authentic / LQ Authentic / HQ Counterfeit.
+    Within each panel: Listed vs Sold on x-axis, with Rep vs Rep+Warrant bars.
     """
     df_r = load_results_df(r_dir)
     df_rw = load_results_df(rw_dir)
@@ -678,61 +719,72 @@ def fig_rq2_listed_vs_sold_quality(
     sold_rw = _share_runs(df_rw, product_quality_counts)
 
     categories = ["HQ Authentic", "LQ Authentic", "HQ Counterfeit"]
-    cat_colors = [COLORS["hq_auth"], COLORS["lq_auth"], COLORS["counterfeit"]]
-    x = np.arange(len(categories))
+    x = np.arange(2)  # Listed / Sold
     w = 0.34
 
-    fig, (ax_listed, ax_sold) = plt.subplots(
-        1, 2, figsize=(10.2, 4.2), gridspec_kw={"wspace": 0.26}
+    fig, axes = plt.subplots(
+        1, 3, figsize=(12.2, 4.2), gridspec_kw={"wspace": 0.28}, sharey=False
     )
 
-    def _draw_panel(ax: plt.Axes, run_a, run_b, ylabel: str):
-        means_a, sems_a = zip(*[_mean_sem(run_a, i) for i in range(3)])
-        means_b, sems_b = zip(*[_mean_sem(run_b, i) for i in range(3)])
+    for idx, (ax, cat_name) in enumerate(zip(axes, categories)):
+        listed_mean_r, listed_sem_r = _mean_sem(listed_r, idx)
+        listed_mean_rw, listed_sem_rw = _mean_sem(listed_rw, idx)
+        sold_mean_r, sold_sem_r = _mean_sem(sold_r, idx)
+        sold_mean_rw, sold_sem_rw = _mean_sem(sold_rw, idx)
 
-        for i, color in enumerate(cat_colors):
-            ax.bar(
-                x[i] - w / 2,
-                means_a[i],
-                width=w,
-                color=color,
-                alpha=0.55,
-                edgecolor="white",
-                linewidth=0.5,
-                yerr=sems_a[i],
-                capsize=3,
-                error_kw={"elinewidth": 1.0, "ecolor": "#555"},
-                zorder=3,
-            )
-            ax.bar(
-                x[i] + w / 2,
-                means_b[i],
-                width=w,
-                color=color,
-                alpha=0.95,
-                edgecolor="white",
-                linewidth=0.5,
-                yerr=sems_b[i],
-                capsize=3,
-                error_kw={"elinewidth": 1.0, "ecolor": "#555"},
-                zorder=3,
-            )
+        vals_r = [listed_mean_r, sold_mean_r]
+        errs_r = [listed_sem_r, sold_sem_r]
+        vals_rw = [listed_mean_rw, sold_mean_rw]
+        errs_rw = [listed_sem_rw, sold_sem_rw]
+
+        ax.bar(
+            x - w / 2,
+            vals_r,
+            width=w,
+            color=REP_COLOR,
+            edgecolor="white",
+            linewidth=0.5,
+            yerr=errs_r,
+            capsize=3,
+            error_kw={"elinewidth": 1.0, "ecolor": "#555"},
+            zorder=3,
+        )
+        ax.bar(
+            x + w / 2,
+            vals_rw,
+            width=w,
+            color=RW_COLOR,
+            edgecolor="white",
+            linewidth=0.5,
+            yerr=errs_rw,
+            capsize=3,
+            error_kw={"elinewidth": 1.0, "ecolor": "#555"},
+            zorder=3,
+        )
 
         ax.set_xticks(x)
-        ax.set_xticklabels(categories, rotation=15, ha="right", fontsize=9)
-        ax.set_ylabel(ylabel, fontsize=10)
-        panel_top = max([means_a[i] + sems_a[i] for i in range(3)] + [means_b[i] + sems_b[i] for i in range(3)])
-        _set_dynamic_ylim_positive(ax, [panel_top], pad_ratio=0.18, min_top=1.0)
+        ax.set_xticklabels(["Listed", "Sold"], fontsize=9)
+        ax.set_title(cat_name, fontsize=10)
+        if idx == 0:
+            ax.set_ylabel("Share (%)", fontsize=10)
+        panel_tops = [vals_r[i] + errs_r[i] for i in range(2)] + [vals_rw[i] + errs_rw[i] for i in range(2)]
+        _set_dynamic_ylim_positive(ax, panel_tops, pad_ratio=0.18, min_top=1.0)
         ax.grid(axis="y", alpha=0.25, zorder=0)
         ax.set_axisbelow(True)
 
-        # Condition markers
-        ax.scatter([], [], color="#777777", alpha=0.55, label="Rep")
-        ax.scatter([], [], color="#777777", alpha=0.95, label="Rep+Warrant")
-        ax.legend(frameon=False, fontsize=8, loc="upper right")
-
-    _draw_panel(ax_listed, listed_r, listed_rw, "Share of Listed Products (%)")
-    _draw_panel(ax_sold, sold_r, sold_rw, "Share of Sold Products (%)")
+    handles = [
+        mpatches.Patch(facecolor=REP_COLOR, edgecolor="white", label="Rep"),
+        mpatches.Patch(facecolor=RW_COLOR, edgecolor="white", label="Rep+Warrant"),
+    ]
+    fig.legend(
+        handles=handles,
+        loc="lower center",
+        bbox_to_anchor=(0.5, 0.0),
+        ncol=2,
+        frameon=False,
+        fontsize=9,
+    )
+    fig.subplots_adjust(bottom=0.18)
 
     save_figure(fig, output_dir / "rq2_listed_vs_sold_quality.png")
     print("  [RQ2-Quality] Listed-vs-sold quality figure saved.")
@@ -801,6 +853,226 @@ def fig_rq2_welfare_overview(
     ax.legend(frameon=False, fontsize=9, loc="upper left")
     save_figure(fig, output_dir / "rq2_warrant_vs_rep_welfare_overview.png")
     print("  [RQ2-Welfare] Welfare overview figure saved.")
+
+
+def fig_rq2_micro_reasoning_impact(
+    r_dir: str, rw_dir: str, output_dir: Path
+) -> None:
+    """RQ2 micro-level analysis: fraudulent-seller reasoning shift with warrant.
+
+    Output includes:
+    1. Word-cloud-style panel for Rep (fraud-involved sellers)
+    2. Word-cloud-style panel for Rep+Warrant (same seller IDs as Rep fraud set)
+    3. TF-IDF embedding + KMeans clustering scatter
+    """
+    r_path = Path(r_dir)
+    rw_path = Path(rw_dir)
+    if not r_path.exists() or not rw_path.exists():
+        print("[RQ2-Micro] Missing directories, skipping.")
+        return
+
+    df_r = load_results_df(r_dir)
+    if df_r.empty or "seller_id" not in df_r.columns or "is_honest" not in df_r.columns:
+        print("[RQ2-Micro] Missing required transaction fields, skipping.")
+        return
+
+    fraud_rows = df_r[df_r["is_honest"] == False]  # noqa: E712
+    if fraud_rows.empty:
+        print("[RQ2-Micro] No fraudulent transactions in Rep, skipping.")
+        return
+
+    fraud_seller_by_run: dict[int, set[int]] = defaultdict(set)
+    for _, row in fraud_rows[["run_id", "seller_id"]].dropna().iterrows():
+        try:
+            rid = int(row["run_id"])
+            sid = int(row["seller_id"])
+            fraud_seller_by_run[rid].add(sid)
+        except Exception:
+            continue
+
+    def _clean_reasoning(text: str) -> str:
+        if not text:
+            return ""
+        txt = str(text)
+        txt = txt.split("<ACTION>")[0]
+        txt = txt.replace("<THOUGHT>", " ").replace("</THOUGHT>", " ")
+        txt = re.sub(r"[^A-Za-z\s]", " ", txt)
+        txt = re.sub(r"\s+", " ", txt).strip()
+        return txt
+
+    def _load_reasonings_for_sellers(base_dir: Path, seller_by_run: dict[int, set[int]]) -> list[str]:
+        texts: list[str] = []
+        for f in sorted(base_dir.glob("run_*_actions.json")):
+            try:
+                rid = int(f.stem.split("_")[1])
+            except Exception:
+                continue
+            target_sellers = seller_by_run.get(rid, set())
+            if not target_sellers:
+                continue
+            try:
+                data = json.loads(f.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            for rec in data:
+                if rec.get("phase") != "seller_listing":
+                    continue
+                for ai in rec.get("agent_infos", []):
+                    aid = ai.get("agent_id")
+                    try:
+                        sid = int(aid) if aid is not None else None
+                    except Exception:
+                        sid = None
+                    if sid is None and str(ai.get("agent_name", "")).startswith("seller_"):
+                        try:
+                            sid = int(str(ai["agent_name"]).split("_")[1]) + 1
+                        except Exception:
+                            sid = None
+                    if sid not in target_sellers:
+                        continue
+                    info = ai.get("agent_action_info", {})
+                    txt = _clean_reasoning(info.get("action_reasoning", ""))
+                    if txt:
+                        texts.append(txt)
+        return texts
+
+    rep_texts = _load_reasonings_for_sellers(r_path, fraud_seller_by_run)
+    rw_texts = _load_reasonings_for_sellers(rw_path, fraud_seller_by_run)
+    if not rep_texts or not rw_texts:
+        print("[RQ2-Micro] Insufficient reasoning text for comparison, skipping.")
+        return
+
+    stop = {
+        "the", "and", "to", "of", "in", "for", "with", "that", "this", "is", "are", "be", "as", "on", "it",
+        "my", "i", "we", "our", "can", "will", "should", "need", "must", "have", "has", "from", "by",
+        "round", "current", "market", "seller", "buyers", "buyer", "product", "products", "quality", "hq", "lq",
+        "action", "function", "arguments", "list", "listing", "based", "decision", "decide", "strategy",
+        "profit", "reputation", "budget", "first", "next", "also", "there", "their", "them", "these",
+    }
+
+    def _freq(texts: list[str], top_n: int = 36) -> list[tuple[str, int]]:
+        cnt = Counter()
+        for txt in texts:
+            toks = [t.lower() for t in re.findall(r"[A-Za-z]{3,}", txt)]
+            toks = [t for t in toks if t not in stop]
+            cnt.update(toks)
+        return cnt.most_common(top_n)
+
+    def _draw_word_cloud_style(ax: plt.Axes, text_pairs: list[tuple[str, int]], title: str, color: str) -> None:
+        ax.set_title(title, fontsize=10)
+        ax.axis("off")
+        ax.set_box_aspect(1.0)
+        if not text_pairs:
+            ax.text(0.5, 0.5, "No text", ha="center", va="center", fontsize=10, color="#666")
+            return
+        freqs = {w: float(c) for w, c in text_pairs}
+        wc = WordCloud(
+            width=900,
+            height=900,
+            background_color="white",
+            max_words=min(120, len(freqs)),
+            collocations=False,
+            prefer_horizontal=0.98,
+            random_state=42,
+            relative_scaling=0.45,
+            min_font_size=10,
+            max_font_size=110,
+            margin=2,
+            color_func=lambda *args, **kwargs: color,
+        ).generate_from_frequencies(freqs)
+        ax.imshow(wc, interpolation="bilinear")
+
+    rep_freq = _freq(rep_texts)
+    rw_freq = _freq(rw_texts)
+
+    corpus = rep_texts + rw_texts
+    cond_labels = np.array(["Rep"] * len(rep_texts) + ["Rep+Warrant"] * len(rw_texts))
+    n_docs = len(corpus)
+    if n_docs < 6:
+        print("[RQ2-Micro] Too few reasoning samples, skipping.")
+        return
+
+    try:
+        vec = TfidfVectorizer(max_features=1200, ngram_range=(1, 2), min_df=2, stop_words="english")
+        X = vec.fit_transform(corpus)
+        if X.shape[1] < 2:
+            raise ValueError("Too few TF-IDF features")
+        svd = TruncatedSVD(n_components=2, random_state=42)
+        emb = svd.fit_transform(X)
+        k = 2
+        kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+        clusters = kmeans.fit_predict(emb)
+    except Exception as e:
+        print(f"[RQ2-Micro] Embedding failed ({e}), skipping.")
+        return
+
+    fig, axes = plt.subplots(
+        1, 3, figsize=(15.0, 5.4), gridspec_kw={"wspace": 0.18, "width_ratios": [1.0, 1.0, 1.0]}
+    )
+    _draw_word_cloud_style(axes[0], rep_freq, "Rep: Fraud-Involved Seller Reasoning", REP_COLOR)
+    _draw_word_cloud_style(axes[1], rw_freq, "Rep+Warrant: Same Seller IDs Reasoning", RW_COLOR)
+
+    ax = axes[2]
+    ax.set_box_aspect(1.0)
+    cond_color = {"Rep": REP_COLOR, "Rep+Warrant": RW_COLOR}
+    cond_marker = {"Rep": "o", "Rep+Warrant": "^"}
+    for cond in ["Rep", "Rep+Warrant"]:
+        idx = np.where(cond_labels == cond)[0]
+        if len(idx) == 0:
+            continue
+        ax.scatter(
+            emb[idx, 0],
+            emb[idx, 1],
+            c=cond_color[cond],
+            s=28,
+            alpha=0.82,
+            marker=cond_marker[cond],
+            edgecolors="white",
+            linewidths=0.35,
+        )
+    ax.set_title("Reasoning Semantic Map under Rep vs Rep+Warrant", fontsize=10)
+    ax.set_xlabel("Embedding Dimension 1", fontsize=9)
+    ax.set_ylabel("Embedding Dimension 2", fontsize=9)
+    ax.grid(alpha=0.22, zorder=0)
+    ax.set_axisbelow(True)
+    legend_handles = [
+        Line2D([0], [0], marker="o", color="none", markerfacecolor=REP_COLOR,
+               markeredgecolor="white", markersize=7, label="Rep"),
+        Line2D([0], [0], marker="^", color="none", markerfacecolor=RW_COLOR,
+               markeredgecolor="white", markersize=7, label="Rep+Warrant"),
+    ]
+    ax.legend(handles=legend_handles, frameon=False, fontsize=8.2, loc="best")
+    ax.text(
+        0.02, 0.98, f"Clusters identified: {len(np.unique(clusters))}",
+        transform=ax.transAxes, ha="left", va="top", fontsize=7.8, color=COLORS["neutral_dark"]
+    )
+
+    # Cluster semantic anchors: top-frequency token in each cluster, mapped at centroid.
+    cluster_top_words: dict[int, str] = {}
+    anchor_red = "#D32F2F"
+    for cid in sorted(np.unique(clusters)):
+        cluster_docs = [corpus[i] for i in np.where(clusters == cid)[0]]
+        top_words = _freq(cluster_docs, top_n=1)
+        cluster_top_words[int(cid)] = top_words[0][0] if top_words else f"C{int(cid)+1}"
+        cx = float(np.mean(emb[clusters == cid, 0]))
+        cy = float(np.mean(emb[clusters == cid, 1]))
+        ax.scatter(
+            [cx], [cy],
+            marker="*", s=200, c=anchor_red,
+            edgecolors="white", linewidths=0.9, zorder=5
+        )
+        ax.text(
+            cx, cy,
+            f" {cluster_top_words[int(cid)]}",
+            fontsize=9.3, color=anchor_red,
+            ha="left", va="center", fontweight="bold"
+        )
+
+    save_figure(fig, output_dir / "rq2_warrant_micro_reasoning_impact.png")
+    print(
+        f"  [RQ2-Micro] Saved micro reasoning figure. "
+        f"Rep texts={len(rep_texts)}, Rep+Warrant texts={len(rw_texts)}, clusters={len(np.unique(clusters))}"
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────

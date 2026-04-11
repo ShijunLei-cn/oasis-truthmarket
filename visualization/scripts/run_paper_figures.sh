@@ -7,7 +7,7 @@
 set -euo pipefail
 
 MODEL_TYPE="${MODEL_TYPE:-gpt-4o-mini}"
-LOCKED_EXPERIMENT_PREFIX="./experiments/paper_important_results"
+LOCKED_EXPERIMENT_PREFIX="./experiments/gpt-4o-mini/newresults"
 if [ -n "${EXPERIMENT_PREFIX:-}" ] && [ "${EXPERIMENT_PREFIX}" != "${LOCKED_EXPERIMENT_PREFIX}" ]; then
     echo "ERROR: EXPERIMENT_PREFIX is locked for this stage."
     echo "Allowed only: ${LOCKED_EXPERIMENT_PREFIX}"
@@ -19,7 +19,7 @@ if [ ! -d "${EXPERIMENT_PREFIX}" ]; then
     echo "ERROR: experiment directory not found: ${EXPERIMENT_PREFIX}"
     exit 1
 fi
-OUTPUT_BASE="./figs/${MODEL_TYPE}/paper_important_results"
+OUTPUT_BASE="./figs/${MODEL_TYPE}/newresults"
 GENERATE_STATS="${GENERATE_STATS:-0}"
 
 export PYTHONPATH="${PYTHONPATH:-}:$(pwd)"
@@ -59,6 +59,7 @@ echo "  ${OUTPUT_BASE}/rq2/rq2_warrant_vs_rep_welfare_overview.png"
 echo "  ${OUTPUT_BASE}/rq2/rq2_warrant_vs_rep_deception_and_profit.png"
 echo "  ${OUTPUT_BASE}/rq2/rq2_listed_vs_sold_quality.png"
 echo "  ${OUTPUT_BASE}/rq2/rq2_product_quality_over_rounds.png"
+echo "  ${OUTPUT_BASE}/rq2/rq2_warrant_micro_reasoning_impact.png"
 echo "RQ3:"
 echo "  ${OUTPUT_BASE}/rq3/rq3_welfare_overview.png"
 echo "  ${OUTPUT_BASE}/rq3/rq3_seller_comm_deception_by_constraint.png"

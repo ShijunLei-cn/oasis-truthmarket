@@ -13,6 +13,7 @@ from pathlib import Path
 from generate_rq1_figures import (
     fig1_2_manipulation_detection_rep_only,
     fig1_profit_and_deceptions,
+    fig_rq2_micro_reasoning_impact,
     fig_rq2_listed_vs_sold_quality,
     fig_rq2_product_quality_over_rounds,
     fig_rq2_welfare_overview,
@@ -52,6 +53,7 @@ def generate_rq2(base_dir: Path, output_dir: Path) -> None:
     fig1_profit_and_deceptions(str(r_dir), str(rw_dir), output_dir, show_significance=False)
     fig_rq2_listed_vs_sold_quality(str(r_dir), str(rw_dir), output_dir)
     fig_rq2_product_quality_over_rounds(str(r_dir), str(rw_dir), output_dir)
+    fig_rq2_micro_reasoning_impact(str(r_dir), str(rw_dir), output_dir)
 
     _copy_if_exists(
         output_dir / "rq1_warrant_vs_rep_deception_and_profit.png",
