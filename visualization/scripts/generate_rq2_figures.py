@@ -997,12 +997,23 @@ def fig_rq3_profit_decomposition_grouped(
     rq3_comm_only: bool = False,
     rq3_include_baseline: bool = True,
 ) -> None:
-    """Grouped-bar profit decomposition (left: honest, right: dishonest)."""
+    """Grouped-bar per-transaction profit/utility (left: profit, right: utility)."""
     base_path = Path(base_dir)
     baseline_path = Path(baseline_dir)
     constraints = _rq3_constraints(with_baseline=rq3_include_baseline)
     market_types = _rq3_market_types(baseline_path, comm_only=rq3_comm_only)
     bar_colors = INTERFERENCE_CONDITION_COLORS
+    def _profit_per_txn(run_df: pd.DataFrame) -> float:
+        tx = float(len(run_df))
+        if tx <= 0:
+            return 0.0
+        return sum_seller_profit(run_df) / tx
+
+    def _utility_per_txn(run_df: pd.DataFrame) -> float:
+        tx = float(len(run_df))
+        if tx <= 0:
+            return 0.0
+        return sum_buyer_utility(run_df) / tx
 
     def _collect(metric_fn):
         means: Dict[str, List[float]] = {}
@@ -1024,8 +1035,8 @@ def fig_rq3_profit_decomposition_grouped(
             sems[mt_key] = mt_sems
         return means, sems
 
-    h_means, h_sems = _collect(honest_profit)
-    d_means, d_sems = _collect(dishonest_profit)
+    h_means, h_sems = _collect(_profit_per_txn)
+    d_means, d_sems = _collect(_utility_per_txn)
 
     fig, (ax_h, ax_d) = plt.subplots(1, 2, figsize=(13.0, 4.4), gridspec_kw={"wspace": 0.22})
     group_x = np.arange(len(market_types))
@@ -1052,8 +1063,8 @@ def fig_rq3_profit_decomposition_grouped(
         )
 
     for ax, ylab in [
-        (ax_h, "Honest Profit per Run"),
-        (ax_d, "Dishonest Profit per Run"),
+        (ax_h, "Profit per Transaction"),
+        (ax_d, "Utility per Transaction"),
     ]:
         ax.set_xticks(group_x)
         ax.set_xticklabels([mt_label for _, mt_label, _, _ in market_types], fontsize=9)

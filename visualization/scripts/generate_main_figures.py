@@ -108,14 +108,6 @@ def generate_rq3(base_dir: Path, output_dir: Path) -> None:
         rq3_comm_only=True,
         rq3_include_baseline=True,
     )
-    fig_rq2_all_markettype_dual_metrics(
-        str(rq3_base),
-        output_dir,
-        file_prefix=prefix,
-        baseline_dir=str(baseline),
-        rq3_comm_only=True,
-        rq3_include_baseline=True,
-    )
     fig_rq3_micro_reasoning_impact(str(rq3_base), output_dir)
 
 

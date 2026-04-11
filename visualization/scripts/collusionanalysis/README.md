@@ -1,10 +1,10 @@
-# Collusion Analysis Module (RQ2)
+# Collusion Analysis Module (Focused)
 
-This module provides tools for analyzing and visualizing seller collusion behavior in the TruthMarketTwin marketplace experiments, specifically for RQ2 research question.
+This module provides tools for analyzing and visualizing seller collusion behavior in the TruthMarketTwin marketplace experiments, with a focus on Rep vs Rep+Warrant comparisons.
 
 ## Overview
 
-The collusion analysis is based on Claude Sonnet 4.6 annotated results that categorize seller communication into 6 types:
+The collusion analysis is based on LLM-annotated results that categorize seller communication into 6 types:
 
 | Type | Name | Description | Collusive? |
 |------|------|-------------|------------|
@@ -19,17 +19,20 @@ The collusion analysis is based on Claude Sonnet 4.6 annotated results that cate
 
 The analysis uses the following data files from `data/case_analysis/`:
 
-- `deception_rate_by_collusion.csv` - Deception rates with/without detected collusion
-- `type_distribution_by_condition.csv` - Type distributions across 12 experimental conditions
-- `type_distribution_by_round.csv` - Type distributions over 10 rounds
-- `qualitative_examples.json` - Example posts for each type
+- `posts_labeled.jsonl` - LLM-labeled seller posts (collusion types + deceptive listing)
 
 ## Visualizations Generated
 
-This module generates 1 RQ2-relevant figure:
+This module generates a focused figure plus 5 expanded schemes:
 
 ```
-fig1_deception_by_collusion.png - Deception rate comparison (4.9% vs 41.3%)
+collusion_consistency_rep_vs_warrant.png - Left: agent consistency boxplots, right: 4-way category heatmap
+collusion_scheme1_time_lag.png - Round trends + lag correlation heatmap
+collusion_scheme2_agent_scatter_quartile.png - Agent scatter + quartile boxplot
+collusion_scheme3_keywords_embedding.png - Log-odds keywords + embedding map
+collusion_scheme4_topics_fraud.png - Topic share + fraud rate
+collusion_scheme5_mosaic.png - Mosaic plot (Rep / Rep+Warrant)
+collusion_scheme5_sankey.png - Sankey plot (Rep / Rep+Warrant)
 ```
 
 ## Usage
@@ -48,19 +51,12 @@ bash visualization/scripts/collusionanalysis/run_collusion_analysis.sh \
 
 ## Output Files
 
-All outputs are saved to `visualization/figs/paper/collusion_analysis/`:
+All outputs are saved to `figs/gpt-4o-mini/newresults/collusion_analysis/`:
 
 ```
 collusion_analysis/
-└── fig1_deception_by_collusion.png    # Main finding figure
+└── collusion_consistency_rep_vs_warrant.png
 ```
-
-## Key Findings (RQ2)
-
-### Finding: Collusion Dramatically Increases Deception
-- Without collusion: 4.9% deception rate
-- With collusion: 41.3% deception rate
-- **8.4x increase** in deception when collusion is detected
 
 ## Requirements
 
@@ -69,5 +65,4 @@ collusion_analysis/
 - matplotlib >= 3.5.0
 - numpy >= 1.21.0
 - pandas >= 1.3.0
-- scipy >= 1.7.0
 ```

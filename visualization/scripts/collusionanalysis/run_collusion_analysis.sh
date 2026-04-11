@@ -5,7 +5,7 @@
 # This script generates the RQ2-relevant collusion analysis visualizations:
 #   - fig1_deception_by_collusion.png (核心发现：欺诈率对比)
 #   - fig1_1_sankey_by_condition.png (桑基图：post collusion → 行为欺诈)
-#   - fig1_2_embedding_cluster.png (UMAP散点图 + 词云)
+#   - collusion_consistency_rep_vs_warrant.png (一致性箱线图 + 4分类热力图)
 #
 # Usage:
 #   ./run_collusion_analysis.sh              # Default paths
@@ -19,9 +19,9 @@ set -e  # Exit on error
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 
-# Default paths
-DATA_DIR="${PROJECT_ROOT}/experiments/gpt-4o-mini/paper_important_results/data"
-OUTPUT_DIR="${PROJECT_ROOT}/visualization/figs/gpt-4o-mini/paper_important_results/collusion_analysis"
+# Default paths (newresults)
+DATA_DIR="${PROJECT_ROOT}/experiments/gpt-4o-mini/newresults/data"
+OUTPUT_DIR="${PROJECT_ROOT}/figs/gpt-4o-mini/newresults/collusion_analysis"
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -77,10 +77,7 @@ fi
 
 # Check required data files
 REQUIRED_FILES=(
-    "deception_rate_by_collusion.csv"
-    "type_distribution_by_condition.csv"
-    "type_distribution_by_round.csv"
-    "qualitative_examples.json"
+    "posts_labeled.jsonl"
 )
 
 echo "Checking required data files..."
@@ -100,13 +97,6 @@ cd "${PROJECT_ROOT}"
 python3 "${SCRIPT_DIR}/collusion_analysis.py" \
     --data-dir "${DATA_DIR}" \
     --output-dir "${OUTPUT_DIR}"
-
-# Run 2x2 analysis
-echo ""
-echo "----------------------------------------------------------------------------"
-echo "Running 2x2 collusion analysis..."
-echo "----------------------------------------------------------------------------"
-python3 "${SCRIPT_DIR}/analyze_2x2_collusion.py" --data-dir "${DATA_DIR}/case_analysis"
 
 # Check if figures were generated
 echo ""

@@ -390,7 +390,7 @@ def main():
     parser.add_argument(
         "--experiment-id",
         default=None,
-        help="Specific experiment ID to process (e.g., r_wsc_R_policy_making)"
+        help="Specific experiment ID(s) to process (comma-separated, e.g., r_wsc_R_policy_making,rw_wsc_R_policy_making)"
     )
     args = parser.parse_args()
     
@@ -412,8 +412,8 @@ def main():
     
     # Determine which experiments to process
     if args.experiment_id:
-        # Process specific experiment
-        experiments_to_process = [args.experiment_id]
+        # Process specific experiment(s)
+        experiments_to_process = [e.strip() for e in args.experiment_id.split(",") if e.strip()]
     elif args.rq == "all":
         # Process all RQs
         experiments_to_process = []
@@ -422,10 +422,12 @@ def main():
                 if exp_dir.is_dir() and exp_dir.name != "data":
                     experiments_to_process.append(exp_dir.name)
     else:
-        # Process specific RQ
+        # Process specific RQ (match by prefix to support rq2_welfare, rq3_resilience, etc.)
         experiments_to_process = []
-        rq_dir = experiments_dir / args.rq
-        if rq_dir.exists():
+        rq_dirs = [d for d in sorted(experiments_dir.iterdir()) if d.is_dir() and d.name.startswith(args.rq)]
+        if not rq_dirs:
+            print(f"  WARNING: No RQ directories matching prefix '{args.rq}' under {experiments_dir}")
+        for rq_dir in rq_dirs:
             for exp_dir in sorted(rq_dir.iterdir()):
                 if exp_dir.is_dir():
                     experiments_to_process.append(exp_dir.name)

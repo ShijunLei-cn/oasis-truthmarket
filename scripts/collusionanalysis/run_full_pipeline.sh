@@ -26,6 +26,11 @@ MODEL="gpt-4o"  # Default to gpt-4o for real LLM annotation
 EXPERIMENT_ID=""
 DRY_RUN=false
 
+# Default paths (newresults)
+EXPERIMENTS_DIR_DEFAULT="${PROJECT_ROOT}/experiments/gpt-4o-mini/newresults"
+OUTPUT_DIR_DEFAULT="${EXPERIMENTS_DIR_DEFAULT}/data/case_analysis"
+VIZ_OUTPUT_DIR_DEFAULT="${PROJECT_ROOT}/figs/gpt-4o-mini/newresults/collusion_analysis"
+
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -45,6 +50,19 @@ while [[ $# -gt 0 ]]; do
             DRY_RUN=true
             shift
             ;;
+        --experiments-dir)
+            EXPERIMENTS_DIR_DEFAULT="$2"
+            OUTPUT_DIR_DEFAULT="${EXPERIMENTS_DIR_DEFAULT}/data/case_analysis"
+            shift 2
+            ;;
+        --output-dir)
+            OUTPUT_DIR_DEFAULT="$2"
+            shift 2
+            ;;
+        --viz-output-dir)
+            VIZ_OUTPUT_DIR_DEFAULT="$2"
+            shift 2
+            ;;
         --help)
             echo "Usage: $0 [OPTIONS]"
             echo ""
@@ -52,7 +70,10 @@ while [[ $# -gt 0 ]]; do
             echo "  --rq <rq1|rq2|rq3|all>   Which RQ to process (default: rq2)"
             echo "  --model <model>          LLM model to use (default: gpt-4o)"
             echo "                            Options: gpt-4o, gpt-4o-mini, claude-sonnet-4-20250514"
-            echo "  --experiment-id <id>      Process specific experiment only"
+            echo "  --experiment-id <id>      Process specific experiment(s) only (comma-separated)"
+            echo "  --experiments-dir <dir>   Experiments root (default: ${EXPERIMENTS_DIR_DEFAULT})"
+            echo "  --output-dir <dir>        Output case_analysis dir (default: ${OUTPUT_DIR_DEFAULT})"
+            echo "  --viz-output-dir <dir>    Visualization output dir (default: ${VIZ_OUTPUT_DIR_DEFAULT})"
             echo "  --dry-run                Show what would be done without running"
             echo "  --help                   Show this help message"
             echo ""
@@ -70,8 +91,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Paths
-EXPERIMENTS_DIR="${PROJECT_ROOT}/experiments/gpt-4o-mini/paper_important_results"
-OUTPUT_DIR="${PROJECT_ROOT}/experiments/gpt-4o-mini/paper_important_results/data/case_analysis"
+EXPERIMENTS_DIR="${EXPERIMENTS_DIR_DEFAULT}"
+OUTPUT_DIR="${OUTPUT_DIR_DEFAULT}"
+VIZ_OUTPUT_DIR="${VIZ_OUTPUT_DIR_DEFAULT}"
 TEMP_DIR="${OUTPUT_DIR}/temp"
 
 echo "============================================================================"
@@ -82,6 +104,7 @@ echo "Project root: ${PROJECT_ROOT}"
 echo "RQ to process: ${RQ}"
 echo "LLM Model: ${MODEL}"
 echo "Output directory: ${OUTPUT_DIR}"
+echo "Visualization output: ${VIZ_OUTPUT_DIR}"
 echo ""
 
 # Show dry run info
@@ -232,18 +255,18 @@ VIZ_SCRIPT="${PROJECT_ROOT}/visualization/scripts/collusionanalysis/collusion_an
 
 # Note: OUTPUT_DIR is already the case_analysis directory, so for visualization
 # we need to pass the parent directory and let the script append "case_analysis"
-VIZ_DATA_DIR="${PROJECT_ROOT}/experiments/gpt-4o-mini/paper_important_results/data"
+VIZ_DATA_DIR="$(cd "${OUTPUT_DIR}/.." && pwd)"
 
 if [ -f "$VIZ_SCRIPT" ]; then
     if [ "$DRY_RUN" = true ]; then
         echo "[DRY RUN] Would run:"
         echo "  python3 ${VIZ_SCRIPT} \\"
         echo "    --data-dir ${VIZ_DATA_DIR} \\"
-        echo "    --output-dir ${OUTPUT_DIR}"
+        echo "    --output-dir ${VIZ_OUTPUT_DIR}"
     else
         python3 "${VIZ_SCRIPT}" \
             --data-dir "${VIZ_DATA_DIR}" \
-            --output-dir "${OUTPUT_DIR}"
+            --output-dir "${VIZ_OUTPUT_DIR}"
     fi
 else
     echo "  Visualization script not found at: ${VIZ_SCRIPT}"
