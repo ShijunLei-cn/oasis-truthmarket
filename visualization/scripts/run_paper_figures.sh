@@ -20,7 +20,9 @@ if [ ! -d "${EXPERIMENT_PREFIX}" ]; then
     exit 1
 fi
 OUTPUT_BASE="./figs/${MODEL_TYPE}/newresults"
+TABLES_BASE="./tables/${MODEL_TYPE}/newresults"
 GENERATE_STATS="${GENERATE_STATS:-0}"
+GENERATE_TABLES="${GENERATE_TABLES:-1}"
 
 export PYTHONPATH="${PYTHONPATH:-}:$(pwd)"
 
@@ -48,6 +50,16 @@ else
 fi
 
 echo ""
+if [ "${GENERATE_TABLES}" = "1" ]; then
+    echo "── Generating LaTeX Tables ────────────────────────────"
+    python3 visualization/scripts/generate_paper_tables.py \
+        --base-dir "${EXPERIMENT_PREFIX}" \
+        --output-dir "${TABLES_BASE}"
+else
+    echo "── Table Generation Skipped (GENERATE_TABLES=${GENERATE_TABLES}) ───"
+fi
+
+echo ""
 echo "=========================================="
 echo "All figures generated with new RQ1/RQ2/RQ3 mapping."
 echo "=========================================="
@@ -66,6 +78,14 @@ echo "  ${OUTPUT_BASE}/rq3/rq3_seller_comm_deception_by_constraint.png"
 echo "  ${OUTPUT_BASE}/rq3/rq3_profit_decomposition_honest_vs_dishonest.png"
 echo "  ${OUTPUT_BASE}/rq3/rq3_all_constraints_grouped.png"
 echo "  ${OUTPUT_BASE}/rq3/rq3_markettype_hqfake_utility_ratio.png"
+echo "  ${OUTPUT_BASE}/rq3/rq3_warrant_micro_reasoning_impact.png"
+echo "Tables:"
+echo "  ${TABLES_BASE}/all_tables.tex"
+echo "  ${TABLES_BASE}/rq1/tab_rq1_intent_rep_only.tex"
+echo "  ${TABLES_BASE}/rq2/tab_rq2_welfare_summary.tex"
+echo "  ${TABLES_BASE}/rq2/tab_rq2_welfare_product_quality.tex"
+echo "  ${TABLES_BASE}/rq3/tab_rq3_resilience_summary.tex"
+echo "  ${TABLES_BASE}/rq3/tab_rq3_resilience_product_quality.tex"
 if [ "${GENERATE_STATS}" = "1" ]; then
     echo "Stats:"
     echo "  ${OUTPUT_BASE}/stats/stats_report.txt"

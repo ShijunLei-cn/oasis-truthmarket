@@ -345,12 +345,18 @@ def fig5_profit_decomposition(base_dir: str, output_dir: Path, file_prefix: str 
 # Figure 6 (appendix) : Product mix per constraint
 # ─────────────────────────────────────────────────────────────────────────────
 
-def fig6_product_mix(base_dir: str, output_dir: Path, file_prefix: str = "rq2") -> None:
+def fig6_product_mix(
+    base_dir: str,
+    output_dir: Path,
+    file_prefix: str = "rq2",
+    rq3_comm_only: bool = False,
+    rq3_include_baseline: bool = True,
+) -> None:
     """Grouped bars for product quality shares (RQ3 style)."""
-    constraints = _rq3_constraints_with_baseline()
+    constraints = _rq3_constraints(with_baseline=rq3_include_baseline)
     base_path = Path(base_dir)
     baseline_dir = base_path.parent / "rq2_welfare"
-    market_types = _rq3_market_types(baseline_dir)
+    market_types = _rq3_market_types(baseline_dir, comm_only=rq3_comm_only)
     bar_colors = INTERFERENCE_CONDITION_COLORS
 
     def _share_metric(idx: int):
@@ -360,9 +366,10 @@ def fig6_product_mix(base_dir: str, output_dir: Path, file_prefix: str = "rq2") 
             means, sems = [], []
             for c_key, _ in constraints:
                 if c_key == "baseline":
-                    df = load_results_df(str(baseline_subdir))
+                    df = load_results_df(str(baseline_subdir)) if baseline_subdir.exists() else pd.DataFrame()
                 else:
-                    df = load_results_df(str(base_path / f"{dir_prefix}_{c_key}"))
+                    exp_dir = base_path / f"{dir_prefix}_{c_key}"
+                    df = load_results_df(str(exp_dir)) if exp_dir.exists() else pd.DataFrame()
                 vals = []
                 if not df.empty:
                     for t in per_run_values(df, product_quality_counts_all):
@@ -541,12 +548,18 @@ def fig7_buyer_utility_by_constraint(base_dir: str, output_dir: Path, file_prefi
 # Figure All : Aggregate all constraints into one 2x2 summary figure
 # ─────────────────────────────────────────────────────────────────────────────
 
-def fig_all_constraints_summary(base_dir: str, output_dir: Path, file_prefix: str = "rq2") -> None:
+def fig_all_constraints_summary(
+    base_dir: str,
+    output_dir: Path,
+    file_prefix: str = "rq2",
+    rq3_comm_only: bool = False,
+    rq3_include_baseline: bool = True,
+) -> None:
     """RQ3 grouped 2x2 summary (grouped bars in all subplots)."""
     base_path = Path(base_dir)
     baseline_dir = base_path.parent / "rq2_welfare"
-    constraints = _rq3_constraints_with_baseline()
-    market_types = _rq3_market_types(baseline_dir)
+    constraints = _rq3_constraints(with_baseline=rq3_include_baseline)
+    market_types = _rq3_market_types(baseline_dir, comm_only=rq3_comm_only)
     bar_colors = INTERFERENCE_CONDITION_COLORS
 
     def _transaction_count(run_df: pd.DataFrame) -> float:
@@ -559,9 +572,10 @@ def fig_all_constraints_summary(base_dir: str, output_dir: Path, file_prefix: st
             mt_means, mt_sems = [], []
             for c_key, _ in constraints:
                 if c_key == "baseline":
-                    df = load_results_df(str(baseline_subdir))
+                    df = load_results_df(str(baseline_subdir)) if baseline_subdir.exists() else pd.DataFrame()
                 else:
-                    df = load_results_df(str(base_path / f"{dir_prefix}_{c_key}"))
+                    exp_dir = base_path / f"{dir_prefix}_{c_key}"
+                    df = load_results_df(str(exp_dir)) if exp_dir.exists() else pd.DataFrame()
                 vals = per_run_values(df, metric_fn) if not df.empty else [0.0]
                 if not vals:
                     vals = [0.0]
@@ -617,7 +631,12 @@ def fig_all_constraints_summary(base_dir: str, output_dir: Path, file_prefix: st
 
 
 def fig_rq2_all_markettype_dual_metrics(
-    base_dir: str, output_dir: Path, file_prefix: str = "rq2", baseline_dir: str | None = None
+    base_dir: str,
+    output_dir: Path,
+    file_prefix: str = "rq2",
+    baseline_dir: str | None = None,
+    rq3_comm_only: bool = False,
+    rq3_include_baseline: bool = True,
 ) -> None:
     """RQ2 ALL figure requested by user:
     - Left: counterfeit HQ count
@@ -631,18 +650,8 @@ def fig_rq2_all_markettype_dual_metrics(
     else:
         baseline_dir_path = Path(baseline_dir)
 
-    constraints = [
-        ("baseline", "Baseline"),
-        ("policy_making", "Policy-Making"),
-        ("pressure_quickprofits", "Pressure"),
-        ("psychological-based-attack", "Psychology"),
-    ]
-    market_types = [
-        ("rep", "Rep", "r_wsc_F", baseline_dir_path / "r_wo"),
-        ("rep_comm", "Rep Comm", "r_wsc_R", baseline_dir_path / "r_wo"),
-        ("rw", "Rep+Warrant", "rw_wsc_F", baseline_dir_path / "rw_wo"),
-        ("rw_comm", "Rep+Warrant Comm", "rw_wsc_R", baseline_dir_path / "rw_wo"),
-    ]
+    constraints = _rq3_constraints(with_baseline=rq3_include_baseline)
+    market_types = _rq3_market_types(baseline_dir_path, comm_only=rq3_comm_only)
     bar_colors = INTERFERENCE_CONDITION_COLORS
 
     def _sem(vals: List[float]) -> float:
@@ -686,7 +695,8 @@ def fig_rq2_all_markettype_dual_metrics(
                 utility_stds.append(_sem(baseline_utility_runs))
                 continue
 
-            df = load_results_df(str(base_path / f"{dir_prefix}_{c_key}"))
+            exp_dir = base_path / f"{dir_prefix}_{c_key}"
+            df = load_results_df(str(exp_dir)) if exp_dir.exists() else pd.DataFrame()
             if df.empty:
                 hq_runs = [0.0]
                 utility_runs = [0.0]
@@ -795,16 +805,27 @@ def fig_rq2_all_markettype_dual_metrics(
     print("  [RQ3] Market-type grouped dual-metric figure saved.")
 
 
-def _rq3_constraints_with_baseline():
+def _rq3_constraints(with_baseline: bool):
+    if with_baseline:
+        return [
+            ("baseline", "Baseline"),
+            ("policy_making", "Policy-Making"),
+            ("pressure_quickprofits", "Pressure"),
+            ("psychological-based-attack", "Psychology"),
+        ]
     return [
-        ("baseline", "Baseline"),
         ("policy_making", "Policy-Making"),
         ("pressure_quickprofits", "Pressure"),
         ("psychological-based-attack", "Psychology"),
     ]
 
 
-def _rq3_market_types(baseline_dir: Path):
+def _rq3_market_types(baseline_dir: Path, comm_only: bool):
+    if comm_only:
+        return [
+            ("rep", "Rep", "r_wsc_R", baseline_dir / "r_wo"),
+            ("rw", "Rep+Warrant", "rw_wsc_R", baseline_dir / "rw_wo"),
+        ]
     return [
         ("rep", "Rep", "r_wsc_F", baseline_dir / "r_wo"),
         ("rep_comm", "Rep Comm", "r_wsc_R", baseline_dir / "r_wo"),
@@ -827,11 +848,13 @@ def _rq3_grouped_metric(
     metric_fn,
     ylabel: str,
     out_name: str,
+    rq3_comm_only: bool = False,
+    rq3_include_baseline: bool = True,
 ) -> None:
     base_path = Path(base_dir)
     baseline_path = Path(baseline_dir)
-    constraints = _rq3_constraints_with_baseline()
-    market_types = _rq3_market_types(baseline_path)
+    constraints = _rq3_constraints(with_baseline=rq3_include_baseline)
+    market_types = _rq3_market_types(baseline_path, comm_only=rq3_comm_only)
     bar_colors = INTERFERENCE_CONDITION_COLORS
 
     means: Dict[str, List[float]] = {}
@@ -840,9 +863,10 @@ def _rq3_grouped_metric(
         mt_means, mt_sems = [], []
         for c_key, _ in constraints:
             if c_key == "baseline":
-                df = load_results_df(str(baseline_subdir))
+                df = load_results_df(str(baseline_subdir)) if baseline_subdir.exists() else pd.DataFrame()
             else:
-                df = load_results_df(str(base_path / f"{dir_prefix}_{c_key}"))
+                exp_dir = base_path / f"{dir_prefix}_{c_key}"
+                df = load_results_df(str(exp_dir)) if exp_dir.exists() else pd.DataFrame()
             vals = per_run_values(df, metric_fn) if not df.empty else [0.0]
             if not vals:
                 vals = [0.0]
@@ -880,12 +904,19 @@ def _rq3_grouped_metric(
     print(f"  [RQ3] Saved grouped figure: {out_name}")
 
 
-def fig_rq3_welfare_overview(base_dir: str, output_dir: Path, baseline_dir: str, file_prefix: str = "rq3") -> None:
+def fig_rq3_welfare_overview(
+    base_dir: str,
+    output_dir: Path,
+    baseline_dir: str,
+    file_prefix: str = "rq3",
+    rq3_comm_only: bool = False,
+    rq3_include_baseline: bool = True,
+) -> None:
     """RQ3 welfare overview with grouped bars by market type and interference constraint."""
     base_path = Path(base_dir)
     baseline_path = Path(baseline_dir)
-    constraints = _rq3_constraints_with_baseline()
-    market_types = _rq3_market_types(baseline_path)
+    constraints = _rq3_constraints(with_baseline=rq3_include_baseline)
+    market_types = _rq3_market_types(baseline_path, comm_only=rq3_comm_only)
     bar_colors = INTERFERENCE_CONDITION_COLORS
 
     def _transaction_count(run_df: pd.DataFrame) -> float:
@@ -919,9 +950,10 @@ def fig_rq3_welfare_overview(base_dir: str, output_dir: Path, baseline_dir: str,
             mt_means, mt_sems = [], []
             for c_key, _ in constraints:
                 if c_key == "baseline":
-                    df = load_results_df(str(baseline_subdir))
+                    df = load_results_df(str(baseline_subdir)) if baseline_subdir.exists() else pd.DataFrame()
                 else:
-                    df = load_results_df(str(base_path / f"{dir_prefix}_{c_key}"))
+                    exp_dir = base_path / f"{dir_prefix}_{c_key}"
+                    df = load_results_df(str(exp_dir)) if exp_dir.exists() else pd.DataFrame()
                 vals = per_run_values(df, metric_fn) if not df.empty else [0.0]
                 if not vals:
                     vals = [0.0]
@@ -958,13 +990,18 @@ def fig_rq3_welfare_overview(base_dir: str, output_dir: Path, baseline_dir: str,
 
 
 def fig_rq3_profit_decomposition_grouped(
-    base_dir: str, output_dir: Path, baseline_dir: str, file_prefix: str = "rq3"
+    base_dir: str,
+    output_dir: Path,
+    baseline_dir: str,
+    file_prefix: str = "rq3",
+    rq3_comm_only: bool = False,
+    rq3_include_baseline: bool = True,
 ) -> None:
     """Grouped-bar profit decomposition (left: honest, right: dishonest)."""
     base_path = Path(base_dir)
     baseline_path = Path(baseline_dir)
-    constraints = _rq3_constraints_with_baseline()
-    market_types = _rq3_market_types(baseline_path)
+    constraints = _rq3_constraints(with_baseline=rq3_include_baseline)
+    market_types = _rq3_market_types(baseline_path, comm_only=rq3_comm_only)
     bar_colors = INTERFERENCE_CONDITION_COLORS
 
     def _collect(metric_fn):
@@ -974,9 +1011,10 @@ def fig_rq3_profit_decomposition_grouped(
             mt_means, mt_sems = [], []
             for c_key, _ in constraints:
                 if c_key == "baseline":
-                    df = load_results_df(str(baseline_subdir))
+                    df = load_results_df(str(baseline_subdir)) if baseline_subdir.exists() else pd.DataFrame()
                 else:
-                    df = load_results_df(str(base_path / f"{dir_prefix}_{c_key}"))
+                    exp_dir = base_path / f"{dir_prefix}_{c_key}"
+                    df = load_results_df(str(exp_dir)) if exp_dir.exists() else pd.DataFrame()
                 vals = per_run_values(df, metric_fn) if not df.empty else [0.0]
                 if not vals:
                     vals = [0.0]

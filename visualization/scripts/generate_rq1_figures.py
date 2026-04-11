@@ -1075,6 +1075,227 @@ def fig_rq2_micro_reasoning_impact(
     )
 
 
+def fig_rq3_micro_reasoning_impact(
+    rq3_base_dir: str, output_dir: Path
+) -> None:
+    """RQ3 micro-level analysis across seller-communication constraints."""
+    base_path = Path(rq3_base_dir)
+    constraints = [
+        "policy_making",
+        "pressure_quickprofits",
+        "psychological-based-attack",
+    ]
+
+    def _clean_reasoning(text: str) -> str:
+        if not text:
+            return ""
+        txt = str(text)
+        txt = txt.split("<ACTION>")[0]
+        txt = txt.replace("<THOUGHT>", " ").replace("</THOUGHT>", " ")
+        txt = re.sub(r"[^A-Za-z\s]", " ", txt)
+        txt = re.sub(r"\s+", " ", txt).strip()
+        return txt
+
+    def _load_reasonings_for_sellers(base_dir: Path, seller_by_run: dict[int, set[int]]) -> list[str]:
+        texts: list[str] = []
+        for f in sorted(base_dir.glob("run_*_actions.json")):
+            try:
+                rid = int(f.stem.split("_")[1])
+            except Exception:
+                continue
+            target_sellers = seller_by_run.get(rid, set())
+            if not target_sellers:
+                continue
+            try:
+                data = json.loads(f.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            for rec in data:
+                if rec.get("phase") != "seller_listing":
+                    continue
+                for ai in rec.get("agent_infos", []):
+                    aid = ai.get("agent_id")
+                    try:
+                        sid = int(aid) if aid is not None else None
+                    except Exception:
+                        sid = None
+                    if sid is None and str(ai.get("agent_name", "")).startswith("seller_"):
+                        try:
+                            sid = int(str(ai["agent_name"]).split("_")[1]) + 1
+                        except Exception:
+                            sid = None
+                    if sid not in target_sellers:
+                        continue
+                    info = ai.get("agent_action_info", {})
+                    txt = _clean_reasoning(info.get("action_reasoning", ""))
+                    if txt:
+                        texts.append(txt)
+        return texts
+
+    def _fraud_sellers_by_run(df: pd.DataFrame) -> dict[int, set[int]]:
+        out: dict[int, set[int]] = defaultdict(set)
+        if df.empty or "seller_id" not in df.columns or "is_honest" not in df.columns:
+            return out
+        fraud_rows = df[df["is_honest"] == False]  # noqa: E712
+        for _, row in fraud_rows[["run_id", "seller_id"]].dropna().iterrows():
+            try:
+                rid = int(row["run_id"])
+                sid = int(row["seller_id"])
+                out[rid].add(sid)
+            except Exception:
+                continue
+        return out
+
+    rep_texts: list[str] = []
+    rw_texts: list[str] = []
+    for ck in constraints:
+        rep_dir = base_path / f"r_wsc_R_{ck}"
+        rw_dir = base_path / f"rw_wsc_R_{ck}"
+        if not rep_dir.exists():
+            continue
+        rep_df = load_results_df(str(rep_dir))
+        fraud_map = _fraud_sellers_by_run(rep_df)
+        if fraud_map:
+            rep_texts.extend(_load_reasonings_for_sellers(rep_dir, fraud_map))
+            if rw_dir.exists():
+                rw_texts.extend(_load_reasonings_for_sellers(rw_dir, fraud_map))
+
+    if not rep_texts or not rw_texts:
+        print("[RQ3-Micro] Insufficient reasoning text for comparison, skipping.")
+        return
+
+    stop = {
+        "the", "and", "to", "of", "in", "for", "with", "that", "this", "is", "are", "be", "as", "on", "it",
+        "my", "i", "we", "our", "can", "will", "should", "need", "must", "have", "has", "from", "by",
+        "round", "current", "market", "seller", "buyers", "buyer", "product", "products", "quality", "hq", "lq",
+        "action", "function", "arguments", "list", "listing", "based", "decision", "decide", "strategy",
+        "profit", "reputation", "budget", "first", "next", "also", "there", "their", "them", "these",
+    }
+
+    def _freq(texts: list[str], top_n: int = 36) -> list[tuple[str, int]]:
+        cnt = Counter()
+        for txt in texts:
+            toks = [t.lower() for t in re.findall(r"[A-Za-z]{3,}", txt)]
+            toks = [t for t in toks if t not in stop]
+            cnt.update(toks)
+        return cnt.most_common(top_n)
+
+    def _draw_word_cloud_style(ax: plt.Axes, text_pairs: list[tuple[str, int]], title: str, color: str) -> None:
+        ax.set_title(title, fontsize=10)
+        ax.axis("off")
+        ax.set_box_aspect(1.0)
+        if not text_pairs:
+            ax.text(0.5, 0.5, "No text", ha="center", va="center", fontsize=10, color="#666")
+            return
+        freqs = {w: float(c) for w, c in text_pairs}
+        wc = WordCloud(
+            width=900,
+            height=900,
+            background_color="white",
+            max_words=min(120, len(freqs)),
+            collocations=False,
+            prefer_horizontal=0.98,
+            random_state=42,
+            relative_scaling=0.45,
+            min_font_size=10,
+            max_font_size=110,
+            margin=2,
+            color_func=lambda *args, **kwargs: color,
+        ).generate_from_frequencies(freqs)
+        ax.imshow(wc, interpolation="bilinear")
+
+    rep_freq = _freq(rep_texts)
+    rw_freq = _freq(rw_texts)
+
+    corpus = rep_texts + rw_texts
+    cond_labels = np.array(["Rep"] * len(rep_texts) + ["Rep+Warrant"] * len(rw_texts))
+    n_docs = len(corpus)
+    if n_docs < 6:
+        print("[RQ3-Micro] Too few reasoning samples, skipping.")
+        return
+
+    try:
+        vec = TfidfVectorizer(max_features=1200, ngram_range=(1, 2), min_df=2, stop_words="english")
+        X = vec.fit_transform(corpus)
+        if X.shape[1] < 2:
+            raise ValueError("Too few TF-IDF features")
+        svd = TruncatedSVD(n_components=2, random_state=42)
+        emb = svd.fit_transform(X)
+        k = 2
+        kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+        clusters = kmeans.fit_predict(emb)
+    except Exception as e:
+        print(f"[RQ3-Micro] Embedding failed ({e}), skipping.")
+        return
+
+    fig, axes = plt.subplots(
+        1, 3, figsize=(15.0, 5.4), gridspec_kw={"wspace": 0.18, "width_ratios": [1.0, 1.0, 1.0]}
+    )
+    _draw_word_cloud_style(axes[0], rep_freq, "RQ3 Rep: Fraud-Involved Reasoning", REP_COLOR)
+    _draw_word_cloud_style(axes[1], rw_freq, "RQ3 Rep+Warrant: Fraud-Involved Reasoning", RW_COLOR)
+
+    ax = axes[2]
+    ax.set_box_aspect(1.0)
+    cond_color = {"Rep": REP_COLOR, "Rep+Warrant": RW_COLOR}
+    cond_marker = {"Rep": "o", "Rep+Warrant": "^"}
+    for cond in ["Rep", "Rep+Warrant"]:
+        idx = np.where(cond_labels == cond)[0]
+        if len(idx) == 0:
+            continue
+        ax.scatter(
+            emb[idx, 0],
+            emb[idx, 1],
+            c=cond_color[cond],
+            s=28,
+            alpha=0.82,
+            marker=cond_marker[cond],
+            edgecolors="white",
+            linewidths=0.35,
+        )
+    ax.set_title("RQ3 Reasoning Semantic Map", fontsize=10)
+    ax.set_xlabel("Embedding Dimension 1", fontsize=9)
+    ax.set_ylabel("Embedding Dimension 2", fontsize=9)
+    ax.grid(alpha=0.22, zorder=0)
+    ax.set_axisbelow(True)
+    legend_handles = [
+        Line2D([0], [0], marker="o", color="none", markerfacecolor=REP_COLOR,
+               markeredgecolor="white", markersize=7, label="Rep"),
+        Line2D([0], [0], marker="^", color="none", markerfacecolor=RW_COLOR,
+               markeredgecolor="white", markersize=7, label="Rep+Warrant"),
+    ]
+    ax.legend(handles=legend_handles, frameon=False, fontsize=8.2, loc="best")
+    ax.text(
+        0.02, 0.98, f"Clusters identified: {len(np.unique(clusters))}",
+        transform=ax.transAxes, ha="left", va="top", fontsize=7.8, color=COLORS["neutral_dark"]
+    )
+
+    # Cluster semantic anchors: top-frequency token in each cluster, mapped at centroid.
+    anchor_red = "#D32F2F"
+    for cid in sorted(np.unique(clusters)):
+        cluster_docs = [corpus[i] for i in np.where(clusters == cid)[0]]
+        top_words = _freq(cluster_docs, top_n=1)
+        label = top_words[0][0] if top_words else f"C{int(cid)+1}"
+        cx = float(np.mean(emb[clusters == cid, 0]))
+        cy = float(np.mean(emb[clusters == cid, 1]))
+        ax.scatter(
+            [cx], [cy],
+            marker="*", s=200, c=anchor_red,
+            edgecolors="white", linewidths=0.9, zorder=5
+        )
+        ax.text(
+            cx, cy,
+            f" {label}",
+            fontsize=9.3, color=anchor_red,
+            ha="left", va="center", fontweight="bold"
+        )
+
+    save_figure(fig, output_dir / "rq3_warrant_micro_reasoning_impact.png")
+    print(
+        f"  [RQ3-Micro] Saved micro reasoning figure. "
+        f"Rep texts={len(rep_texts)}, Rep+Warrant texts={len(rw_texts)}, clusters={len(np.unique(clusters))}"
+    )
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Entry point
 # ─────────────────────────────────────────────────────────────────────────────

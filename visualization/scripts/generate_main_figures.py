@@ -17,6 +17,7 @@ from generate_rq1_figures import (
     fig_rq2_listed_vs_sold_quality,
     fig_rq2_product_quality_over_rounds,
     fig_rq2_welfare_overview,
+    fig_rq3_micro_reasoning_impact,
 )
 from generate_rq2_figures import (
     fig_rq3_welfare_overview,
@@ -67,7 +68,14 @@ def generate_rq3(base_dir: Path, output_dir: Path) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     prefix = "rq3"
 
-    fig_rq3_welfare_overview(str(rq3_base), output_dir, baseline_dir=str(baseline), file_prefix=prefix)
+    fig_rq3_welfare_overview(
+        str(rq3_base),
+        output_dir,
+        baseline_dir=str(baseline),
+        file_prefix=prefix,
+        rq3_comm_only=True,
+        rq3_include_baseline=True,
+    )
     _rq3_grouped_metric(
         str(rq3_base),
         output_dir,
@@ -75,18 +83,40 @@ def generate_rq3(base_dir: Path, output_dir: Path) -> None:
         metric_fn=lambda run_df: float((run_df["is_honest"] == False).sum()),  # noqa: E712
         ylabel="Deceptions per Run",
         out_name=f"{prefix}_seller_comm_deception_by_constraint.png",
+        rq3_comm_only=True,
+        rq3_include_baseline=True,
     )
     fig_rq3_profit_decomposition_grouped(
-        str(rq3_base), output_dir, baseline_dir=str(baseline), file_prefix=prefix
+        str(rq3_base),
+        output_dir,
+        baseline_dir=str(baseline),
+        file_prefix=prefix,
+        rq3_comm_only=True,
+        rq3_include_baseline=True,
     )
-    fig6_product_mix(str(rq3_base), output_dir, file_prefix=prefix)
-    fig_all_constraints_summary(str(rq3_base), output_dir, file_prefix=prefix)
+    fig6_product_mix(
+        str(rq3_base),
+        output_dir,
+        file_prefix=prefix,
+        rq3_comm_only=True,
+        rq3_include_baseline=True,
+    )
+    fig_all_constraints_summary(
+        str(rq3_base),
+        output_dir,
+        file_prefix=prefix,
+        rq3_comm_only=True,
+        rq3_include_baseline=True,
+    )
     fig_rq2_all_markettype_dual_metrics(
         str(rq3_base),
         output_dir,
         file_prefix=prefix,
         baseline_dir=str(baseline),
+        rq3_comm_only=True,
+        rq3_include_baseline=True,
     )
+    fig_rq3_micro_reasoning_impact(str(rq3_base), output_dir)
 
 
 def main() -> None:
