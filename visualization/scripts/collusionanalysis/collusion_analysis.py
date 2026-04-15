@@ -1358,6 +1358,7 @@ _WC_STOPWORDS_EXTRA = {
     "customer", "business", "quality", "high", "low", "think", "know",
     "time", "good", "like", "new", "ensure", "help", "believe", "important",
     "fellow", "approach", "strategy", "strategies", "consider",
+    "while", "still",
 }
 
 # 4 market conditions for fig1-2

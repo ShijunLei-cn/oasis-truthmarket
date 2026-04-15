@@ -25,9 +25,10 @@ Usage
 import argparse
 import sys
 import json
+import os
 import re
 from pathlib import Path
-from collections import Counter, defaultdict
+from collections import defaultdict
 
 import matplotlib
 matplotlib.use("Agg")
@@ -37,11 +38,7 @@ from matplotlib.lines import Line2D
 import numpy as np
 import pandas as pd
 from scipy.stats import gaussian_kde
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.cluster import KMeans
-from sklearn.decomposition import TruncatedSVD
-from wordcloud import WordCloud
-
+from dotenv import load_dotenv
 # Allow running from project root
 sys.path.insert(0, str(Path(__file__).parent))
 from fig_utils import (
@@ -68,6 +65,9 @@ from fig_utils import (
 
 setup_style()
 
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+load_dotenv(PROJECT_ROOT / ".env", override=True)
+
 # ── Condition labels ──────────────────────────────────────────────────────────
 LABEL_R  = "Rep"
 LABEL_RW = "Rep+Warrant"
@@ -84,6 +84,600 @@ def _set_dynamic_ylim_positive(
     """Adaptive positive y-limits for bar charts."""
     ymax = max([float(v) for v in tops] + [min_top])
     ax.set_ylim(0, ymax * (1.0 + pad_ratio))
+
+
+def _clean_reasoning_text(text: str) -> str:
+    if not text:
+        return ""
+    txt = str(text)
+    txt = txt.split("<ACTION>")[0]
+    txt = txt.replace("<THOUGHT>", " ").replace("</THOUGHT>", " ")
+    txt = re.sub(r"[^A-Za-z\s]", " ", txt)
+    txt = re.sub(r"\s+", " ", txt).strip()
+    return txt
+
+
+def _reasoning_stopwords() -> set[str]:
+    from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
+
+    stop = set(ENGLISH_STOP_WORDS) | {
+        "the", "and", "to", "of", "in", "for", "with", "that", "this", "is", "are", "be", "as", "on", "it",
+        "my", "i", "we", "our", "can", "will", "should", "need", "must", "have", "has", "from", "by",
+        "round", "current", "market", "seller", "sellers", "buyers", "buyer", "product", "products",
+        "quality", "hq", "lq", "action", "function", "arguments", "list", "listing", "based", "decision",
+        "decide", "strategy", "profit", "reputation", "budget", "first", "next", "also", "there", "their",
+        "them", "these", "while", "still",
+    }
+    stop_path = Path(__file__).resolve().parents[2] / "configs" / "stopwords_en.txt"
+    if stop_path.exists():
+        extra = {
+            ln.strip().lower()
+            for ln in stop_path.read_text(encoding="utf-8").splitlines()
+            if ln.strip() and not ln.strip().startswith("#")
+        }
+        stop |= extra
+    return stop
+
+
+def _load_seller_reasonings(base_dir: Path) -> list[str]:
+    texts: list[str] = []
+    for f in sorted(base_dir.glob("run_*_actions.json")):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        for rec in data:
+            if rec.get("phase") != "seller_listing":
+                continue
+            for ai in rec.get("agent_infos", []):
+                name = str(ai.get("agent_name", ""))
+                if not name.startswith("seller_") and ai.get("agent_id") is None:
+                    continue
+                info = ai.get("agent_action_info", {})
+                txt = _clean_reasoning_text(info.get("action_reasoning", ""))
+                if txt:
+                    texts.append(txt)
+    return texts
+
+
+def _load_seller_messages(base_dir: Path) -> list[str]:
+    texts: list[str] = []
+    for f in sorted(base_dir.glob("run_*_actions.json")):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        for rec in data:
+            if rec.get("phase") != "seller_communication":
+                continue
+            for ai in rec.get("agent_infos", []):
+                name = str(ai.get("agent_name", ""))
+                if not name.startswith("seller_") and ai.get("agent_id") is None:
+                    continue
+                info = ai.get("agent_action_info", {})
+                raw_args = info.get("action_args", {})
+                content = ""
+                if isinstance(raw_args, str):
+                    try:
+                        parsed = json.loads(raw_args)
+                    except Exception:
+                        parsed = {}
+                    content = str(parsed.get("content", ""))
+                elif isinstance(raw_args, dict):
+                    content = str(raw_args.get("content", ""))
+                if not content:
+                    content = str(info.get("content", ""))
+                txt = _clean_reasoning_text(content)
+                if txt:
+                    texts.append(txt)
+    return texts
+
+
+def _parse_action_args(raw_args) -> dict:
+    if isinstance(raw_args, dict):
+        return raw_args
+    if isinstance(raw_args, str):
+        try:
+            parsed = json.loads(raw_args)
+            if isinstance(parsed, dict):
+                return parsed
+        except Exception:
+            return {}
+    return {}
+
+
+def _quality_combo_label(advertised_quality: str, product_quality: str) -> str:
+    aq = str(advertised_quality).upper().strip()
+    pq = str(product_quality).upper().strip()
+    if aq == "HQ" and pq == "HQ":
+        return "HQ Authentic"
+    if aq == "LQ" and pq == "LQ":
+        return "LQ Authentic"
+    if aq == "HQ" and pq == "LQ":
+        return "HQ Counterfeit"
+    if aq == "LQ" and pq == "HQ":
+        return "HQ Hidden Bargain"
+    return "Other"
+
+
+def _load_seller_listing_topic_records(base_dirs: list[Path]) -> tuple[pd.DataFrame, pd.DataFrame]:
+    docs: list[dict] = []
+    product_rows: list[dict] = []
+    doc_id = 0
+
+    for base_dir in base_dirs:
+        for f in sorted(base_dir.glob("run_*_actions.json")):
+            try:
+                run_id = int(f.stem.split("_")[1])
+            except Exception:
+                run_id = -1
+            try:
+                data = json.loads(f.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+
+            for rec in data:
+                if rec.get("phase") != "seller_listing":
+                    continue
+                round_num = rec.get("round")
+                try:
+                    round_num = int(round_num)
+                except Exception:
+                    round_num = None
+
+                for ai in rec.get("agent_infos", []):
+                    name = str(ai.get("agent_name", ""))
+                    if not name.startswith("seller_") and ai.get("agent_id") is None:
+                        continue
+                    info = ai.get("agent_action_info", {})
+                    reasoning = _clean_reasoning_text(info.get("action_reasoning", ""))
+                    if not reasoning:
+                        continue
+
+                    docs.append({
+                        "doc_id": doc_id,
+                        "run_id": run_id,
+                        "round": round_num,
+                        "reasoning": reasoning,
+                        "source_dir": base_dir.name,
+                        "agent_name": name,
+                    })
+
+                    action_args = _parse_action_args(info.get("action_args", {}))
+                    products = action_args.get("products", [])
+                    if not isinstance(products, list):
+                        products = []
+
+                    for idx, product in enumerate(products):
+                        if not isinstance(product, dict):
+                            continue
+                        try:
+                            qty = int(product.get("quantity", 1) or 1)
+                        except Exception:
+                            qty = 1
+                        qty = max(1, qty)
+                        quality_label = _quality_combo_label(
+                            product.get("advertised_quality", ""),
+                            product.get("product_quality", ""),
+                        )
+                        product_rows.append({
+                            "doc_id": doc_id,
+                            "run_id": run_id,
+                            "round": round_num,
+                            "product_idx": idx,
+                            "quantity": qty,
+                            "quality_label": quality_label,
+                            "advertised_quality": str(product.get("advertised_quality", "")).upper().strip(),
+                            "product_quality": str(product.get("product_quality", "")).upper().strip(),
+                        })
+                    doc_id += 1
+
+    return pd.DataFrame(docs), pd.DataFrame(product_rows)
+
+
+def _get_openai_client():
+    if not os.environ.get("OPENAI_API_KEY"):
+        return None
+    try:
+        import openai  # type: ignore
+        return openai.OpenAI()
+    except Exception:
+        return None
+
+
+def _llm_topic_label(
+    client,
+    topic_model,
+    topic_id: int,
+    fallback_words: list[str],
+) -> str:
+    if client is None:
+        return ", ".join(fallback_words[:4]) if fallback_words else f"Topic {topic_id}"
+    try:
+        docs = topic_model.get_representative_docs(topic_id)[:4]
+        prompt = (
+            "You are labeling a topic from seller reasoning or seller messages in a marketplace simulation.\n"
+            "Return exactly one meaningful phrase of 5-10 words suitable as a chart y-axis label.\n"
+            "The phrase must summarize the shared reasoning pattern or communication intent.\n"
+            "Do not list raw keywords. Do not mention 'topic', 'seller', 'marketplace', or dataset names.\n"
+            "Use natural language, like a concise slide label.\n\n"
+            f"Keywords: {', '.join(fallback_words[:8])}\n"
+            "Representative examples:\n"
+            + "\n".join(f"- {d}" for d in docs)
+            + "\n\nReturn only the label phrase."
+        )
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2,
+        )
+        label = resp.choices[0].message.content.strip().replace("\n", " ")
+        label = re.sub(r"\s+", " ", label).strip(" .:-")
+        return label or (", ".join(fallback_words[:4]) if fallback_words else f"Topic {topic_id}")
+    except Exception:
+        return ", ".join(fallback_words[:4]) if fallback_words else f"Topic {topic_id}"
+
+
+def _fit_bertopic_topic_records(
+    docs_df: pd.DataFrame,
+    max_topics: int = 6,
+) -> tuple[object | None, pd.DataFrame, list[int], dict[int, str], str, str]:
+    os.environ.setdefault("NUMBA_CACHE_DIR", "/tmp/numba_cache")
+    try:
+        from bertopic import BERTopic
+        from bertopic.dimensionality import BaseDimensionalityReduction
+        from bertopic.vectorizers import ClassTfidfTransformer
+        from sklearn.cluster import KMeans
+        from sklearn.decomposition import TruncatedSVD
+        from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
+    except Exception as e:
+        return None, docs_df, [], {}, str(e), "unavailable"
+
+    if docs_df.empty or len(docs_df) < 12:
+        return None, docs_df, [], {}, "too few documents", "unavailable"
+
+    stop = _reasoning_stopwords()
+    corpus = docs_df["reasoning"].astype(str).tolist()
+    tfidf = TfidfVectorizer(max_features=2500, ngram_range=(1, 2), min_df=2, stop_words=list(stop))
+    X = tfidf.fit_transform(corpus)
+    if X.shape[1] < 3:
+        return None, docs_df, [], {}, "too few textual features", "unavailable"
+
+    n_components = max(2, min(8, X.shape[1] - 1))
+    embeddings = TruncatedSVD(n_components=n_components, random_state=42).fit_transform(X)
+    n_clusters = max(2, min(max_topics + 2, len(corpus) // 120))
+    vectorizer = CountVectorizer(stop_words=list(stop), ngram_range=(1, 2), min_df=2)
+    topic_model = BERTopic(
+        embedding_model=None,
+        umap_model=BaseDimensionalityReduction(),
+        hdbscan_model=KMeans(n_clusters=n_clusters, random_state=42, n_init=10),
+        vectorizer_model=vectorizer,
+        ctfidf_model=ClassTfidfTransformer(reduce_frequent_words=True),
+        min_topic_size=max(10, min(30, len(corpus) // 20)),
+        top_n_words=8,
+        calculate_probabilities=False,
+        verbose=False,
+    )
+    topics, _ = topic_model.fit_transform(corpus, embeddings=embeddings)
+    out_df = docs_df.copy()
+    out_df["topic"] = topics
+    out_df = out_df[out_df["topic"] != -1].copy()
+    if out_df.empty:
+        return None, out_df, [], {}, "no stable topics", "unavailable"
+
+    topic_counts = out_df["topic"].value_counts().head(max_topics)
+    topic_order = [int(t) for t in topic_counts.index.tolist()]
+    out_df = out_df[out_df["topic"].isin(topic_order)].copy()
+
+    client = _get_openai_client()
+    label_mode = "llm" if client is not None else "keywords-fallback"
+    labels: dict[int, str] = {}
+    for topic_id in topic_order:
+        words = [word for word, _ in (topic_model.get_topic(topic_id) or [])[:6]]
+        labels[int(topic_id)] = _llm_topic_label(client, topic_model, int(topic_id), words)
+
+    detail = f"docs={len(out_df)}, topics={len(topic_order)}, labels={label_mode}"
+    return topic_model, out_df, topic_order, labels, detail, label_mode
+
+
+def _draw_markettype_topic_figure(
+    docs_df: pd.DataFrame,
+    product_df: pd.DataFrame,
+    output_path: Path,
+    figure_title: str,
+    primary_color: str,
+) -> str:
+    base_font = 14
+    quality_order = ["HQ Authentic", "LQ Authentic", "HQ Counterfeit", "HQ Hidden Bargain", "Other"]
+    quality_colors = {
+        "HQ Authentic": COLORS["hq_auth"],
+        "LQ Authentic": COLORS["lq_auth"],
+        "HQ Counterfeit": COLORS["counterfeit"],
+        "HQ Hidden Bargain": COLORS["accent"],
+        "Other": COLORS["neutral"],
+    }
+
+    topic_model, topic_docs, topic_order, topic_labels, detail, label_mode = _fit_bertopic_topic_records(docs_df)
+    panel_output_path = output_path.with_name(output_path.stem + "_round_quality_topics.png")
+    fig_summary, ax0 = plt.subplots(1, 1, figsize=(10.8, 5.6))
+
+    if topic_model is None or topic_docs.empty or not topic_order:
+        ax0.axis("off")
+        ax0.text(0.5, 0.5, f"BERTopic unavailable: {detail}", ha="center", va="center", fontsize=base_font, color="#666")
+        fig_summary.suptitle(figure_title, fontsize=base_font, fontweight="bold", y=0.98)
+        save_figure(fig_summary, output_path)
+        return detail
+
+    topic_counts = topic_docs["topic"].value_counts().reindex(topic_order).fillna(0)
+    total_docs = max(1, int(topic_counts.sum()))
+    topic_share = topic_counts / total_docs
+
+    y = np.arange(len(topic_order))
+    ax0.barh(y, topic_share.values, color=primary_color, alpha=0.82, edgecolor="white", linewidth=0.6)
+    ax0.set_yticks(y)
+    ax0.set_yticklabels([topic_labels[t] for t in topic_order], fontsize=base_font)
+    ax0.invert_yaxis()
+    ax0.set_xlabel("Topic Share", fontsize=base_font)
+    ax0.set_title("BERTopic Theme Summary", fontsize=base_font)
+    ax0.grid(axis="x", alpha=0.22, linestyle=":", zorder=0)
+    ax0.set_axisbelow(True)
+    for yy, vv in zip(y, topic_share.values):
+        ax0.text(vv + 0.006, yy, f"{vv:.0%}", va="center", ha="left", fontsize=base_font, color="#444")
+    fig_summary.suptitle(figure_title, fontsize=base_font, fontweight="bold", y=0.98)
+    fig_summary.text(
+        0.5,
+        0.02,
+        (
+            "BERTopic theme summary with LLM-generated labels."
+            if label_mode == "llm"
+            else "BERTopic theme summary with keyword fallback labels (no OPENAI_API_KEY)."
+        ),
+        ha="center",
+        va="bottom",
+        fontsize=base_font,
+        color=COLORS["neutral_dark"],
+    )
+    save_figure(fig_summary, output_path)
+
+    joined = product_df.merge(topic_docs[["doc_id", "topic"]], on="doc_id", how="inner")
+    round_values = sorted(int(r) for r in joined["round"].dropna().unique())
+    bar_w = 0.16
+    x = np.arange(len(round_values), dtype=float)
+
+    fig_panel, (ax1, ax2) = plt.subplots(
+        2, 1, figsize=(12.8, 9.2),
+        gridspec_kw={"height_ratios": [1.0, 1.55], "hspace": 0.32}
+    )
+    for idx, quality in enumerate([q for q in quality_order if q in joined["quality_label"].unique()]):
+        vals = []
+        for round_num in round_values:
+            sub = joined[(joined["round"] == round_num) & (joined["quality_label"] == quality)]
+            vals.append(float(sub["quantity"].sum()))
+        offset = (idx - (len([q for q in quality_order if q in joined["quality_label"].unique()]) - 1) / 2) * bar_w
+        ax1.bar(
+            x + offset,
+            vals,
+            width=bar_w * 0.92,
+            color=quality_colors.get(quality, COLORS["neutral"]),
+            edgecolor="white",
+            linewidth=0.5,
+            label=quality,
+            zorder=3,
+        )
+    ax1.set_xticks(x)
+    ax1.set_xticklabels(round_values, fontsize=base_font)
+    ax1.set_xlabel("Round Number", fontsize=base_font)
+    ax1.set_ylabel("Listed Product Count", fontsize=base_font)
+    ax1.set_title("Product Quality Counts by Round", fontsize=base_font)
+    ax1.grid(axis="y", alpha=0.22, linestyle=":", zorder=0)
+    ax1.set_axisbelow(True)
+    ax1.legend(frameon=False, ncol=3, fontsize=base_font, loc="upper right")
+
+    present_qualities = [q for q in quality_order if q in joined["quality_label"].unique()]
+    topic_palette = plt.get_cmap("tab20")
+    topic_colors = {topic_id: topic_palette(i % 20) for i, topic_id in enumerate(topic_order)}
+    group_w = 0.76 / max(1, len(present_qualities))
+    for q_idx, quality in enumerate(present_qualities):
+        bottoms = np.zeros(len(round_values), dtype=float)
+        centers = x + (q_idx - (len(present_qualities) - 1) / 2) * group_w
+        for t_idx, topic_id in enumerate(topic_order):
+            vals = []
+            for round_num in round_values:
+                sub = joined[(joined["round"] == round_num) & (joined["quality_label"] == quality)]
+                total_qty = float(sub["quantity"].sum())
+                topic_qty = float(sub.loc[sub["topic"] == topic_id, "quantity"].sum())
+                vals.append(0.0 if total_qty <= 0 else topic_qty / total_qty)
+            vals_arr = np.array(vals, dtype=float)
+            ax2.bar(
+                centers,
+                vals_arr,
+                width=group_w * 0.92,
+                bottom=bottoms,
+                color=topic_colors[topic_id],
+                edgecolor="white",
+                linewidth=0.35,
+                label=topic_labels[topic_id] if q_idx == 0 else None,
+                zorder=3,
+            )
+            bottoms += vals_arr
+
+    ax2.set_xticks(x)
+    ax2.set_xticklabels(round_values, fontsize=base_font)
+    ax2.set_xlabel("Round Number", fontsize=base_font)
+    ax2.set_ylabel("Topic Share within Product Quality", fontsize=base_font)
+    ax2.set_ylim(0, 1.0)
+    ax2.set_title("Topic Distribution by Round and Product Quality", fontsize=base_font)
+    ax2.grid(axis="y", alpha=0.20, linestyle=":", zorder=0)
+    ax2.set_axisbelow(True)
+
+    quality_handles = [
+        mpatches.Patch(color=quality_colors[q], label=q)
+        for q in present_qualities
+    ]
+    topic_handles = [
+        mpatches.Patch(color=topic_colors[t], label=topic_labels[t])
+        for t in topic_order
+    ]
+    leg1 = ax2.legend(
+        handles=quality_handles,
+        frameon=False,
+        fontsize=base_font,
+        ncol=min(3, len(quality_handles)),
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.18),
+    )
+    ax2.add_artist(leg1)
+    ax2.legend(
+        handles=topic_handles,
+        frameon=False,
+        fontsize=base_font,
+        ncol=2,
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.32),
+    )
+
+    fig_panel.suptitle(f"{figure_title} — Round-Level Product/Topic Dynamics", fontsize=base_font, fontweight="bold", y=0.99)
+    fig_panel.text(
+        0.5,
+        0.02,
+        "Top panel: listed product-quality counts by round. Bottom panel: within-quality topic composition by round.",
+        ha="center",
+        va="bottom",
+        fontsize=base_font,
+        color=COLORS["neutral_dark"],
+    )
+    fig_panel.subplots_adjust(bottom=0.28)
+    save_figure(fig_panel, panel_output_path)
+    return detail
+
+
+def _plot_bertopic_group_comparison(
+    ax: plt.Axes,
+    group_texts: dict[str, list[str]],
+    title: str,
+    color_map: dict[str, str],
+    max_topics: int = 6,
+) -> tuple[bool, str]:
+    base_font = 14
+    os.environ.setdefault("NUMBA_CACHE_DIR", "/tmp/numba_cache")
+    try:
+        from bertopic import BERTopic
+        from bertopic.dimensionality import BaseDimensionalityReduction
+        from bertopic.vectorizers import ClassTfidfTransformer
+        from sklearn.cluster import KMeans
+        from sklearn.decomposition import TruncatedSVD
+        from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
+    except Exception as e:
+        ax.axis("off")
+        ax.text(0.5, 0.5, "BERTopic unavailable", ha="center", va="center", fontsize=base_font, color="#666")
+        return False, str(e)
+
+    prepared = {label: texts for label, texts in group_texts.items() if texts}
+    if len(prepared) < 2:
+        ax.axis("off")
+        ax.text(0.5, 0.5, "Need two non-empty groups", ha="center", va="center", fontsize=base_font, color="#666")
+        return False, "insufficient groups"
+
+    corpus: list[str] = []
+    labels: list[str] = []
+    for label, texts in prepared.items():
+        corpus.extend(texts)
+        labels.extend([label] * len(texts))
+    if len(corpus) < 12:
+        ax.axis("off")
+        ax.text(0.5, 0.5, "Too few reasoning samples", ha="center", va="center", fontsize=base_font, color="#666")
+        return False, "too few reasoning samples"
+
+    stop = _reasoning_stopwords()
+    tfidf = TfidfVectorizer(max_features=2500, ngram_range=(1, 2), min_df=2, stop_words=list(stop))
+    X = tfidf.fit_transform(corpus)
+    if X.shape[1] < 3:
+        ax.axis("off")
+        ax.text(0.5, 0.5, "Too few textual features", ha="center", va="center", fontsize=base_font, color="#666")
+        return False, "too few textual features"
+
+    n_components = max(2, min(8, X.shape[1] - 1))
+    embeddings = TruncatedSVD(n_components=n_components, random_state=42).fit_transform(X)
+    n_clusters = max(2, min(max_topics + 2, len(corpus) // 120))
+
+    vectorizer = CountVectorizer(stop_words=list(stop), ngram_range=(1, 2), min_df=2)
+    topic_model = BERTopic(
+        embedding_model=None,
+        umap_model=BaseDimensionalityReduction(),
+        hdbscan_model=KMeans(n_clusters=n_clusters, random_state=42, n_init=10),
+        vectorizer_model=vectorizer,
+        ctfidf_model=ClassTfidfTransformer(reduce_frequent_words=True),
+        min_topic_size=max(10, min(30, len(corpus) // 20)),
+        top_n_words=8,
+        calculate_probabilities=False,
+        verbose=False,
+    )
+
+    try:
+        topics, _ = topic_model.fit_transform(corpus, embeddings=embeddings)
+    except Exception as e:
+        ax.axis("off")
+        ax.text(0.5, 0.5, "BERTopic fitting failed", ha="center", va="center", fontsize=base_font, color="#666")
+        return False, str(e)
+
+    topic_df = pd.DataFrame({"group": labels, "topic": topics})
+    topic_df = topic_df[topic_df["topic"] != -1]
+    if topic_df.empty:
+        ax.axis("off")
+        ax.text(0.5, 0.5, "No stable topics discovered", ha="center", va="center", fontsize=base_font, color="#666")
+        return False, "no stable topics"
+
+    counts = topic_df.groupby(["topic", "group"]).size().unstack(fill_value=0)
+    counts = counts.reindex(columns=list(prepared.keys()), fill_value=0)
+    topic_order = counts.sum(axis=1).sort_values(ascending=False).head(max_topics).index.tolist()
+    counts = counts.loc[topic_order]
+    shares = counts.div(counts.sum(axis=0), axis=1).fillna(0.0)
+
+    client = _get_openai_client()
+    label_mode = "llm" if client is not None else "keywords-fallback"
+    topic_labels: list[str] = []
+    for topic_id in topic_order:
+        words = [word for word, _ in (topic_model.get_topic(int(topic_id)) or [])[:6]]
+        topic_labels.append(_llm_topic_label(client, topic_model, int(topic_id), words))
+
+    n_groups = len(prepared)
+    y = np.arange(len(topic_order), dtype=float)
+    bar_h = 0.72 / max(n_groups, 2)
+    offsets = np.linspace(-(n_groups - 1) / 2, (n_groups - 1) / 2, n_groups) * bar_h
+
+    for idx, group in enumerate(prepared.keys()):
+        vals = shares[group].to_numpy(dtype=float)
+        ax.barh(
+            y + offsets[idx],
+            vals,
+            height=bar_h * 0.92,
+            color=color_map.get(group, COLORS["neutral_dark"]),
+            alpha=0.88,
+            edgecolor="white",
+            linewidth=0.5,
+            label=f"{group} (n={len(prepared[group])})",
+            zorder=3,
+        )
+        for yy, vv in zip(y + offsets[idx], vals):
+            if vv <= 0:
+                continue
+            ax.text(vv + 0.006, yy, f"{vv:.0%}", va="center", ha="left", fontsize=7.5, color="#444")
+
+    ax.set_yticks(y)
+    ax.set_yticklabels(topic_labels, fontsize=base_font)
+    ax.invert_yaxis()
+    ax.set_xlim(0, min(1.0, max(0.22, shares.to_numpy().max() * 1.24)))
+    ax.set_xlabel("Topic Share within Group", fontsize=base_font)
+    ax.set_title(title, fontsize=base_font)
+    ax.grid(axis="x", alpha=0.22, linestyle=":", zorder=0)
+    ax.set_axisbelow(True)
+    ax.legend(frameon=False, fontsize=base_font, loc="lower right")
+
+    return True, (
+        f"docs={len(corpus)}, "
+        f"groups=" + ", ".join(f"{label}:{len(texts)}" for label, texts in prepared.items())
+        + f", topics={len(topic_order)}, labels={label_mode}"
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -790,6 +1384,65 @@ def fig_rq2_listed_vs_sold_quality(
     print("  [RQ2-Quality] Listed-vs-sold quality figure saved.")
 
 
+def fig_rq2_listed_vs_sold_counts(
+    r_dir: str, rw_dir: str, output_dir: Path
+) -> None:
+    """RQ2: Compare listed vs sold counts for three product quality combos."""
+    df_r = load_results_df(r_dir)
+    df_rw = load_results_df(rw_dir)
+    if df_r.empty or df_rw.empty:
+        print("[RQ2-QualityCounts] Missing data, skipping.")
+        return
+
+    listed_r = per_run_values(df_r, product_quality_counts_all)
+    listed_rw = per_run_values(df_rw, product_quality_counts_all)
+    sold_r = per_run_values(df_r, product_quality_counts)
+    sold_rw = per_run_values(df_rw, product_quality_counts)
+
+    def _sum_counts(vals: list[tuple[float, float, float]]) -> np.ndarray:
+        if not vals:
+            return np.zeros(3)
+        arr = np.array(vals, dtype=float)
+        return arr.sum(axis=0)
+
+    sum_listed_r = _sum_counts(listed_r)
+    sum_sold_r = _sum_counts(sold_r)
+    sum_listed_rw = _sum_counts(listed_rw)
+    sum_sold_rw = _sum_counts(sold_rw)
+
+    categories = ["HQ Authentic", "LQ Authentic", "HQ Counterfeit"]
+    x = np.arange(len(categories))
+    w = 0.36
+
+    fig, axes = plt.subplots(1, 2, figsize=(12.8, 4.8), gridspec_kw={"wspace": 0.28})
+    listed_color = COLORS["good_mid"]
+    sold_color = COLORS["neutral_dark"]
+
+    def _panel(ax: plt.Axes, counts_listed, counts_sold, title: str) -> None:
+        ax.bar(
+            x - w / 2, counts_listed, width=w, color=listed_color, alpha=0.75,
+            edgecolor="white", linewidth=0.5, label="Listed", zorder=3
+        )
+        ax.bar(
+            x + w / 2, counts_sold, width=w, color=sold_color, alpha=0.85,
+            edgecolor="white", linewidth=0.5, label="Sold", zorder=3
+        )
+        ax.set_xticks(x)
+        ax.set_xticklabels(categories, fontsize=14)
+        ax.set_title(title, fontsize=14, fontweight="bold")
+        ax.grid(axis="y", alpha=0.25, zorder=0)
+        ax.set_axisbelow(True)
+        ax.set_ylabel("Total Count", fontsize=14)
+        ax.legend(frameon=False, fontsize=14, loc="upper right")
+
+    _panel(axes[0], sum_listed_r, sum_sold_r, "Rep")
+    _panel(axes[1], sum_listed_rw, sum_sold_rw, "Rep+Warrant")
+
+    fig.suptitle("RQ2 Listed vs Sold Counts by Product Quality", fontsize=14, fontweight="bold", y=0.98)
+    save_figure(fig, output_dir / "rq2_listed_vs_sold_counts.png")
+    print("  [RQ2-QualityCounts] Listed vs sold counts figure saved.")
+
+
 def fig_rq2_welfare_overview(
     r_dir: str, rw_dir: str, output_dir: Path
 ) -> None:
@@ -858,227 +1511,156 @@ def fig_rq2_welfare_overview(
 def fig_rq2_micro_reasoning_impact(
     r_dir: str, rw_dir: str, output_dir: Path
 ) -> None:
-    """RQ2 micro-level analysis: fraudulent-seller reasoning shift with warrant.
-
-    Output includes:
-    1. Word-cloud-style panel for Rep (fraud-involved sellers)
-    2. Word-cloud-style panel for Rep+Warrant (same seller IDs as Rep fraud set)
-    3. TF-IDF embedding + KMeans clustering scatter
-    """
+    """RQ2 BERTopic market-type figures using seller listing action reasoning."""
     r_path = Path(r_dir)
     rw_path = Path(rw_dir)
     if not r_path.exists() or not rw_path.exists():
         print("[RQ2-Micro] Missing directories, skipping.")
         return
 
-    df_r = load_results_df(r_dir)
-    if df_r.empty or "seller_id" not in df_r.columns or "is_honest" not in df_r.columns:
-        print("[RQ2-Micro] Missing required transaction fields, skipping.")
-        return
+    rep_docs, rep_products = _load_seller_listing_topic_records([r_path])
+    rw_docs, rw_products = _load_seller_listing_topic_records([rw_path])
+    rep_texts = rep_docs["reasoning"].astype(str).tolist() if not rep_docs.empty else []
+    rw_texts = rw_docs["reasoning"].astype(str).tolist() if not rw_docs.empty else []
 
-    fraud_rows = df_r[df_r["is_honest"] == False]  # noqa: E712
-    if fraud_rows.empty:
-        print("[RQ2-Micro] No fraudulent transactions in Rep, skipping.")
-        return
-
-    fraud_seller_by_run: dict[int, set[int]] = defaultdict(set)
-    for _, row in fraud_rows[["run_id", "seller_id"]].dropna().iterrows():
-        try:
-            rid = int(row["run_id"])
-            sid = int(row["seller_id"])
-            fraud_seller_by_run[rid].add(sid)
-        except Exception:
-            continue
-
-    def _clean_reasoning(text: str) -> str:
-        if not text:
-            return ""
-        txt = str(text)
-        txt = txt.split("<ACTION>")[0]
-        txt = txt.replace("<THOUGHT>", " ").replace("</THOUGHT>", " ")
-        txt = re.sub(r"[^A-Za-z\s]", " ", txt)
-        txt = re.sub(r"\s+", " ", txt).strip()
-        return txt
-
-    def _load_reasonings_for_sellers(base_dir: Path, seller_by_run: dict[int, set[int]]) -> list[str]:
-        texts: list[str] = []
-        for f in sorted(base_dir.glob("run_*_actions.json")):
-            try:
-                rid = int(f.stem.split("_")[1])
-            except Exception:
-                continue
-            target_sellers = seller_by_run.get(rid, set())
-            if not target_sellers:
-                continue
-            try:
-                data = json.loads(f.read_text(encoding="utf-8"))
-            except Exception:
-                continue
-            for rec in data:
-                if rec.get("phase") != "seller_listing":
-                    continue
-                for ai in rec.get("agent_infos", []):
-                    aid = ai.get("agent_id")
-                    try:
-                        sid = int(aid) if aid is not None else None
-                    except Exception:
-                        sid = None
-                    if sid is None and str(ai.get("agent_name", "")).startswith("seller_"):
-                        try:
-                            sid = int(str(ai["agent_name"]).split("_")[1]) + 1
-                        except Exception:
-                            sid = None
-                    if sid not in target_sellers:
-                        continue
-                    info = ai.get("agent_action_info", {})
-                    txt = _clean_reasoning(info.get("action_reasoning", ""))
-                    if txt:
-                        texts.append(txt)
-        return texts
-
-    rep_texts = _load_reasonings_for_sellers(r_path, fraud_seller_by_run)
-    rw_texts = _load_reasonings_for_sellers(rw_path, fraud_seller_by_run)
-    if not rep_texts or not rw_texts:
-        print("[RQ2-Micro] Insufficient reasoning text for comparison, skipping.")
-        return
-
-    stop = {
-        "the", "and", "to", "of", "in", "for", "with", "that", "this", "is", "are", "be", "as", "on", "it",
-        "my", "i", "we", "our", "can", "will", "should", "need", "must", "have", "has", "from", "by",
-        "round", "current", "market", "seller", "buyers", "buyer", "product", "products", "quality", "hq", "lq",
-        "action", "function", "arguments", "list", "listing", "based", "decision", "decide", "strategy",
-        "profit", "reputation", "budget", "first", "next", "also", "there", "their", "them", "these",
-    }
-
-    def _freq(texts: list[str], top_n: int = 36) -> list[tuple[str, int]]:
-        cnt = Counter()
-        for txt in texts:
-            toks = [t.lower() for t in re.findall(r"[A-Za-z]{3,}", txt)]
-            toks = [t for t in toks if t not in stop]
-            cnt.update(toks)
-        return cnt.most_common(top_n)
-
-    def _draw_word_cloud_style(ax: plt.Axes, text_pairs: list[tuple[str, int]], title: str, color: str) -> None:
-        ax.set_title(title, fontsize=10)
-        ax.axis("off")
-        ax.set_box_aspect(1.0)
-        if not text_pairs:
-            ax.text(0.5, 0.5, "No text", ha="center", va="center", fontsize=10, color="#666")
-            return
-        freqs = {w: float(c) for w, c in text_pairs}
-        wc = WordCloud(
-            width=900,
-            height=900,
-            background_color="white",
-            max_words=min(120, len(freqs)),
-            collocations=False,
-            prefer_horizontal=0.98,
-            random_state=42,
-            relative_scaling=0.45,
-            min_font_size=10,
-            max_font_size=110,
-            margin=2,
-            color_func=lambda *args, **kwargs: color,
-        ).generate_from_frequencies(freqs)
-        ax.imshow(wc, interpolation="bilinear")
-
-    rep_freq = _freq(rep_texts)
-    rw_freq = _freq(rw_texts)
-
-    corpus = rep_texts + rw_texts
-    cond_labels = np.array(["Rep"] * len(rep_texts) + ["Rep+Warrant"] * len(rw_texts))
-    n_docs = len(corpus)
-    if n_docs < 6:
-        print("[RQ2-Micro] Too few reasoning samples, skipping.")
-        return
-
-    try:
-        vec = TfidfVectorizer(max_features=1200, ngram_range=(1, 2), min_df=2, stop_words="english")
-        X = vec.fit_transform(corpus)
-        if X.shape[1] < 2:
-            raise ValueError("Too few TF-IDF features")
-        svd = TruncatedSVD(n_components=2, random_state=42)
-        emb = svd.fit_transform(X)
-        k = 2
-        kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
-        clusters = kmeans.fit_predict(emb)
-    except Exception as e:
-        print(f"[RQ2-Micro] Embedding failed ({e}), skipping.")
-        return
-
-    fig, axes = plt.subplots(
-        1, 3, figsize=(15.0, 5.4), gridspec_kw={"wspace": 0.18, "width_ratios": [1.0, 1.0, 1.0]}
+    rep_detail = _draw_markettype_topic_figure(
+        rep_docs,
+        rep_products,
+        output_dir / "rq2_rep_micro_reasoning_impact.png",
+        "RQ2 BERTopic: Rep Seller Action Reasoning",
+        REP_COLOR,
     )
-    _draw_word_cloud_style(axes[0], rep_freq, "Rep: Fraud-Involved Seller Reasoning", REP_COLOR)
-    _draw_word_cloud_style(axes[1], rw_freq, "Rep+Warrant: Same Seller IDs Reasoning", RW_COLOR)
-
-    ax = axes[2]
-    ax.set_box_aspect(1.0)
-    cond_color = {"Rep": REP_COLOR, "Rep+Warrant": RW_COLOR}
-    cond_marker = {"Rep": "o", "Rep+Warrant": "^"}
-    for cond in ["Rep", "Rep+Warrant"]:
-        idx = np.where(cond_labels == cond)[0]
-        if len(idx) == 0:
-            continue
-        ax.scatter(
-            emb[idx, 0],
-            emb[idx, 1],
-            c=cond_color[cond],
-            s=28,
-            alpha=0.82,
-            marker=cond_marker[cond],
-            edgecolors="white",
-            linewidths=0.35,
-        )
-    ax.set_title("Reasoning Semantic Map under Rep vs Rep+Warrant", fontsize=10)
-    ax.set_xlabel("Embedding Dimension 1", fontsize=9)
-    ax.set_ylabel("Embedding Dimension 2", fontsize=9)
-    ax.grid(alpha=0.22, zorder=0)
-    ax.set_axisbelow(True)
-    legend_handles = [
-        Line2D([0], [0], marker="o", color="none", markerfacecolor=REP_COLOR,
-               markeredgecolor="white", markersize=7, label="Rep"),
-        Line2D([0], [0], marker="^", color="none", markerfacecolor=RW_COLOR,
-               markeredgecolor="white", markersize=7, label="Rep+Warrant"),
-    ]
-    ax.legend(handles=legend_handles, frameon=False, fontsize=8.2, loc="best")
-    ax.text(
-        0.02, 0.98, f"Clusters identified: {len(np.unique(clusters))}",
-        transform=ax.transAxes, ha="left", va="top", fontsize=7.8, color=COLORS["neutral_dark"]
+    rw_detail = _draw_markettype_topic_figure(
+        rw_docs,
+        rw_products,
+        output_dir / "rq2_rep_warrant_micro_reasoning_impact.png",
+        "RQ2 BERTopic: Rep+Warrant Seller Action Reasoning",
+        RW_COLOR,
     )
-
-    # Cluster semantic anchors: top-frequency token in each cluster, mapped at centroid.
-    cluster_top_words: dict[int, str] = {}
-    anchor_red = "#D32F2F"
-    for cid in sorted(np.unique(clusters)):
-        cluster_docs = [corpus[i] for i in np.where(clusters == cid)[0]]
-        top_words = _freq(cluster_docs, top_n=1)
-        cluster_top_words[int(cid)] = top_words[0][0] if top_words else f"C{int(cid)+1}"
-        cx = float(np.mean(emb[clusters == cid, 0]))
-        cy = float(np.mean(emb[clusters == cid, 1]))
-        ax.scatter(
-            [cx], [cy],
-            marker="*", s=200, c=anchor_red,
-            edgecolors="white", linewidths=0.9, zorder=5
-        )
-        ax.text(
-            cx, cy,
-            f" {cluster_top_words[int(cid)]}",
-            fontsize=9.3, color=anchor_red,
-            ha="left", va="center", fontweight="bold"
-        )
-
-    save_figure(fig, output_dir / "rq2_warrant_micro_reasoning_impact.png")
     print(
-        f"  [RQ2-Micro] Saved micro reasoning figure. "
-        f"Rep texts={len(rep_texts)}, Rep+Warrant texts={len(rw_texts)}, clusters={len(np.unique(clusters))}"
+        "  [RQ2-Micro] Saved BERTopic market-type figures. "
+        f"Rep[{rep_detail}] | Rep+Warrant[{rw_detail}]"
     )
+
+    if rep_texts and rw_texts:
+        fig, ax = plt.subplots(1, 1, figsize=(11.6, 5.2))
+        ok, compare_detail = _plot_bertopic_group_comparison(
+            ax,
+            {"Rep": rep_texts, "Rep+Warrant": rw_texts},
+            title="RQ2 BERTopic Comparison: Seller Action Reasoning",
+            color_map={"Rep": REP_COLOR, "Rep+Warrant": RW_COLOR},
+        )
+        if ok:
+            fig.text(
+                0.5,
+                0.01,
+                "Joint BERTopic comparison across the two market types.",
+                ha="center",
+                va="bottom",
+                fontsize=8,
+                color=COLORS["neutral_dark"],
+            )
+        else:
+            print(f"[RQ2-Micro] BERTopic comparison skipped ({compare_detail}).")
+        save_figure(fig, output_dir / "rq2_warrant_micro_reasoning_impact.png")
+        print(f"  [RQ2-Micro] Saved BERTopic comparison figure. {compare_detail}")
 
 
 def fig_rq3_micro_reasoning_impact(
     rq3_base_dir: str, output_dir: Path
 ) -> None:
-    """RQ3 micro-level analysis across seller-communication constraints."""
+    """RQ3 BERTopic market-type figures using seller listing action reasoning."""
+    base_path = Path(rq3_base_dir)
+    constraints = [
+        "policy_making",
+        "pressure_quickprofits",
+        "psychological-based-attack",
+    ]
+
+    rep_dirs: list[Path] = []
+    rw_dirs: list[Path] = []
+    for ck in constraints:
+        for prefix, bucket in [
+            ("r_wsc_F", rep_dirs),
+            ("r_wsc_R", rep_dirs),
+            ("rw_wsc_F", rw_dirs),
+            ("rw_wsc_R", rw_dirs),
+        ]:
+            exp_dir = base_path / f"{prefix}_{ck}"
+            if exp_dir.exists():
+                bucket.append(exp_dir)
+
+    rep_docs, rep_products = _load_seller_listing_topic_records(rep_dirs)
+    rw_docs, rw_products = _load_seller_listing_topic_records(rw_dirs)
+
+    rep_detail = _draw_markettype_topic_figure(
+        rep_docs,
+        rep_products,
+        output_dir / "rq3_rep_micro_reasoning_impact.png",
+        "RQ3 BERTopic: Rep Seller Action Reasoning",
+        REP_COLOR,
+    )
+    rw_detail = _draw_markettype_topic_figure(
+        rw_docs,
+        rw_products,
+        output_dir / "rq3_rep_warrant_micro_reasoning_impact.png",
+        "RQ3 BERTopic: Rep+Warrant Seller Action Reasoning",
+        RW_COLOR,
+    )
+    print(
+        "  [RQ3-Micro] Saved BERTopic market-type figures. "
+        f"Rep[{rep_detail}] | Rep+Warrant[{rw_detail}]"
+    )
+
+    rep_texts = rep_docs["reasoning"].astype(str).tolist() if not rep_docs.empty else []
+    rw_texts = rw_docs["reasoning"].astype(str).tolist() if not rw_docs.empty else []
+    if rep_texts and rw_texts:
+        fig, ax = plt.subplots(1, 1, figsize=(11.6, 5.2))
+        ok, compare_detail = _plot_bertopic_group_comparison(
+            ax,
+            {"Rep": rep_texts, "Rep+Warrant": rw_texts},
+            title="RQ3 BERTopic Comparison: Seller Action Reasoning",
+            color_map={"Rep": REP_COLOR, "Rep+Warrant": RW_COLOR},
+        )
+        if ok:
+            fig.text(
+                0.5,
+                0.01,
+                "Joint BERTopic comparison across the two market types in RQ3.",
+                ha="center",
+                va="bottom",
+                fontsize=8,
+                color=COLORS["neutral_dark"],
+            )
+        else:
+            print(f"[RQ3-Micro] BERTopic comparison skipped ({compare_detail}).")
+        save_figure(fig, output_dir / "rq3_warrant_micro_reasoning_impact.png")
+        print(f"  [RQ3-Micro] Saved BERTopic comparison figure. {compare_detail}")
+
+
+def fig_rq3_collusion_mechanisms_llm(
+    rq3_base_dir: str,
+    output_dir: Path,
+    file_prefix: str = "rq3",
+    max_topics: int = 8,
+) -> None:
+    """
+    RQ3: Use BERTopic + LLM representation to extract topic mechanisms
+    that explain why seller deception/collusion emerges.
+    Outputs a LaTeX table with topic labels and LLM explanations.
+    """
+    os.environ.setdefault("NUMBA_CACHE_DIR", "/tmp/numba_cache")
+    try:
+        from bertopic import BERTopic
+        from bertopic.dimensionality import BaseDimensionalityReduction
+        from bertopic.vectorizers import ClassTfidfTransformer
+        from sklearn.cluster import KMeans
+        from sklearn.decomposition import TruncatedSVD
+        from sklearn.feature_extraction.text import CountVectorizer, ENGLISH_STOP_WORDS, TfidfVectorizer
+    except Exception as e:
+        print(f"[RQ3-Why] Missing BERTopic dependencies ({e}), skipping.")
+        return
+
     base_path = Path(rq3_base_dir)
     constraints = [
         "policy_making",
@@ -1146,154 +1728,159 @@ def fig_rq3_micro_reasoning_impact(
                 continue
         return out
 
-    rep_texts: list[str] = []
-    rw_texts: list[str] = []
+    # Collect fraud-involved reasoning texts (Rep+Comm + Rep+Warrant+Comm across constraints)
+    texts: list[str] = []
     for ck in constraints:
-        rep_dir = base_path / f"r_wsc_R_{ck}"
-        rw_dir = base_path / f"rw_wsc_R_{ck}"
-        if not rep_dir.exists():
-            continue
-        rep_df = load_results_df(str(rep_dir))
-        fraud_map = _fraud_sellers_by_run(rep_df)
-        if fraud_map:
-            rep_texts.extend(_load_reasonings_for_sellers(rep_dir, fraud_map))
-            if rw_dir.exists():
-                rw_texts.extend(_load_reasonings_for_sellers(rw_dir, fraud_map))
+        for prefix in ["r_wsc_R", "rw_wsc_R"]:
+            exp_dir = base_path / f"{prefix}_{ck}"
+            if not exp_dir.exists():
+                continue
+            df = load_results_df(str(exp_dir))
+            fraud_map = _fraud_sellers_by_run(df)
+            if fraud_map:
+                texts.extend(_load_reasonings_for_sellers(exp_dir, fraud_map))
 
-    if not rep_texts or not rw_texts:
-        print("[RQ3-Micro] Insufficient reasoning text for comparison, skipping.")
+    if len(texts) < 10:
+        print("[RQ3-Why] Insufficient reasoning texts, skipping.")
         return
 
-    stop = {
-        "the", "and", "to", "of", "in", "for", "with", "that", "this", "is", "are", "be", "as", "on", "it",
-        "my", "i", "we", "our", "can", "will", "should", "need", "must", "have", "has", "from", "by",
-        "round", "current", "market", "seller", "buyers", "buyer", "product", "products", "quality", "hq", "lq",
-        "action", "function", "arguments", "list", "listing", "based", "decision", "decide", "strategy",
-        "profit", "reputation", "budget", "first", "next", "also", "there", "their", "them", "these",
-    }
+    # Stopwords
+    stop = set(ENGLISH_STOP_WORDS)
+    stop_path = Path(__file__).resolve().parents[2] / "configs" / "stopwords_en.txt"
+    if stop_path.exists():
+        extra = {ln.strip().lower() for ln in stop_path.read_text(encoding="utf-8").splitlines()
+                 if ln.strip() and not ln.strip().startswith("#")}
+        stop |= extra
 
-    def _freq(texts: list[str], top_n: int = 36) -> list[tuple[str, int]]:
-        cnt = Counter()
-        for txt in texts:
-            toks = [t.lower() for t in re.findall(r"[A-Za-z]{3,}", txt)]
-            toks = [t for t in toks if t not in stop]
-            cnt.update(toks)
-        return cnt.most_common(top_n)
-
-    def _draw_word_cloud_style(ax: plt.Axes, text_pairs: list[tuple[str, int]], title: str, color: str) -> None:
-        ax.set_title(title, fontsize=10)
-        ax.axis("off")
-        ax.set_box_aspect(1.0)
-        if not text_pairs:
-            ax.text(0.5, 0.5, "No text", ha="center", va="center", fontsize=10, color="#666")
-            return
-        freqs = {w: float(c) for w, c in text_pairs}
-        wc = WordCloud(
-            width=900,
-            height=900,
-            background_color="white",
-            max_words=min(120, len(freqs)),
-            collocations=False,
-            prefer_horizontal=0.98,
-            random_state=42,
-            relative_scaling=0.45,
-            min_font_size=10,
-            max_font_size=110,
-            margin=2,
-            color_func=lambda *args, **kwargs: color,
-        ).generate_from_frequencies(freqs)
-        ax.imshow(wc, interpolation="bilinear")
-
-    rep_freq = _freq(rep_texts)
-    rw_freq = _freq(rw_texts)
-
-    corpus = rep_texts + rw_texts
-    cond_labels = np.array(["Rep"] * len(rep_texts) + ["Rep+Warrant"] * len(rw_texts))
-    n_docs = len(corpus)
-    if n_docs < 6:
-        print("[RQ3-Micro] Too few reasoning samples, skipping.")
+    # BERTopic model
+    tfidf = TfidfVectorizer(max_features=2500, ngram_range=(1, 2), min_df=2, stop_words=list(stop))
+    X = tfidf.fit_transform(texts)
+    if X.shape[1] < 3:
+        print("[RQ3-Why] Too few textual features, skipping.")
         return
+    n_components = max(2, min(8, X.shape[1] - 1))
+    embeddings = TruncatedSVD(n_components=n_components, random_state=42).fit_transform(X)
+    n_clusters = max(2, min(max_topics + 2, len(texts) // 120))
+
+    vectorizer = CountVectorizer(stop_words=list(stop), min_df=2)
+    ctfidf = ClassTfidfTransformer(reduce_frequent_words=True)
+    topic_model = BERTopic(
+        embedding_model=None,
+        umap_model=BaseDimensionalityReduction(),
+        hdbscan_model=KMeans(n_clusters=n_clusters, random_state=42, n_init=10),
+        min_topic_size=8,
+        top_n_words=10,
+        vectorizer_model=vectorizer,
+        ctfidf_model=ctfidf,
+        calculate_probabilities=False,
+    )
+    topics, _ = topic_model.fit_transform(texts, embeddings=embeddings)
+
+    # Prepare LLM representation (optional)
+    llm_enabled = False
+    def _llm_explain(topic_id: int) -> tuple[str, str]:
+        return (f"Topic {topic_id}", "LLM unavailable")
 
     try:
-        vec = TfidfVectorizer(max_features=1200, ngram_range=(1, 2), min_df=2, stop_words="english")
-        X = vec.fit_transform(corpus)
-        if X.shape[1] < 2:
-            raise ValueError("Too few TF-IDF features")
-        svd = TruncatedSVD(n_components=2, random_state=42)
-        emb = svd.fit_transform(X)
-        k = 2
-        kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
-        clusters = kmeans.fit_predict(emb)
-    except Exception as e:
-        print(f"[RQ3-Micro] Embedding failed ({e}), skipping.")
-        return
+        import openai  # type: ignore
+        client = openai.OpenAI()
+        llm_enabled = True
 
-    fig, axes = plt.subplots(
-        1, 3, figsize=(15.0, 5.4), gridspec_kw={"wspace": 0.18, "width_ratios": [1.0, 1.0, 1.0]}
-    )
-    _draw_word_cloud_style(axes[0], rep_freq, "RQ3 Rep: Fraud-Involved Reasoning", REP_COLOR)
-    _draw_word_cloud_style(axes[1], rw_freq, "RQ3 Rep+Warrant: Fraud-Involved Reasoning", RW_COLOR)
+        def _llm_explain(topic_id: int) -> tuple[str, str]:
+            try:
+                kws = [w for w, _ in topic_model.get_topic(topic_id)[:8]]
+                docs = topic_model.get_representative_docs(topic_id)[:4]
+                prompt = (
+                    "You are analyzing seller reasoning texts in a simulated marketplace. "
+                    "Your task is to explain WHY seller deception/collusion emerges in this topic.\\n\\n"
+                    f"Keywords: {', '.join(kws)}\\n"
+                    "Representative texts:\\n" + "\\n".join([f"- {d}" for d in docs]) + "\\n\\n"
+                    "Return two lines:\\n"
+                    "Label: <short label>\\n"
+                    "Mechanism: <1-2 sentence explanation of why deception emerges>"
+                )
+                resp = client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.2,
+                )
+                text = resp.choices[0].message.content.strip()
+                label = "Topic"
+                mech = text
+                for line in text.splitlines():
+                    if line.lower().startswith("label:"):
+                        label = line.split(":", 1)[1].strip()
+                    if line.lower().startswith("mechanism:"):
+                        mech = line.split(":", 1)[1].strip()
+                return label, mech
+            except Exception:
+                kws = [w for w, _ in topic_model.get_topic(topic_id)[:6]]
+                return ("Keywords: " + ", ".join(kws), "LLM unavailable")
+    except Exception:
+        llm_enabled = False
 
-    ax = axes[2]
-    ax.set_box_aspect(1.0)
-    cond_color = {"Rep": REP_COLOR, "Rep+Warrant": RW_COLOR}
-    cond_marker = {"Rep": "o", "Rep+Warrant": "^"}
-    for cond in ["Rep", "Rep+Warrant"]:
-        idx = np.where(cond_labels == cond)[0]
-        if len(idx) == 0:
-            continue
-        ax.scatter(
-            emb[idx, 0],
-            emb[idx, 1],
-            c=cond_color[cond],
-            s=28,
-            alpha=0.82,
-            marker=cond_marker[cond],
-            edgecolors="white",
-            linewidths=0.35,
-        )
-    ax.set_title("RQ3 Reasoning Semantic Map", fontsize=10)
-    ax.set_xlabel("Embedding Dimension 1", fontsize=9)
-    ax.set_ylabel("Embedding Dimension 2", fontsize=9)
-    ax.grid(alpha=0.22, zorder=0)
-    ax.set_axisbelow(True)
-    legend_handles = [
-        Line2D([0], [0], marker="o", color="none", markerfacecolor=REP_COLOR,
-               markeredgecolor="white", markersize=7, label="Rep"),
-        Line2D([0], [0], marker="^", color="none", markerfacecolor=RW_COLOR,
-               markeredgecolor="white", markersize=7, label="Rep+Warrant"),
+    # Build LaTeX table
+    topic_info = topic_model.get_topic_info()
+    topic_rows = topic_info[topic_info.Topic != -1].head(max_topics)
+
+    lines = [
+        r"\begin{table*}[!h]",
+        r"    \centering",
+        r"    \small",
+        r"    \caption{RQ3 (Why): Topic-level mechanisms for seller deception/collusion (LLM-labeled).}",
+        r"    \label{tab:rq3_collusion_mechanisms}",
+        r"    \begin{tabular}{p{0.12\textwidth}p{0.25\textwidth}p{0.55\textwidth}}",
+        r"    \toprule",
+        r"    \textbf{Topic} & \textbf{Label} & \textbf{Mechanism Explanation} \\",
+        r"    \midrule",
     ]
-    ax.legend(handles=legend_handles, frameon=False, fontsize=8.2, loc="best")
-    ax.text(
-        0.02, 0.98, f"Clusters identified: {len(np.unique(clusters))}",
-        transform=ax.transAxes, ha="left", va="top", fontsize=7.8, color=COLORS["neutral_dark"]
-    )
+    for _, row in topic_rows.iterrows():
+        tid = int(row["Topic"])
+        label, mech = _llm_explain(tid)
+        if not llm_enabled:
+            kws = [w for w, _ in topic_model.get_topic(tid)[:6]]
+            label = "Keywords: " + ", ".join(kws)
+        label = label.replace("&", r"\&")
+        mech = mech.replace("&", r"\&")
+        lines.append(rf"    T{tid} & {label} & {mech} \\")
+    lines.extend([r"    \bottomrule", r"    \end{tabular}", r"\end{table*}"])
 
-    # Cluster semantic anchors: top-frequency token in each cluster, mapped at centroid.
-    anchor_red = "#D32F2F"
-    for cid in sorted(np.unique(clusters)):
-        cluster_docs = [corpus[i] for i in np.where(clusters == cid)[0]]
-        top_words = _freq(cluster_docs, top_n=1)
-        label = top_words[0][0] if top_words else f"C{int(cid)+1}"
-        cx = float(np.mean(emb[clusters == cid, 0]))
-        cy = float(np.mean(emb[clusters == cid, 1]))
-        ax.scatter(
-            [cx], [cy],
-            marker="*", s=200, c=anchor_red,
-            edgecolors="white", linewidths=0.9, zorder=5
-        )
-        ax.text(
-            cx, cy,
-            f" {label}",
-            fontsize=9.3, color=anchor_red,
-            ha="left", va="center", fontweight="bold"
-        )
+    project_root = Path(__file__).resolve().parents[2]
+    out_dir = project_root / "tables" / "gpt-4o-mini" / "newresults" / "rq3"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / f"tab_{file_prefix}_collusion_mechanisms.tex"
+    out_path.write_text("\n".join(lines), encoding="utf-8")
+    print(f"[RQ3-Why] Saved topic mechanism table: {out_path}")
 
-    save_figure(fig, output_dir / "rq3_warrant_micro_reasoning_impact.png")
-    print(
-        f"  [RQ3-Micro] Saved micro reasoning figure. "
-        f"Rep texts={len(rep_texts)}, Rep+Warrant texts={len(rw_texts)}, clusters={len(np.unique(clusters))}"
-    )
+    # -------------------------------
+    # Standalone BERTopic figure
+    # -------------------------------
+    try:
+        fig, ax = plt.subplots(figsize=(10.5, 5.0))
+        topic_ids = [int(r["Topic"]) for _, r in topic_rows.iterrows()]
+        counts = [int(r["Count"]) for _, r in topic_rows.iterrows()]
+        labels = []
+        for tid in topic_ids:
+            label, mech = _llm_explain(tid)
+            if not llm_enabled:
+                kws = [w for w, _ in topic_model.get_topic(tid)[:6]]
+                label = "Keywords: " + ", ".join(kws)
+            labels.append(label)
+
+        y = np.arange(len(topic_ids))
+        ax.barh(y, counts, color="#4F5D73", alpha=0.85)
+        ax.set_yticks(y)
+        ax.set_yticklabels([f"T{tid}: {lab}" for tid, lab in zip(topic_ids, labels)], fontsize=8)
+        ax.invert_yaxis()
+        ax.set_xlabel("Document Count", fontsize=9)
+        ax.set_title("RQ3 BERTopic Themes (Mechanism Labels)", fontsize=11, fontweight="bold")
+        ax.grid(axis="x", alpha=0.25, linestyle=":")
+        fig.tight_layout()
+        fig_path = output_dir / f"{file_prefix}_bertopic_mechanisms.png"
+        save_figure(fig, fig_path)
+        print(f"[RQ3-Why] Saved BERTopic figure: {fig_path}")
+    except Exception as e:
+        print(f"[RQ3-Why] Failed to save BERTopic figure ({e})")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

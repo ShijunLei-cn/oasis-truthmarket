@@ -15,9 +15,11 @@ from generate_rq1_figures import (
     fig1_profit_and_deceptions,
     fig_rq2_micro_reasoning_impact,
     fig_rq2_listed_vs_sold_quality,
+    fig_rq2_listed_vs_sold_counts,
     fig_rq2_product_quality_over_rounds,
     fig_rq2_welfare_overview,
     fig_rq3_micro_reasoning_impact,
+    fig_rq3_collusion_mechanisms_llm,
 )
 from generate_rq2_figures import (
     fig_rq3_welfare_overview,
@@ -53,6 +55,7 @@ def generate_rq2(base_dir: Path, output_dir: Path) -> None:
     fig_rq2_welfare_overview(str(r_dir), str(rw_dir), output_dir)
     fig1_profit_and_deceptions(str(r_dir), str(rw_dir), output_dir, show_significance=False)
     fig_rq2_listed_vs_sold_quality(str(r_dir), str(rw_dir), output_dir)
+    fig_rq2_listed_vs_sold_counts(str(r_dir), str(rw_dir), output_dir)
     fig_rq2_product_quality_over_rounds(str(r_dir), str(rw_dir), output_dir)
     fig_rq2_micro_reasoning_impact(str(r_dir), str(rw_dir), output_dir)
 
@@ -109,6 +112,7 @@ def generate_rq3(base_dir: Path, output_dir: Path) -> None:
         rq3_include_baseline=True,
     )
     fig_rq3_micro_reasoning_impact(str(rq3_base), output_dir)
+    fig_rq3_collusion_mechanisms_llm(str(rq3_base), output_dir)
 
 
 def main() -> None:

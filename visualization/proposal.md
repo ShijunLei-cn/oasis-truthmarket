@@ -38,18 +38,23 @@
 - 先给总体结论：是否存在系统性操纵意图。
 - 再给分漏洞类型对比：5类 vulnerability 的 detection rate。
 - 最后给行为证据：对应 action 频次或典型案例（可放附录）。
+- **Findings（结论）：** reputation-only 市场中卖家在多类漏洞上呈现明确的操纵意图，且这种意图在不同漏洞类型之间存在显著差异（以 detection rate 与动作频次为证据）。
+In the eputation-only marketplace, sellers exhibit clear manipulative intent across multiple vulnerability types, and this intent varies significantly between different vulnerability types.
 
 ### 4.2 RQ2: Warrant Improves Market Welfare
 - 先给四个 welfare 指标的总览对比（Rep vs Rep+Warrant）。
 - 再给机制解释图：商品质量构成、交易结构、收益来源变化。
 - 强调“收益改善是否来自更诚实交易而非策略性欺骗”。
+- **Findings（结论）：** 相比 reputation-only，warrant 机制在整体 welfare 上有系统性改善，并伴随产品质量结构与交易结果的更健康分布（收益提升不主要来自欺诈性交易）。
+Compared to reputation-only, the warranty mechanism offers a systematic improvement in overall welfare, accompanied by a healthier distribution of product quality structure and transaction outcomes (the increase in revenue does not primarily come from fraudulent transactions).
 
 ### 4.3 RQ3: Market Resilience to Seller Communication Interference
 - 先做跨约束横向比较（3 类干扰 × 2 市场机制）。
 - 再做宏观到微观解释链路：
 - 宏观：deception/welfare 指标变化。
 - 微观：profit decomposition、product mix、关键行为变化。
-
+- **Findings（结论）：** 在卖家通信干扰下，Rep+Warrant 市场整体更具韧性，表现为更低的欺诈水平与更稳定的 welfare 指标，同时微观层面的行为结构更少被干扰诱导偏离。
+Despite interference from seller communications, the Rep+Warrant market as a whole is more resilient, exhibiting lower fraud levels and more stable welfare metrics, while micro-level behavioral structures are less susceptible to interference and deviation.
 ---
 
 ## 3. 图表规划（按新版 RQ）
