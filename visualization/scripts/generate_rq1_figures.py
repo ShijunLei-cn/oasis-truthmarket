@@ -404,7 +404,6 @@ def _draw_markettype_topic_figure(
     if topic_model is None or topic_docs.empty or not topic_order:
         ax0.axis("off")
         ax0.text(0.5, 0.5, f"BERTopic unavailable: {detail}", ha="center", va="center", fontsize=base_font, color="#666")
-        fig_summary.suptitle(figure_title, fontsize=base_font, fontweight="bold", y=0.98)
         save_figure(fig_summary, output_path)
         return detail
 
@@ -418,25 +417,23 @@ def _draw_markettype_topic_figure(
     ax0.set_yticklabels([topic_labels[t] for t in topic_order], fontsize=base_font)
     ax0.invert_yaxis()
     ax0.set_xlabel("Topic Share", fontsize=base_font)
-    ax0.set_title("BERTopic Theme Summary", fontsize=base_font)
     ax0.grid(axis="x", alpha=0.22, linestyle=":", zorder=0)
     ax0.set_axisbelow(True)
     for yy, vv in zip(y, topic_share.values):
         ax0.text(vv + 0.006, yy, f"{vv:.0%}", va="center", ha="left", fontsize=base_font, color="#444")
-    fig_summary.suptitle(figure_title, fontsize=base_font, fontweight="bold", y=0.98)
-    fig_summary.text(
-        0.5,
-        0.02,
-        (
-            "BERTopic theme summary with LLM-generated labels."
-            if label_mode == "llm"
-            else "BERTopic theme summary with keyword fallback labels (no OPENAI_API_KEY)."
-        ),
-        ha="center",
-        va="bottom",
-        fontsize=base_font,
-        color=COLORS["neutral_dark"],
-    )
+    # fig_summary.text(
+    #     0.5,
+    #     0.02,
+    #     (
+    #         "BERTopic theme summary with LLM-generated labels."
+    #         if label_mode == "llm"
+    #         else "BERTopic theme summary with keyword fallback labels (no OPENAI_API_KEY)."
+    #     ),
+    #     ha="center",
+    #     va="bottom",
+    #     fontsize=base_font,
+    #     color=COLORS["neutral_dark"],
+    # )
     save_figure(fig_summary, output_path)
 
     joined = product_df.merge(topic_docs[["doc_id", "topic"]], on="doc_id", how="inner")
@@ -468,9 +465,11 @@ def _draw_markettype_topic_figure(
     ax1.set_xticklabels(round_values, fontsize=base_font)
     ax1.set_xlabel("Round Number", fontsize=base_font)
     ax1.set_ylabel("Listed Product Count", fontsize=base_font)
-    ax1.set_title("Product Quality Counts by Round", fontsize=base_font)
     ax1.grid(axis="y", alpha=0.22, linestyle=":", zorder=0)
     ax1.set_axisbelow(True)
+    # Use blank labels to avoid duplicate legend with the one on ax2
+    for patch in ax1.patches:
+        patch.set_label('_nolegend_')
     ax1.legend(frameon=False, ncol=3, fontsize=base_font, loc="upper right")
 
     present_qualities = [q for q in quality_order if q in joined["quality_label"].unique()]
@@ -506,7 +505,6 @@ def _draw_markettype_topic_figure(
     ax2.set_xlabel("Round Number", fontsize=base_font)
     ax2.set_ylabel("Topic Share within Product Quality", fontsize=base_font)
     ax2.set_ylim(0, 1.0)
-    ax2.set_title("Topic Distribution by Round and Product Quality", fontsize=base_font)
     ax2.grid(axis="y", alpha=0.20, linestyle=":", zorder=0)
     ax2.set_axisbelow(True)
 
@@ -518,15 +516,15 @@ def _draw_markettype_topic_figure(
         mpatches.Patch(color=topic_colors[t], label=topic_labels[t])
         for t in topic_order
     ]
-    leg1 = ax2.legend(
-        handles=quality_handles,
-        frameon=False,
-        fontsize=base_font,
-        ncol=min(3, len(quality_handles)),
-        loc="upper center",
-        bbox_to_anchor=(0.5, -0.18),
-    )
-    ax2.add_artist(leg1)
+    # leg1 = ax2.legend(
+    #     handles=quality_handles,
+    #     frameon=False,
+    #     fontsize=base_font,
+    #     ncol=min(3, len(quality_handles)),
+    #     loc="upper center",
+    #     bbox_to_anchor=(0.5, -0.18),
+    # )
+    # ax2.add_artist(leg1)
     ax2.legend(
         handles=topic_handles,
         frameon=False,
@@ -536,17 +534,7 @@ def _draw_markettype_topic_figure(
         bbox_to_anchor=(0.5, -0.32),
     )
 
-    fig_panel.suptitle(f"{figure_title} — Round-Level Product/Topic Dynamics", fontsize=base_font, fontweight="bold", y=0.99)
-    fig_panel.text(
-        0.5,
-        0.02,
-        "Top panel: listed product-quality counts by round. Bottom panel: within-quality topic composition by round.",
-        ha="center",
-        va="bottom",
-        fontsize=base_font,
-        color=COLORS["neutral_dark"],
-    )
-    fig_panel.subplots_adjust(bottom=0.28)
+    fig_panel.subplots_adjust(bottom=0.15)
     save_figure(fig_panel, panel_output_path)
     return detail
 
@@ -1550,18 +1538,18 @@ def fig_rq2_micro_reasoning_impact(
             title="RQ2 BERTopic Comparison: Seller Action Reasoning",
             color_map={"Rep": REP_COLOR, "Rep+Warrant": RW_COLOR},
         )
-        if ok:
-            fig.text(
-                0.5,
-                0.01,
-                "Joint BERTopic comparison across the two market types.",
-                ha="center",
-                va="bottom",
-                fontsize=8,
-                color=COLORS["neutral_dark"],
-            )
-        else:
-            print(f"[RQ2-Micro] BERTopic comparison skipped ({compare_detail}).")
+        # if ok:
+        #     fig.text(
+        #         0.5,
+        #         0.01,
+        #         "Joint BERTopic comparison across the two market types.",
+        #         ha="center",
+        #         va="bottom",
+        #         fontsize=8,
+        #         color=COLORS["neutral_dark"],
+        #     )
+        # else:
+        #     print(f"[RQ2-Micro] BERTopic comparison skipped ({compare_detail}).")
         save_figure(fig, output_dir / "rq2_warrant_micro_reasoning_impact.png")
         print(f"  [RQ2-Micro] Saved BERTopic comparison figure. {compare_detail}")
 
@@ -1622,18 +1610,18 @@ def fig_rq3_micro_reasoning_impact(
             title="RQ3 BERTopic Comparison: Seller Action Reasoning",
             color_map={"Rep": REP_COLOR, "Rep+Warrant": RW_COLOR},
         )
-        if ok:
-            fig.text(
-                0.5,
-                0.01,
-                "Joint BERTopic comparison across the two market types in RQ3.",
-                ha="center",
-                va="bottom",
-                fontsize=8,
-                color=COLORS["neutral_dark"],
-            )
-        else:
-            print(f"[RQ3-Micro] BERTopic comparison skipped ({compare_detail}).")
+        # if ok:
+        #     fig.text(
+        #         0.5,
+        #         0.01,
+        #         "Joint BERTopic comparison across the two market types in RQ3.",
+        #         ha="center",
+        #         va="bottom",
+        #         fontsize=8,
+        #         color=COLORS["neutral_dark"],
+        #     )
+        # else:
+        #     print(f"[RQ3-Micro] BERTopic comparison skipped ({compare_detail}).")
         save_figure(fig, output_dir / "rq3_warrant_micro_reasoning_impact.png")
         print(f"  [RQ3-Micro] Saved BERTopic comparison figure. {compare_detail}")
 
