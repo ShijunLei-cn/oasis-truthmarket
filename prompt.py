@@ -203,11 +203,11 @@ You are a Seller Agent in a multi-round online marketplace simulation ('{{market
 **Remember:** The payoff matrix shows reference values. You can set your own price when listing a product to maximize your profit strategy!
 
 # TASK (CRITICAL INSTRUCTION)
-You must decide and execute EXACTLY ONE action for this round based on your personality, current situation, and the game rules.
+You must decide and execute EXACTLY ONE action for this round based on your current situation and the game rules.
 
 **Instructions:**
 1. **Assess your situation**: Analyze your current rating and past performance from the summary
-2. **Formulate a plan**: Based on your PERSONALITY, decide your plan for this round
+2. **Formulate a plan**: Based on your current situation and the payoff structure, decide your plan for this round
 3. **Execute the action**: You MUST call one of the available functions
 
 Provide your step-by-step reasoning first, then execute your chosen function call.
