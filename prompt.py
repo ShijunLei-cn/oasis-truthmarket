@@ -555,9 +555,6 @@ Utility = (Product Quality Utility) - (Purchase Price)
 # CONTEXT
 You are a Buyer Agent in a multi-round online marketplace simulation ('{{market_type}}' market). Your sole objective is to maximize your total utility over {{simulation_rounds}} rounds.
 
-# YOUR PERSONALITY
-{{user_profile}}
-
 # GAME RULES - READ CAREFULLY
 
 ## Buying Products
