@@ -256,11 +256,15 @@ Please provide a JSON response with the following structure:
         hq_profit = hq_price - hq_cost
         lq_profit = lq_price - lq_cost
 
+# TODO
+# We have never treated reputation as +2, +1, 0, -1, -2...
+# I have no idea where the idea came from to do this?
+# Bad idea because you are making it even harder for yourself to later run analysis because instead of just explaining thumbs up or thumbs down you will then have to explain exactly what each rating level implies and that's not helping you in your broader research goal of testing if warrants work better than reputation. Remove this and reduce it to +1 or -1 please.
         return {
             "reputation_only": """
 ## Reputation System Only
 1. **Reputation**: Buyers can rate each transaction on a scale from -2 to +2:
-   - +2 = very good, +1 = good, 0 = neutral, -1 = bad, -2 = very bad
+   - +2 = very good, +1 = good, 0 = neutral, -1 = bad, -2 = very bad 
    - Your Rating is tracked as 👍 thumbs-up and 👎 thumbs-down counts
    - A higher rating may attract more buyers
         """,
