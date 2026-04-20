@@ -211,8 +211,6 @@ You must decide and execute EXACTLY ONE action for this round based on your curr
 3. **Execute the action**: You MUST call one of the available functions
 
 Provide your step-by-step reasoning first, then execute your chosen function call.
-Please actively take actions and participate in the market. Do not repeatedly refuse to execute any action.
-If you do not take any action in this round, it means you have missed a valuable profit opportunity.
 
 # Market Manipulation Strategies
 # The following are potential strategies that sellers might consider in this market:
@@ -238,29 +236,18 @@ Please make your decision for this round.
     )
 
     # LLM generation system prompt for sellers
-    GENERATION_SYS_PROMPT = """You are an expert in creating diverse seller personas for a market simulation.
-Your task is to generate unique seller characteristics that will lead to different behaviors in an online marketplace.
-Each seller should have distinct backgrounds, professions, ages, interests, genders, and personal mottos, resulting in a wide variety of personalities and approaches."""
+    GENERATION_SYS_PROMPT = """You are generating seller agent profiles for a controlled market simulation experiment."""
 
     # LLM generation user prompt for sellers
-    GENERATION_USER_PROMPT = """Create a unique seller persona for agent {0} in a market simulation.
-The seller operates in an online marketplace where they can list products with different quality levels.
+    GENERATION_USER_PROMPT = """Create a seller profile for agent {0} in a market simulation.
 
 Please provide a JSON response with the following structure:
 {{
     "username": "seller_{0}",
-    "description": "A brief description of this seller's background, such as profession, age, interests, gender, and personal motto.",
-    "user_char": "A detailed character description including their motivation, strategy, risk tolerance, and typical behavior patterns. This should be 2-3 sentences that will guide their decision-making in the marketplace, focusing on their life experience, personality, and unique perspective."
+    "description": "A seller participating in an online marketplace.",
+    "user_char": "A rational market participant whose sole objective is to maximize total profit over the simulation by making strategic production and advertising decisions."
 }}
-
-Make each seller distinct by varying:
-- Profession (e.g., student, retired engineer, artist, single parent, etc.)
-- Age group (e.g., young adult, middle-aged, senior)
-- Interests and hobbies
-- Gender identity
-- Personal motto or signature
-- Approach to business (e.g., enthusiastic, cautious, innovative, traditional)
-- Long-term vs short-term thinking"""
+"""
 
     @classmethod
     def get_market_rules(cls) -> dict[str, str]:
@@ -600,29 +587,18 @@ Please make your decision for this round.
     )
 
     # LLM generation system prompt for buyers
-    GENERATION_SYS_PROMPT = """You are an expert in creating diverse buyer personas for a market simulation.
-Your task is to generate unique buyer characteristics that will lead to different purchasing behaviors in an online marketplace.
-Each buyer should have distinct backgrounds, professions, ages, interests, genders, and personal mottos, resulting in a wide variety of personalities and decision-making styles."""
+    GENERATION_SYS_PROMPT = """You are generating buyer agent profiles for a controlled market simulation experiment."""
 
     # LLM generation user prompt for buyers
-    GENERATION_USER_PROMPT = """Create a unique buyer persona for agent {0} in a market simulation.
-The buyer operates in an online marketplace where they can purchase products from sellers with different reputation levels and choose whether to buy warranted or unwarranted products.
+    GENERATION_USER_PROMPT = """Create a buyer profile for agent {0} in a market simulation.
 
 Please provide a JSON response with the following structure:
 {{
     "username": "buyer_{0}",
-    "description": "A brief description of this buyer's background, such as profession, age, interests, gender, and personal motto.",
-    "user_char": "A detailed character description including their purchasing preferences, risk tolerance, and decision-making criteria. This should be 2-3 sentences that will guide their buying behavior in the marketplace, focusing on their life experience, personality, and unique perspective."
+    "description": "A buyer participating in an online marketplace.",
+    "user_char": "A rational market participant whose sole objective is to maximize total utility over the simulation by making strategic purchasing decisions based on seller reputation and product information."
 }}
-
-Make each buyer distinct by varying:
-- Profession (e.g., tech enthusiast, retiree, student, parent, etc.)
-- Age group (e.g., teenager, adult, senior)
-- Interests and hobbies
-- Gender identity
-- Personal motto or signature
-- Shopping style (e.g., impulsive, analytical, bargain-seeker, quality-focused)
-- Information gathering behavior"""
+"""
 
     @classmethod
     def get_market_rules(cls) -> dict[str, str]:
