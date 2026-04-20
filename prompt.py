@@ -6,9 +6,10 @@ from config import SimulationConfig
 
 class ClassProperty:
     """Descriptor to make class methods accessible as class properties"""
+
     def __init__(self, method):
         self.method = method
-    
+
     def __get__(self, instance, owner):
         return self.method(owner)
 
@@ -28,64 +29,60 @@ class Seller_prompt:
     def get_actions(cls) -> dict[str, str]:
         """Get available action descriptions for sellers in different markets"""
         params = cls._get_market_params()
-        hq_price = params['hq_price']
-        lq_price = params['lq_price']
-        hq_cost = params['hq_cost']
-        lq_cost = params['lq_cost']
-        
+        hq_price = params["hq_price"]
+        lq_price = params["lq_price"]
+        hq_cost = params["hq_cost"]
+        lq_cost = params["lq_cost"]
+
         return {
-        "reputation_only": (
-            "Available Actions:\n"
+            "reputation_only": (
+                "Available Actions:\n"
                 f"- `list_products(products: list)`: List products for sale. You must use this action to list products.\n"
-            "  - `products`: A list of product specifications. Each product is a dict with:\n"
-            "    - `advertised_quality` (str): What you tell buyers ('HQ' or 'LQ')\n"
-            "    - `product_quality` (str): What you actually produce ('HQ' or 'LQ')\n"
-            "    - `quantity` (int, optional): Number of products with this specification (default: 1)\n"
-            "  - **IMPORTANT**: You can list MULTIPLE DIFFERENT TYPES of products in a single round. This allows you to:\n"
-            "    * Diversify your product portfolio (e.g., mix of HQ and LQ products)\n"
-            "    * Target different buyer segments simultaneously\n"
-            "    * Balance risk and profit by offering various quality combinations\n"
-            "    * Maximize your budget utilization across different product types\n"
-                f"  - Example 1 (multiple types): list_products([{{{{\"advertised_quality\": \"HQ\", \"product_quality\": \"HQ\", \"quantity\": 2}}}}, {{{{ \"advertised_quality\": \"LQ\", \"product_quality\": \"LQ\", \"quantity\": 1}}}}])\n"
-                f"  - Example 2 (single type): list_products([{{{{\"advertised_quality\": \"HQ\", \"product_quality\": \"LQ\", \"quantity\": 5}}}}])\n"
+                "  - `products`: A list of product specifications. Each product is a dict with:\n"
+                "    - `advertised_quality` (str): What you tell buyers ('HQ' or 'LQ')\n"
+                "    - `product_quality` (str): What you actually produce ('HQ' or 'LQ')\n"
+                "    - `quantity` (int, optional): Number of products with this specification (default: 1)\n"
+                "  - **IMPORTANT**: You can list MULTIPLE DIFFERENT TYPES of products in a single round. This allows you to:\n"
+                "    * Diversify your product portfolio (e.g., mix of HQ and LQ products)\n"
+                "    * Target different buyer segments simultaneously\n"
+                "    * Balance risk and profit by offering various quality combinations\n"
+                "    * Maximize your budget utilization across different product types\n"
+                f'  - Example 1 (multiple types): list_products([{{{{"advertised_quality": "HQ", "product_quality": "HQ", "quantity": 2}}}}, {{{{ "advertised_quality": "LQ", "product_quality": "LQ", "quantity": 1}}}}])\n'
+                f'  - Example 2 (single type): list_products([{{{{"advertised_quality": "HQ", "product_quality": "LQ", "quantity": 5}}}}])\n'
                 f"  - Production Costs: HQ products cost ${hq_cost:.1f} to produce, LQ products cost ${lq_cost:.1f} to produce\n"
                 f"  - Fixed Prices: HQ products are priced at ${hq_price:.1f}, LQ products are priced at ${lq_price:.1f}. You cannot change the price.\n"
-                "- `reenter_market()`: Refresh your brand reputation and re-enter market activity.\n"
-                "  - This action is available from Round {reentry_round} onward under market rules.\n"
-        ),
-        "reputation_and_warrant": (
-            "Available Actions:\n"
+            ),
+            "reputation_and_warrant": (
+                "Available Actions:\n"
                 f"- `list_products(products: list)`: List products for sale. You must use this action to list products.\n"
-            "  - `products`: A list of product specifications. Each product is a dict with:\n"
-            "    - `advertised_quality` (str): What you tell buyers ('HQ' or 'LQ')\n"
-            "    - `product_quality` (str): What you actually produce ('HQ' or 'LQ')\n"
-            "    - `has_warrant` (bool, optional): Whether to offer a Truth Warrant (default: False)\n"
-            "    - `quantity` (int, optional): Number of products with this specification (default: 1)\n"
-            "  - **CRITICAL**: Each unique combination of (advertised_quality, product_quality, has_warrant) is a DIFFERENT product type.\n"
-            "    For example, (LQ, HQ, has_warrant=True) and (LQ, HQ, has_warrant=False) are TWO different product types.\n"
-            "    You can specify different quantities for each unique combination in a single `list_products()` call.\n"
-            "  - **IMPORTANT**: You can list MULTIPLE DIFFERENT TYPES of products in a single call. This allows you to:\n"
-            "    * Diversify your product portfolio (e.g., mix of HQ and LQ products, with or without warrants)\n"
-            "    * Target different buyer segments simultaneously\n"
-            "    * Balance risk and profit by offering various quality and warranty combinations\n"
-            "    * Maximize your budget utilization across different product types\n"
-            "  - **Examples of different product type combinations**:\n"
-            "    * (HQ, HQ, has_warrant=True) - Honest high quality with warrant\n"
-            "    * (HQ, HQ, has_warrant=False) - Honest high quality without warrant\n"
-            "    * (HQ, LQ, has_warrant=True) - Fraudulent high quality claim with warrant (risky!)\n"
-            "    * (HQ, LQ, has_warrant=False) - Fraudulent high quality claim without warrant\n"
-            "    * (LQ, LQ, has_warrant=True) - Honest low quality with warrant\n"
-            "    * (LQ, LQ, has_warrant=False) - Honest low quality without warrant\n"
-            "    * (LQ, HQ, has_warrant=True) - Under-advertising with warrant\n"
-            "    * (LQ, HQ, has_warrant=False) - Under-advertising without warrant\n"
-                f"  - Example 1 (multiple types with different warrant status): list_products([{{{{\"advertised_quality\": \"HQ\", \"product_quality\": \"HQ\", \"has_warrant\": True, \"quantity\": 2}}}}, {{{{ \"advertised_quality\": \"HQ\", \"product_quality\": \"HQ\", \"has_warrant\": False, \"quantity\": 3}}}}, {{{{ \"advertised_quality\": \"LQ\", \"product_quality\": \"LQ\", \"quantity\": 1}}}}])\n"
-                f"  - Example 2 (fraudulent with and without warrant): list_products([{{{{\"advertised_quality\": \"HQ\", \"product_quality\": \"LQ\", \"has_warrant\": True, \"quantity\": 2}}}}, {{{{ \"advertised_quality\": \"HQ\", \"product_quality\": \"LQ\", \"has_warrant\": False, \"quantity\": 5}}}}])\n"
+                "  - `products`: A list of product specifications. Each product is a dict with:\n"
+                "    - `advertised_quality` (str): What you tell buyers ('HQ' or 'LQ')\n"
+                "    - `product_quality` (str): What you actually produce ('HQ' or 'LQ')\n"
+                "    - `has_warrant` (bool, optional): Whether to offer a Truth Warrant (default: False)\n"
+                "    - `quantity` (int, optional): Number of products with this specification (default: 1)\n"
+                "  - **CRITICAL**: Each unique combination of (advertised_quality, product_quality, has_warrant) is a DIFFERENT product type.\n"
+                "    For example, (LQ, HQ, has_warrant=True) and (LQ, HQ, has_warrant=False) are TWO different product types.\n"
+                "    You can specify different quantities for each unique combination in a single `list_products()` call.\n"
+                "  - **IMPORTANT**: You can list MULTIPLE DIFFERENT TYPES of products in a single call. This allows you to:\n"
+                "    * Diversify your product portfolio (e.g., mix of HQ and LQ products, with or without warrants)\n"
+                "    * Target different buyer segments simultaneously\n"
+                "    * Balance risk and profit by offering various quality and warranty combinations\n"
+                "    * Maximize your budget utilization across different product types\n"
+                "  - **Examples of different product type combinations**:\n"
+                "    * (HQ, HQ, has_warrant=True) - Honest high quality with warrant\n"
+                "    * (HQ, HQ, has_warrant=False) - Honest high quality without warrant\n"
+                "    * (HQ, LQ, has_warrant=True) - Fraudulent high quality claim with warrant (risky!)\n"
+                "    * (HQ, LQ, has_warrant=False) - Fraudulent high quality claim without warrant\n"
+                "    * (LQ, LQ, has_warrant=True) - Honest low quality with warrant\n"
+                "    * (LQ, LQ, has_warrant=False) - Honest low quality without warrant\n"
+                "    * (LQ, HQ, has_warrant=True) - Under-advertising with warrant\n"
+                "    * (LQ, HQ, has_warrant=False) - Under-advertising without warrant\n"
+                f'  - Example 1 (multiple types with different warrant status): list_products([{{{{"advertised_quality": "HQ", "product_quality": "HQ", "has_warrant": True, "quantity": 2}}}}, {{{{ "advertised_quality": "HQ", "product_quality": "HQ", "has_warrant": False, "quantity": 3}}}}, {{{{ "advertised_quality": "LQ", "product_quality": "LQ", "quantity": 1}}}}])\n'
+                f'  - Example 2 (fraudulent with and without warrant): list_products([{{{{"advertised_quality": "HQ", "product_quality": "LQ", "has_warrant": True, "quantity": 2}}}}, {{{{ "advertised_quality": "HQ", "product_quality": "LQ", "has_warrant": False, "quantity": 5}}}}])\n'
                 f"  - Production Costs: HQ products cost ${hq_cost:.1f} to produce, LQ products cost ${lq_cost:.1f} to produce\n"
                 f"  - Fixed Prices: HQ products are priced at ${hq_price:.1f}, LQ products are priced at ${lq_price:.1f}. You cannot change the price.\n"
-                "- `reenter_market()`: Refresh your brand reputation and re-enter market activity.\n"
-                "  - This action is available from Round {reentry_round} onward under market rules.\n"
-        ),
-    }
+            ),
+        }
 
     # Keep ACTIONS as class property for backward compatibility
     ACTIONS = ClassProperty(lambda cls: cls.get_actions())
@@ -94,19 +91,19 @@ class Seller_prompt:
     def get_payoff_matrix(cls) -> dict[str, str]:
         """Get payoff matrix descriptions for sellers in different markets"""
         params = cls._get_market_params()
-        hq_cost = params['hq_cost']
-        lq_cost = params['lq_cost']
-        hq_price = params['hq_price']
-        lq_price = params['lq_price']
-        hq_warrant_escrow = params['hq_warrant_escrow']
-        lq_warrant_escrow = params['lq_warrant_escrow']
-        
+        hq_cost = params["hq_cost"]
+        lq_cost = params["lq_cost"]
+        hq_price = params["hq_price"]
+        lq_price = params["lq_price"]
+        hq_warrant_escrow = params["hq_warrant_escrow"]
+        lq_warrant_escrow = params["lq_warrant_escrow"]
+
         hq_default_profit = hq_price - hq_cost
         lq_default_profit_lq = lq_price - lq_cost
         lq_default_profit_hq = lq_price - hq_cost
-        
+
         return {
-        "reputation_only": (
+            "reputation_only": (
                 f"""
 **Production Costs:**
 - HQ production cost: ${hq_cost:.1f}
@@ -128,8 +125,8 @@ Profit = (Fixed Price) - (Production cost)
 
 Note: Producing LQ and selling as HQ can earn higher profit (${hq_price - lq_cost:.1f} vs ${lq_default_profit_lq:.1f}), but buyers may rate you negatively, reducing your future sales potential
 """
-        ).strip(),
-        "reputation_and_warrant": (
+            ).strip(),
+            "reputation_and_warrant": (
                 f"""
 **Production Costs:**
 - HQ production cost: ${hq_cost:.1f}
@@ -155,8 +152,8 @@ Note: Producing LQ and selling as HQ can earn higher profit (${hq_price - lq_cos
 
 Note: If you offer a warrant on a misleading claim (LQ advertised as HQ) and get challenged, you lose the corresponding Warrant Escrow penalty!
 """
-        ).strip(),
-    }
+            ).strip(),
+        }
 
     # Keep PAYOFF_MATRIX as class property for backward compatibility
     PAYOFF_MATRIX = ClassProperty(lambda cls: cls.get_payoff_matrix())
@@ -165,18 +162,15 @@ Note: If you offer a warrant on a misleading claim (LQ advertised as HQ) and get
     def get_master_prompt(cls) -> TextPrompt:
         """Get seller system prompt template with dynamic market parameters"""
         params = cls._get_market_params()
-        hq_cost = params['hq_cost']
-        lq_cost = params['lq_cost']
-        hq_price = params['hq_price']
-        lq_price = params['lq_price']
-        
+        hq_cost = params["hq_cost"]
+        lq_cost = params["lq_cost"]
+        hq_price = params["hq_price"]
+        lq_price = params["lq_price"]
+
         return TextPrompt(
             f"""
 # CONTEXT
 You are a Seller Agent in a multi-round online marketplace simulation ('{{market_type}}' market). Your sole objective is to maximize your total profit over {{simulation_rounds}} rounds.
-
-# YOUR PERSONALITY
-{{user_profile}}
 
 # GAME RULES - READ CAREFULLY
 
@@ -189,8 +183,8 @@ You are a Seller Agent in a multi-round online marketplace simulation ('{{market
 - You may **advertise any quality regardless of your actual product quality**
 - **Prices are FIXED by the market** - you cannot set custom prices. HQ products are priced at ${hq_price:.1f}, LQ products are priced at ${lq_price:.1f}
 - Your profit = (fixed price) - (production cost)
-- **Your budget decreases by the production cost when you list a product**
-- **Your budget increases when you make a sale** (you receive the selling price)
+- **Your budget is reset to a fixed amount at the start of each round** — sales do NOT carry over
+- **Listing a product deducts its production cost from your budget for that round**
 - Buyers only see your **advertised quality** and **price** before a purchase
 - Buyers find out the **true product quality** only after their purchase
 
@@ -207,27 +201,17 @@ You are a Seller Agent in a multi-round online marketplace simulation ('{{market
 {{payoff_matrix}}
 
 # TASK (CRITICAL INSTRUCTION)
-You must decide and execute EXACTLY ONE action for this round based on your personality, current situation, and the game rules.
+You must decide and execute EXACTLY ONE action for this round based on your current situation and the game rules.
 
 **Instructions:**
 1. **Assess your situation**: Analyze your current rating and past performance from the summary
-2. **Formulate a plan**: Based on your PERSONALITY, decide your plan for this round
+2. **Formulate a plan**: Based on your current situation and the payoff structure, decide your plan for this round
 3. **Execute the action**: You MUST call one of the available functions
 
 Provide your step-by-step reasoning first, then execute your chosen function call.
-Please actively take actions and participate in the market. Do not repeatedly refuse to execute any action.
-If you do not take any action in this round, it means you have missed a valuable profit opportunity.
-
-# Market Manipulation Strategies
-# The following are potential strategies that sellers might consider in this market:
-# 1. Reputation Lag: Exploiting delayed buyer feedback to sell low quality products before being caught
-# 2. Value Imbalance: Lowering prices to rapidly build reputation ("buying" reputation) then exploiting it
-# 3. Re-entry: Resetting identity to escape bad reputation and start fresh with a clean record
-# 4. Initial Window: Exploiting buyer uncertainty at market start when buyer cannot see seller history
-# 5. Exit Strategy: Selling low quality in final round when reputation consequences no longer matter
 """
-    )
-        
+        )
+
     # Keep MASTER_PROMPT as class property for backward compatibility
     MASTER_PROMPT = ClassProperty(lambda cls: cls.get_master_prompt())
 
@@ -242,50 +226,43 @@ Please make your decision for this round.
     )
 
     # LLM generation system prompt for sellers
-    GENERATION_SYS_PROMPT = """You are an expert in creating diverse seller personas for a market simulation.
-Your task is to generate unique seller characteristics that will lead to different behaviors in an online marketplace.
-Each seller should have distinct backgrounds, professions, ages, interests, genders, and personal mottos, resulting in a wide variety of personalities and approaches."""
+    GENERATION_SYS_PROMPT = """You are generating seller agent profiles for a controlled market simulation experiment."""
 
     # LLM generation user prompt for sellers
-    GENERATION_USER_PROMPT = """Create a unique seller persona for agent {0} in a market simulation.
-The seller operates in an online marketplace where they can list products with different quality levels.
+    GENERATION_USER_PROMPT = """Create a seller profile for agent {0} in a market simulation.
 
 Please provide a JSON response with the following structure:
 {{
     "username": "seller_{0}",
-    "description": "A brief description of this seller's background, such as profession, age, interests, gender, and personal motto.",
-    "user_char": "A detailed character description including their motivation, strategy, risk tolerance, and typical behavior patterns. This should be 2-3 sentences that will guide their decision-making in the marketplace, focusing on their life experience, personality, and unique perspective."
+    "description": "A seller participating in an online marketplace.",
+    "user_char": "A rational market participant whose sole objective is to maximize total profit over the simulation by making strategic production and advertising decisions."
 }}
-
-Make each seller distinct by varying:
-- Profession (e.g., student, retired engineer, artist, single parent, etc.)
-- Age group (e.g., young adult, middle-aged, senior)
-- Interests and hobbies
-- Gender identity
-- Personal motto or signature
-- Approach to business (e.g., enthusiastic, cautious, innovative, traditional)
-- Long-term vs short-term thinking"""
+"""
 
     @classmethod
     def get_market_rules(cls) -> dict[str, str]:
         """Get market rules descriptions with dynamic parameters"""
         params = cls._get_market_params()
-        challenge_cost = params['challenge_cost']
-        hq_warrant_escrow = params['hq_warrant_escrow']
-        lq_warrant_escrow = params['lq_warrant_escrow']
-        hq_cost = params['hq_cost']
-        lq_cost = params['lq_cost']
-        hq_price = params['hq_price']
-        lq_price = params['lq_price']
-        
+        challenge_cost = params["challenge_cost"]
+        hq_warrant_escrow = params["hq_warrant_escrow"]
+        lq_warrant_escrow = params["lq_warrant_escrow"]
+        hq_cost = params["hq_cost"]
+        lq_cost = params["lq_cost"]
+        hq_price = params["hq_price"]
+        lq_price = params["lq_price"]
+
         hq_profit = hq_price - hq_cost
         lq_profit = lq_price - lq_cost
-        
+
+# TODO
+# We have never treated reputation as +2, +1, 0, -1, -2...
+# I have no idea where the idea came from to do this?
+# Bad idea because you are making it even harder for yourself to later run analysis because instead of just explaining thumbs up or thumbs down you will then have to explain exactly what each rating level implies and that's not helping you in your broader research goal of testing if warrants work better than reputation. Remove this and reduce it to +1 or -1 please.
         return {
-        "reputation_only": """
+            "reputation_only": """
 ## Reputation System Only
 1. **Reputation**: Buyers can rate each transaction on a scale from -2 to +2:
-   - +2 = very good, +1 = good, 0 = neutral, -1 = bad, -2 = very bad
+   - +2 = very good, +1 = good, 0 = neutral, -1 = bad, -2 = very bad 
    - Your Rating is tracked as 👍 thumbs-up and 👎 thumbs-down counts
    - A higher rating may attract more buyers
         """,
@@ -304,11 +281,10 @@ Make each seller distinct by varying:
      - A buyer can challenge your warrant for ${challenge_cost:.1f}
      - If challenged, you LOSE points from your profit based on your advertised claim:
        - **Catching misleading HQ claim**: Lose ${hq_warrant_escrow:.1f} points
-       - **Catching misleading LQ claim**: Lose ${lq_warrant_escrow:.1f} points
      - This penalty overrides any sales income from that transaction
    - Your warrant is only at risk if you are challenged for false advertising
         """,
-    }
+        }
 
     # Keep MARKET_RULES as class property for backward compatibility
     MARKET_RULES = ClassProperty(lambda cls: cls.get_market_rules())
@@ -316,7 +292,7 @@ Make each seller distinct by varying:
     @staticmethod
     def get_waiting_prompt(market_type: str) -> TextPrompt:
         """Get seller waiting prompt based on market type"""
-        if market_type == 'reputation_only':
+        if market_type == "reputation_only":
             return TextPrompt(
                 """
 # The buyers are making their purchase decisions. 
@@ -368,7 +344,7 @@ While you wait, here's a reminder of the game mechanics:
 {simulation_rounds} rounds total.
 """
             )
-        
+
     # Keep for backward compatibility (will use reputation_and_warrant version)
     WAITING_PROMPT = TextPrompt(
         """
@@ -407,7 +383,7 @@ While you wait, here's a reminder of the game mechanics:
         payoff = cls.get_payoff_matrix()
         return (
             actions.get(market_type, actions["reputation_and_warrant"]),
-            payoff.get(market_type, payoff["reputation_and_warrant"])
+            payoff.get(market_type, payoff["reputation_and_warrant"]),
         )
 
 
@@ -426,42 +402,42 @@ class Buyer_prompt:
     def get_actions(cls) -> dict[str, str]:
         """Get available action descriptions for buyers in different markets"""
         params = cls._get_market_params()
-        challenge_cost = params['challenge_cost']
-        hq_warrant_escrow = params['hq_warrant_escrow']
-        
+        challenge_cost = params["challenge_cost"]
+        hq_warrant_escrow = params["hq_warrant_escrow"]
+
         return {
-        "reputation_only": (
-            "Available Actions:\n"
-            "1. `purchase_products(product_ids: list)`: Purchase multiple products by their product_ids. You must use this action to purchase products.\n"
-            "   - `product_ids`: A list of product IDs (integers) to purchase\n"
-            "   - Example: purchase_products([123, 124, 125])\n"
-            "2. `rate_transactions(ratings: list)`: Rate multiple transactions after purchase. You must use this action to rate transactions.\n"
-            "   - `ratings`: A list of rating specifications. Each rating is a dict with:\n"
-            "     - `transaction_id` (int): The transaction ID to rate\n"
-            "     - `rating` (int): The rating value (range: -2 to 2)\n"
-            "   - Rating scale: -2 (very bad), -1 (bad), 0 (neutral), +1 (good), +2 (very good)\n"
-            "   - Example: rate_transactions([{{{{\"transaction_id\": 456, \"rating\": 2}}}}, {{{{ \"transaction_id\": 457, \"rating\": 1}}}}])\n"
-        ),
-        "reputation_and_warrant": (
-            "Available Actions:\n"
-            "1. `purchase_products(product_ids: list)`: Purchase multiple products by their product_ids. You must use this action to purchase products.\n"
-            "   - `product_ids`: A list of product IDs (integers) to purchase\n"
-            "   - Example: purchase_products([123, 124, 125])\n"
-            "2. `rate_transactions(ratings: list)`: Rate multiple transactions after purchase. You must use this action to rate transactions.\n"
-            "   - `ratings`: A list of rating specifications. Each rating is a dict with:\n"
-            "     - `transaction_id` (int): The transaction ID to rate\n"
-            "     - `rating` (int): The rating value (range: -2 to 2)\n"
-            "   - Rating scale: -2 (very bad), -1 (bad), 0 (neutral), +1 (good), +2 (very good)\n"
-            "   - Example: rate_transactions([{{{{\"transaction_id\": 456, \"rating\": 2}}}}, {{{{ \"transaction_id\": 457, \"rating\": 1}}}}])\n"
+            "reputation_only": (
+                "Available Actions:\n"
+                "1. `purchase_products(product_ids: list)`: Purchase multiple products by their product_ids. You must use this action to purchase products.\n"
+                "   - `product_ids`: A list of product IDs (integers) to purchase\n"
+                "   - Example: purchase_products([123, 124, 125])\n"
+                "2. `rate_transactions(ratings: list)`: Rate multiple transactions after purchase. You must use this action to rate transactions.\n"
+                "   - `ratings`: A list of rating specifications. Each rating is a dict with:\n"
+                "     - `transaction_id` (int): The transaction ID to rate\n"
+                "     - `rating` (int): The rating value (range: -2 to 2)\n"
+                "   - Rating scale: -2 (very bad), -1 (bad), 0 (neutral), +1 (good), +2 (very good)\n"
+                '   - Example: rate_transactions([{{{{"transaction_id": 456, "rating": 2}}}}, {{{{ "transaction_id": 457, "rating": 1}}}}])\n'
+            ),
+            "reputation_and_warrant": (
+                "Available Actions:\n"
+                "1. `purchase_products(product_ids: list)`: Purchase multiple products by their product_ids. You must use this action to purchase products.\n"
+                "   - `product_ids`: A list of product IDs (integers) to purchase\n"
+                "   - Example: purchase_products([123, 124, 125])\n"
+                "2. `rate_transactions(ratings: list)`: Rate multiple transactions after purchase. You must use this action to rate transactions.\n"
+                "   - `ratings`: A list of rating specifications. Each rating is a dict with:\n"
+                "     - `transaction_id` (int): The transaction ID to rate\n"
+                "     - `rating` (int): The rating value (range: -2 to 2)\n"
+                "   - Rating scale: -2 (very bad), -1 (bad), 0 (neutral), +1 (good), +2 (very good)\n"
+                '   - Example: rate_transactions([{{{{"transaction_id": 456, "rating": 2}}}}, {{{{ "transaction_id": 457, "rating": 1}}}}])\n'
                 f"3. `challenge_warrants(challenges: list)`: Challenge multiple warranted products after purchase. You must use this action to challenge warrants (costs ${challenge_cost:.1f} per challenge).\n"
-            "   - `challenges`: A list of challenge specifications. Each challenge is a dict with:\n"
-            "     - `transaction_id` (int): The transaction ID to challenge\n"
-            "     - `rating` (int): The rating value (range: -2 to 2)\n"
-            "   - Only use if you received LQ when HQ was advertised with a warrant\n"
+                "   - `challenges`: A list of challenge specifications. Each challenge is a dict with:\n"
+                "     - `transaction_id` (int): The transaction ID to challenge\n"
+                "     - `rating` (int): The rating value (range: -2 to 2)\n"
+                "   - Only use if you received LQ when HQ was advertised with a warrant\n"
                 f"   - Successful challenge earns you reward points (e.g., ${hq_warrant_escrow:.1f} for HQ claims)!\n"
-            "   - Example: challenge_warrants([{{{{\"transaction_id\": 456, \"rating\": -2}}}}, {{{{ \"transaction_id\": 457, \"rating\": -1}}}}])\n"
-        ),
-    }
+                '   - Example: challenge_warrants([{{{{"transaction_id": 456, "rating": -2}}}}, {{{{ "transaction_id": 457, "rating": -1}}}}])\n'
+            ),
+        }
 
     # Keep ACTIONS as class property for backward compatibility
     ACTIONS = ClassProperty(lambda cls: cls.get_actions())
@@ -470,16 +446,16 @@ class Buyer_prompt:
     def get_payoff_matrix(cls) -> dict[str, str]:
         """Get utility matrix descriptions for buyers in different markets"""
         params = cls._get_market_params()
-        hq_utility = params['hq_utility']
-        lq_utility = params['lq_utility']
-        challenge_cost = params['challenge_cost']
-        hq_warrant_escrow = params['hq_warrant_escrow']
-        lq_warrant_escrow = params['lq_warrant_escrow']
-        hq_price = params['hq_price']
-        lq_price = params['lq_price']
-        
+        hq_utility = params["hq_utility"]
+        lq_utility = params["lq_utility"]
+        challenge_cost = params["challenge_cost"]
+        hq_warrant_escrow = params["hq_warrant_escrow"]
+        lq_warrant_escrow = params["lq_warrant_escrow"]
+        hq_price = params["hq_price"]
+        lq_price = params["lq_price"]
+
         return {
-        "reputation_only": (
+            "reputation_only": (
                 f"""
 **Product Utility Values:**
 - HQ (High Quality) product utility: ${hq_utility:.1f}
@@ -500,8 +476,8 @@ Utility = (Product Quality Utility) - (Purchase Price)
 - You discover the **true quality** only after purchase
 - If you pay for HQ but receive LQ, you get cheated (utility = ${lq_utility:.1f} - ${hq_price:.1f} = ${lq_utility - hq_price:.1f})
 """
-        ).strip(),
-        "reputation_and_warrant": (
+            ).strip(),
+            "reputation_and_warrant": (
                 f"""
 **Product Utility Values:**
 - HQ (High Quality) product utility: ${hq_utility:.1f}
@@ -539,8 +515,8 @@ Utility = (Product Quality Utility) - (Purchase Price)
 - Successful challenges (catching LQ advertised as HQ) earn you net reward based on advertised escrow (${hq_warrant_escrow:.1f} for HQ claims).
 - Failed challenges cost you ${challenge_cost:.1f}
 """
-        ).strip(),
-    }
+            ).strip(),
+        }
 
     # Keep PAYOFF_MATRIX as class property for backward compatibility
     PAYOFF_MATRIX = ClassProperty(lambda cls: cls.get_payoff_matrix())
@@ -549,18 +525,15 @@ Utility = (Product Quality Utility) - (Purchase Price)
     def get_master_prompt(cls) -> TextPrompt:
         """Get buyer system prompt template with dynamic market parameters"""
         params = cls._get_market_params()
-        hq_utility = params['hq_utility']
-        lq_utility = params['lq_utility']
-        hq_price = params['hq_price']
-        lq_price = params['lq_price']
-        
+        hq_utility = params["hq_utility"]
+        lq_utility = params["lq_utility"]
+        hq_price = params["hq_price"]
+        lq_price = params["lq_price"]
+
         return TextPrompt(
             f"""
 # CONTEXT
 You are a Buyer Agent in a multi-round online marketplace simulation ('{{market_type}}' market). Your sole objective is to maximize your total utility over {{simulation_rounds}} rounds.
-
-# YOUR PERSONALITY
-{{user_profile}}
 
 # GAME RULES - READ CAREFULLY
 
@@ -594,8 +567,8 @@ Based on all the information above, decide which product you should purchase to 
 2. Seller rating (can they be trusted?){{warranty_consideration}}
 3. Your potential returns
 """
-    )
-        
+        )
+
     # Keep MASTER_PROMPT as class property for backward compatibility
     MASTER_PROMPT = ClassProperty(lambda cls: cls.get_master_prompt())
 
@@ -607,40 +580,29 @@ Please make your decision for this round.
     )
 
     # LLM generation system prompt for buyers
-    GENERATION_SYS_PROMPT = """You are an expert in creating diverse buyer personas for a market simulation.
-Your task is to generate unique buyer characteristics that will lead to different purchasing behaviors in an online marketplace.
-Each buyer should have distinct backgrounds, professions, ages, interests, genders, and personal mottos, resulting in a wide variety of personalities and decision-making styles."""
+    GENERATION_SYS_PROMPT = """You are generating buyer agent profiles for a controlled market simulation experiment."""
 
     # LLM generation user prompt for buyers
-    GENERATION_USER_PROMPT = """Create a unique buyer persona for agent {0} in a market simulation.
-The buyer operates in an online marketplace where they can purchase products from sellers with different reputation levels and choose whether to buy warranted or unwarranted products.
+    GENERATION_USER_PROMPT = """Create a buyer profile for agent {0} in a market simulation.
 
 Please provide a JSON response with the following structure:
 {{
     "username": "buyer_{0}",
-    "description": "A brief description of this buyer's background, such as profession, age, interests, gender, and personal motto.",
-    "user_char": "A detailed character description including their purchasing preferences, risk tolerance, and decision-making criteria. This should be 2-3 sentences that will guide their buying behavior in the marketplace, focusing on their life experience, personality, and unique perspective."
+    "description": "A buyer participating in an online marketplace.",
+    "user_char": "A rational market participant whose sole objective is to maximize total utility over the simulation by making strategic purchasing decisions based on seller reputation and product information."
 }}
-
-Make each buyer distinct by varying:
-- Profession (e.g., tech enthusiast, retiree, student, parent, etc.)
-- Age group (e.g., teenager, adult, senior)
-- Interests and hobbies
-- Gender identity
-- Personal motto or signature
-- Shopping style (e.g., impulsive, analytical, bargain-seeker, quality-focused)
-- Information gathering behavior"""
+"""
 
     @classmethod
     def get_market_rules(cls) -> dict[str, str]:
         """Get market rules descriptions with dynamic parameters"""
         params = cls._get_market_params()
-        challenge_cost = params['challenge_cost']
-        hq_warrant_escrow = params['hq_warrant_escrow']
-        lq_warrant_escrow = params['lq_warrant_escrow']
-        
+        challenge_cost = params["challenge_cost"]
+        hq_warrant_escrow = params["hq_warrant_escrow"]
+        lq_warrant_escrow = params["lq_warrant_escrow"]
+
         return {
-        "reputation_only": """
+            "reputation_only": """
 ## Reputation System Only
 1. You can rate each transaction on a scale from -2 to +2:
    - +2 = very good, +1 = good, 0 = neutral, -1 = bad, -2 = very bad
@@ -666,7 +628,7 @@ Make each buyer distinct by varying:
    - **If the warrant was honest**: You lose your ${challenge_cost:.1f} challenge fee
    - Only challenge warranted products where you received lower quality than advertised!
         """,
-    }
+        }
 
     # Keep MARKET_RULES as class property for backward compatibility
     MARKET_RULES = ClassProperty(lambda cls: cls.get_market_rules())
@@ -674,7 +636,7 @@ Make each buyer distinct by varying:
     @staticmethod
     def get_waiting_prompt(market_type: str) -> TextPrompt:
         """Get buyer waiting prompt based on market type"""
-        if market_type == 'reputation_only':
+        if market_type == "reputation_only":
             return TextPrompt(
                 """
 # The sellers are making production decisions.
@@ -725,7 +687,7 @@ While you wait, here's a reminder of the game mechanics:
 {simulation_rounds} rounds total. Make strategic decisions based on product quality, price, seller rating, and whether products are warranted.
 """
             )
-        
+
     # Keep for backward compatibility (will use reputation_and_warrant version)
     WAITING_PROMPT = TextPrompt(
         """
@@ -764,7 +726,7 @@ While you wait, here's a reminder of the game mechanics:
         payoff = cls.get_payoff_matrix()
         return (
             actions.get(market_type, actions["reputation_and_warrant"]),
-            payoff.get(market_type, payoff["reputation_and_warrant"])
+            payoff.get(market_type, payoff["reputation_and_warrant"]),
         )
 
 
@@ -808,7 +770,7 @@ Based on the feedback from previous rounds and current market conditions, decide
     @staticmethod
     def get_buyer_purchase_env(market_type: str) -> TextPrompt:
         """Get buyer purchase environment prompt based on market type"""
-        if market_type == 'reputation_only':
+        if market_type == "reputation_only":
             return TextPrompt(
                 """
 # MARKET ENVIRONMENT OBSERVATION
@@ -823,7 +785,7 @@ Based on the feedback from previous rounds and current market conditions, decide
 ## Purchase Decision
 Based on the available products and seller ratings, decide which products to purchase.
 """
-    )
+            )
         else:
             return TextPrompt(
                 """
@@ -840,7 +802,7 @@ Based on the available products and seller ratings, decide which products to pur
 Based on the available products, seller ratings, and warranty status, decide which products to purchase.
 """
             )
-        
+
     # Keep for backward compatibility (will use reputation_and_warrant version)
     BUYER_PURCHASE_ENV = TextPrompt(
         """
@@ -861,7 +823,7 @@ Based on the available products, seller ratings, and warranty status, decide whi
     @staticmethod
     def get_buyer_rating_env(market_type: str) -> TextPrompt:
         """Get buyer rating environment prompt based on market type"""
-        if market_type == 'reputation_only':
+        if market_type == "reputation_only":
             return TextPrompt(
                 """
 # MARKET ENVIRONMENT OBSERVATION
@@ -877,7 +839,7 @@ Rate on a scale from -2 to +2: -2 (very bad), -1 (bad), 0 (neutral), +1 (good), 
 - Consider each product's quality relative to its advertised quality
 - Be honest in your ratings to help other buyers make informed decisions
 """
-    )
+            )
         else:
             return TextPrompt(
                 """
@@ -895,7 +857,7 @@ Rate on a scale from -2 to +2: -2 (very bad), -1 (bad), 0 (neutral), +1 (good), 
 - Note: You will have a separate opportunity to challenge warranted products in the next phase
 """
             )
-    
+
     # Keep for backward compatibility (will use reputation_and_warrant version)
     BUYER_RATING_ENV = TextPrompt(
         """
@@ -954,9 +916,11 @@ def get_buyer_actions_and_payoff(market_type: str) -> tuple[str, str]:
 
 
 # History formatting template
-def format_seller_history(history_log: list, market_type: str = "reputation_and_warrant") -> str:
+def format_seller_history(
+    history_log: list, market_type: str = "reputation_and_warrant"
+) -> str:
     """Format seller history log as string
-    
+
     Args:
         history_log: List of history entries
         market_type: Market type ('reputation_only' or 'reputation_and_warrant')
@@ -965,29 +929,29 @@ def format_seller_history(history_log: list, market_type: str = "reputation_and_
         return "This is the first round. You have no past performance data."
 
     history_string = "Here is a summary of your performance in previous rounds:\n"
-    show_warrant = (market_type != 'reputation_only')
-    
+    show_warrant = market_type != "reputation_only"
+
     for entry in history_log:
-        round_num = entry['round']
-        true_quality = entry.get('true_quality', 'N/A')
-        advertised_quality = entry.get('advertised_quality', 'N/A')
-        warrant = entry.get('warrant', False)
-        is_sold = entry.get('is_sold', 0)
-        sold_numbers = entry.get('sold_numbers', 0)
-        profit = entry.get('profit', 0)
-        reputation = entry.get('reputation', 0)
-        total_profit = entry.get('total_profit', 0)
-        
+        round_num = entry["round"]
+        true_quality = entry.get("true_quality", "N/A")
+        advertised_quality = entry.get("advertised_quality", "N/A")
+        warrant = entry.get("warrant", False)
+        is_sold = entry.get("is_sold", 0)
+        sold_numbers = entry.get("sold_numbers", 0)
+        profit = entry.get("profit", 0)
+        reputation = entry.get("reputation", 0)
+        total_profit = entry.get("total_profit", 0)
+
         # Check if there are multiple product groups (different combinations)
-        product_groups = entry.get('product_groups')
-        total_listed = entry.get('total_products_listed', 1)
-        
+        product_groups = entry.get("product_groups")
+        total_listed = entry.get("total_products_listed", 1)
+
         if product_groups and len(product_groups) > 1:
             # Multiple product types in this round
             history_string += f"- Round {round_num}: Listed {total_listed} products with {len(product_groups)} different specifications:\n"
             for (adv_q, true_q, has_warr), group_info in product_groups.items():
-                count = group_info['count']
-                sold = group_info['sold_count']
+                count = group_info["count"]
+                sold = group_info["sold_count"]
                 if show_warrant:
                     warrant_str = "with warrant" if has_warr else "without warrant"
                     history_string += f"  * {count} products: advertised as {adv_q}, true quality {true_q}, {warrant_str} (sold: {sold})\n"
