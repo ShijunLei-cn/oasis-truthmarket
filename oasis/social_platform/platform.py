@@ -2145,10 +2145,13 @@ class Platform:
                 try:
                     transaction_id = rating_spec.get("transaction_id")
                     rating = rating_spec.get("rating")
-                    
+
                     if transaction_id is None or rating is None:
                         failed_ratings.append({"spec": rating_spec, "error": "Missing transaction_id or rating"})
                         continue
+
+                    # Enforce binary rating: any positive value → +1, any negative → -1
+                    rating = 1 if int(rating) > 0 else -1
                     
                     # Find transaction and get seller ID
                     trans_query = "SELECT seller_id FROM transactions WHERE transaction_id = ?"
@@ -2194,6 +2197,10 @@ class Platform:
         transaction_id = rating_details.get("transaction_id")
         rating = rating_details.get("rating")
         current_time = self.sandbox_clock.get_time_step()
+
+        # Enforce binary rating
+        if rating is not None:
+            rating = 1 if int(rating) > 0 else -1
 
         try:
             # 1. Find transaction and get seller ID and product ID
