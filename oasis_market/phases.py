@@ -423,7 +423,7 @@ class CommunicationPhase(MarketPhase):
                     self.env.current_round = round_num
 
                     communication_prompt = (
-                        "\n\nIn this phase, you are allowed to perform some social platform actions to communicate with other sellers. "
+                        "\n\nIn this phase, you are allowed to communicate with other sellers. "
                         "You cannot perform any other actions during this phase.\n"
                         "You can share your plan of listing products, product information, your experience, or any other information with other sellers to help them make listing decisions.\n"
                     )
@@ -453,7 +453,7 @@ class CommunicationPhase(MarketPhase):
                         # Buyer has previous purchase experience to share
                         transaction_summary = f"You have {len(all_transactions)} previous transaction(s) from earlier rounds that you can share information about."
                         communication_prompt = (
-                            f"\n\nIn this phase, you are allowed to perform some social platform actions to communicate with other buyers. "
+                            f"\n\nIn this phase, you are allowed to communicate with other buyers. "
                             f"You cannot perform any other actions during this phase.\n"
                             f"{transaction_summary}\n"
                             f"You can share your purchase experience, product information, seller reputation, or any other information with other buyers to help them make purchase decisions.\n"
@@ -461,7 +461,7 @@ class CommunicationPhase(MarketPhase):
                     else:
                         # First round or no previous purchases - buyer can still communicate but has no purchase history
                         communication_prompt = (
-                            "\n\nIn this phase, you are allowed to perform some social platform actions to communicate with other buyers. "
+                            "\n\nIn this phase, you are allowed to communicate with other buyers. "
                             "You cannot perform any other actions during this phase.\n"
                             "You can share your observations, expectations, or any other information with other buyers to help them make purchase decisions.\n"
                         )
