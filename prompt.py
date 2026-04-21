@@ -506,11 +506,11 @@ The payoff matrix below shows the price you pay for each advertised quality and 
 
 **Your Utility Formula:**
 - **If no challenge:** Utility = (Product Quality Utility) - (Purchase Price)
-- **If challenge succeeds** (LQ advertised as HQ with warrant): 
+- **If challenge succeeds** (true quality is lower than advertised quality):
   Utility = (Product Quality Utility) - (Purchase Price) + (Warrant Escrow) + (Challenge Cost Refund) - (Challenge Cost)
   = (Product Quality Utility) - (Purchase Price) + ${hq_warrant_escrow:.1f} + ${challenge_cost:.1f} - ${challenge_cost:.1f}
   = (Product Quality Utility) - (Purchase Price) + ${hq_warrant_escrow:.1f}
-- **If challenge fails** (HQ advertised as HQ with warrant): 
+- **If challenge fails** (true quality is equal to or higher than advertised quality):
   Utility = (Product Quality Utility) - (Purchase Price) - (Challenge Cost)
   = (Product Quality Utility) - (Purchase Price) - ${challenge_cost:.1f}
 
@@ -521,7 +521,7 @@ The payoff matrix below shows the price you pay for each advertised quality and 
 - Buy HQ advertised as HQ at price ${hq_price:.1f}, with warrant, challenge fails: 
   Utility = ${hq_utility:.1f} - ${hq_price:.1f} - ${challenge_cost:.1f} = ${hq_utility - hq_price - challenge_cost:.1f}
 - Buy LQ advertised as LQ at price ${lq_price:.1f}, with warrant, challenge: 
-  Utility = ${lq_utility:.1f} - ${lq_price:.1f} - ${challenge_cost:.1f} = ${lq_utility - lq_price - challenge_cost:.1f} (challenge fails because product matches advertisement)
+  Utility = ${lq_utility:.1f} - ${lq_price:.1f} - ${challenge_cost:.1f} = ${lq_utility - lq_price - challenge_cost:.1f} (challenge fails because true quality is not lower than advertised quality)
 
 **Important:**
 - **Selling prices for a product are as advertised**: HQ products cost ${hq_price:.1f}, LQ products cost ${lq_price:.1f}. Sellers cannot change these prices.
