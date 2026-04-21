@@ -115,6 +115,8 @@ class Seller_prompt:
         return {
             "reputation_only": (
                 f"""
+The payoff matrix below shows the cost of producing each quality type and the price you receive when selling it, so you can calculate how much profit you make from each combination.
+
 **Production Costs:**
 - HQ production cost: ${hq_cost:.1f}
 - LQ production cost: ${lq_cost:.1f}
@@ -138,6 +140,8 @@ Note: Producing LQ and selling as HQ can earn higher profit (${hq_price - lq_cos
             ).strip(),
             "reputation_and_warrant": (
                 f"""
+The payoff matrix below shows the cost of producing each quality type and the price you receive when selling it, so you can calculate how much profit you make from each combination.
+
 **Production Costs:**
 - HQ production cost: ${hq_cost:.1f}
 - LQ production cost: ${lq_cost:.1f}
@@ -461,6 +465,8 @@ class Buyer_prompt:
         return {
             "reputation_only": (
                 f"""
+The payoff matrix below shows the price you pay for each advertised quality and the utility (value) you actually receive based on the true quality, so you can calculate how much net value you get from each purchase.
+
 **Product Utility Values:**
 - HQ (High Quality) product utility: ${hq_utility:.1f}
 - LQ (Low Quality) product utility: ${lq_utility:.1f}
@@ -483,6 +489,8 @@ Utility = (Product Quality Utility) - (Purchase Price)
             ).strip(),
             "reputation_and_warrant": (
                 f"""
+The payoff matrix below shows the price you pay for each advertised quality and the utility (value) you actually receive based on the true quality, so you can calculate how much net value you get from each purchase.
+
 **Product Utility Values:**
 - HQ (High Quality) product utility: ${hq_utility:.1f}
 - LQ (Low Quality) product utility: ${lq_utility:.1f}
