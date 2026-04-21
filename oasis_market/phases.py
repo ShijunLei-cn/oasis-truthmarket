@@ -425,7 +425,6 @@ class CommunicationPhase(MarketPhase):
                     communication_prompt = (
                         "\n\nIn this phase, you are allowed to communicate with other sellers. "
                         "You cannot perform any other actions during this phase.\n"
-                        "You can share your plan of listing products, product information, your experience, or any other information with other sellers to help them make listing decisions.\n"
                     )
                 else:  # buyer
                     # Prepare buyer state for communication
