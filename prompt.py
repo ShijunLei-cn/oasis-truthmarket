@@ -121,9 +121,11 @@ The payoff matrix below shows the cost of producing each quality type and the pr
 - HQ production cost: ${hq_cost:.1f}
 - LQ production cost: ${lq_cost:.1f}
 
-**Selling Prices:**
-- HQ advertised: ${hq_price:.1f} (profit: ${hq_default_profit:.1f})
-- LQ advertised: ${lq_price:.1f} (profit: ${lq_default_profit_lq:.1f} for LQ, ${lq_default_profit_hq:.1f} for HQ)
+**Profit per Sale (production cost subtracted from selling price):**
+- If you produce an HQ product and advertise it as HQ: a sale earns you ${hq_price:.1f} - ${hq_cost:.1f} = ${hq_default_profit:.1f} profit.
+- If you produce an LQ product and advertise it as HQ: a sale earns you ${hq_price:.1f} - ${lq_cost:.1f} = ${hq_price - lq_cost:.1f} profit.
+- If you produce an LQ product and advertise it as LQ: a sale earns you ${lq_price:.1f} - ${lq_cost:.1f} = ${lq_default_profit_lq:.1f} profit.
+- If you produce an HQ product and advertise it as LQ: a sale earns you ${lq_price:.1f} - ${hq_cost:.1f} = ${lq_default_profit_hq:.1f} profit.
 
 **Your Profit Formula:**
 Profit = (Selling Price) - (Production cost)
@@ -146,9 +148,11 @@ The payoff matrix below shows the cost of producing each quality type and the pr
 - HQ production cost: ${hq_cost:.1f}
 - LQ production cost: ${lq_cost:.1f}
 
-**Selling Prices:**
-- HQ advertised: ${hq_price:.1f} (profit: ${hq_default_profit:.1f})
-- LQ advertised: ${lq_price:.1f} (profit: ${lq_default_profit_lq:.1f} for LQ, ${lq_default_profit_hq:.1f} for HQ)
+**Profit per Sale (production cost subtracted from selling price):**
+- If you produce an HQ product and advertise it as HQ: a sale earns you ${hq_price:.1f} - ${hq_cost:.1f} = ${hq_default_profit:.1f} profit.
+- If you produce an LQ product and advertise it as HQ: a sale earns you ${hq_price:.1f} - ${lq_cost:.1f} = ${hq_price - lq_cost:.1f} profit.
+- If you produce an LQ product and advertise it as LQ: a sale earns you ${lq_price:.1f} - ${lq_cost:.1f} = ${lq_default_profit_lq:.1f} profit.
+- If you produce an HQ product and advertise it as LQ: a sale earns you ${lq_price:.1f} - ${hq_cost:.1f} = ${lq_default_profit_hq:.1f} profit.
 
 **Your Profit Formula:**
 - If no challenge: Profit = (Selling Price) - (Production cost)
