@@ -11,8 +11,8 @@ echo "=========================================="
 echo "Paper Experiments: New 3-RQ Pipeline"
 echo "=========================================="
 
-CONFIG_FILE="${CONFIG_FILE:-configs/sim_gpt4omini_10s_10b_10r_runs5_base.yaml}"
-MODEL_TYPE="${MODEL_TYPE:-gpt-4o-mini}"
+CONFIG_FILE="${CONFIG_FILE:-configs/sim_gpt4o_10s_10b_10r_runs5_base.yaml}"
+MODEL_TYPE="${MODEL_TYPE:-gpt-4o}"
 EXP_ROOT="${MODEL_TYPE}/paper_important_results"
 
 echo "Using config file: ${CONFIG_FILE}"
