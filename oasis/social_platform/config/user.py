@@ -57,8 +57,7 @@ class UserInfo:
                 print(self.profile['other_info'])
                 description += (
                     f"You are a {self.profile['other_info']['gender']}, "
-                    f"{self.profile['other_info']['age']} years old, with an MBTI "
-                    f"personality type of {self.profile['other_info']['mbti']} from "
+                    f"{self.profile['other_info']['age']} years old, from "
                     f"{self.profile['other_info']['country']}.")
 
         system_content = f"""
@@ -66,7 +65,6 @@ class UserInfo:
 You're a Reddit user, and I'll present you with some tweets. After you see the tweets, choose some actions from the following functions.
 
 # SELF-DESCRIPTION
-Your actions should be consistent with your self-description and personality.
 {description}
 
 # RESPONSE METHOD
