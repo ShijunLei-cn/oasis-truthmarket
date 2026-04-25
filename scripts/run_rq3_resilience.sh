@@ -1,12 +1,12 @@
 #!/bin/bash
 # RQ3: Communication interference and deception resistance
-# (macro welfare + deception metrics; old rq2 seller-communication setting)
+# Tests three pressure scenarios: platform_fee_pressure, price_war_pressure, financial_distress_pressure
 
 set -euo pipefail
 
 CONFIG_FILE="${CONFIG_FILE:-configs/sim_gpt4omini_10s_10b_10r_runs5_base.yaml}"
 MODEL_TYPE="${MODEL_TYPE:-gpt-4o-mini}"
-EXP_ROOT="${EXP_ROOT:-${MODEL_TYPE}/newresults}" ## TODO 此处的output dir的文件名可以改成configfile的文件名，更容易区分
+EXP_ROOT="${EXP_ROOT:-${MODEL_TYPE}/newresults}"
 
 echo "=========================================="
 echo "RQ3: Communication Interference & Resistance"
@@ -21,66 +21,36 @@ for MARKET in reputation_only reputation_and_warrant; do
         PREFIX="rw"
     fi
 
+    # Scenario 1: Platform Fee Pressure (survival pressure)
     python ./example/run_market_condition_experiment.py \
-        --experiment-id "${EXP_ROOT}/rq3_resilience/${PREFIX}_wsc_R_policy_making" \
+        --experiment-id "${EXP_ROOT}/rq3_resilience/${PREFIX}_wsc_R_platform_fee" \
         --market-type "${MARKET}" \
         --communication seller \
         --communication-channel-type Real \
         --config "${CONFIG_FILE}" \
-        --Posts4Seller policy_making \
+        --Posts4Seller platform_fee_pressure \
         --disable-reentry
 
+    # Scenario 2: Price War Pressure (competitive pressure)
     python ./example/run_market_condition_experiment.py \
-        --experiment-id "${EXP_ROOT}/rq3_resilience/${PREFIX}_wsc_R_pressure_quickprofits" \
+        --experiment-id "${EXP_ROOT}/rq3_resilience/${PREFIX}_wsc_R_price_war" \
         --market-type "${MARKET}" \
         --communication seller \
         --communication-channel-type Real \
         --config "${CONFIG_FILE}" \
-        --Posts4Seller pressure_quickprofits \
+        --Posts4Seller price_war_pressure \
         --disable-reentry
 
+    # Scenario 3: Financial Distress Pressure (post-pandemic debt crisis)
     python ./example/run_market_condition_experiment.py \
-        --experiment-id "${EXP_ROOT}/rq3_resilience/${PREFIX}_wsc_R_psychological-based-attack" \
+        --experiment-id "${EXP_ROOT}/rq3_resilience/${PREFIX}_wsc_R_financial_distress" \
         --market-type "${MARKET}" \
         --communication seller \
         --communication-channel-type Real \
         --config "${CONFIG_FILE}" \
-        --Posts4Seller psychological-based-attack \
+        --Posts4Seller financial_distress_pressure \
         --disable-reentry
 done
-
-
-# for MARKET in reputation_only reputation_and_warrant; do
-#     if [ "${MARKET}" = "reputation_only" ]; then
-#         PREFIX="r"
-#     else
-#         PREFIX="rw"
-#     fi
-
-#     python ./example/run_market_condition_experiment.py \
-#         --experiment-id "${EXP_ROOT}/rq3_resilience/${PREFIX}_wsc_F_policy_making" \
-#         --market-type "${MARKET}" \
-#         --communication seller \
-#         --communication-channel-type Fake \
-#         --config "${CONFIG_FILE}" \
-#         --disable-reentry
-
-#     python ./example/run_market_condition_experiment.py \
-#         --experiment-id "${EXP_ROOT}/rq3_resilience/${PREFIX}_wsc_F_pressure_quickprofits" \
-#         --market-type "${MARKET}" \
-#         --communication seller \
-#         --communication-channel-type Fake \
-#         --config "${CONFIG_FILE}" \
-#         --disable-reentry
-
-#     python ./example/run_market_condition_experiment.py \
-#         --experiment-id "${EXP_ROOT}/rq3_resilience/${PREFIX}_wsc_F_psychological-based-attack" \
-#         --market-type "${MARKET}" \
-#         --communication seller \
-#         --communication-channel-type Fake \
-#         --config "${CONFIG_FILE}" \
-#         --disable-reentry
-# done
 
 echo ""
 echo "RQ3 done."

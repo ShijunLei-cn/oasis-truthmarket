@@ -1560,9 +1560,9 @@ def fig_rq3_micro_reasoning_impact(
     """RQ3 BERTopic market-type figures using seller listing action reasoning."""
     base_path = Path(rq3_base_dir)
     constraints = [
-        "policy_making",
-        "pressure_quickprofits",
-        "psychological-based-attack",
+        "platform_fee",
+        "price_war",
+        "financial_distress",
     ]
 
     rep_dirs: list[Path] = []
@@ -1651,9 +1651,9 @@ def fig_rq3_collusion_mechanisms_llm(
 
     base_path = Path(rq3_base_dir)
     constraints = [
-        "policy_making",
-        "pressure_quickprofits",
-        "psychological-based-attack",
+        "platform_fee",
+        "price_war",
+        "financial_distress",
     ]
 
     def _clean_reasoning(text: str) -> str:

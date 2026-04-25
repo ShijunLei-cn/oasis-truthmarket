@@ -307,9 +307,9 @@ def generate_rq3_tables(base_dir: Path, out_dir: Path) -> None:
     """New RQ3: seller communication interference resilience (constraint-wise)."""
     rq3_base = base_dir / "rq3_resilience"
     constraints = [
-        ("policy_making", "Policy-Making"),
-        ("pressure_quickprofits", "Pressure-Quick-Profits"),
-        ("psychological-based-attack", "Psychological-Attack"),
+        ("platform_fee", "Platform-Fee"),
+        ("price_war", "Price-War"),
+        ("financial_distress", "Financial-Distress"),
     ]
 
     # Summary welfare/deception table

@@ -263,9 +263,12 @@ Examples:
     parser.add_argument(
         '--Posts4Seller',
         dest='posts4seller',
-        choices=['policy_making', 'pressure_quickprofits', 'psychological-based-attack'],
+        choices=['platform_fee_pressure', 'price_war_pressure', 'financial_distress_pressure',
+                 'policy_making', 'pressure_quickprofits', 'psychological-based-attack'],  # Legacy names for backward compatibility
         default='',
-        help='Initial posts type for sellers: policy_making (government policy scenario), pressure_quickprofits (company pressure scenario), or psychological-based-attack (dark psychology scenario)'
+        help='Initial posts type for sellers: platform_fee_pressure (platform cost survival pressure), '
+             'price_war_pressure (competitive pricing pressure), or financial_distress_pressure (post-pandemic debt crisis). '
+             'Legacy names (policy_making, pressure_quickprofits, psychological-based-attack) are also supported.'
     )
 
     parser.add_argument(

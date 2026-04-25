@@ -82,9 +82,13 @@ CONDITION_LS = {
     "Rep+Warrant, Comm":   "--",
 }
 
-# Consistent colors for interference constraints (baseline/policy/pressure/psychology)
+# Consistent colors for interference constraints (baseline/platform_fee/price_war/financial_distress)
 INTERFERENCE_CONDITION_COLORS = {
     "baseline": COLORS["neutral"],
+    "platform_fee": COLORS["good_mid"],
+    "price_war": COLORS["accent"],
+    "financial_distress": COLORS["bad_mid"],
+    # Legacy names for backward compatibility
     "policy_making": COLORS["good_mid"],
     "pressure_quickprofits": COLORS["accent"],
     "psychological-based-attack": COLORS["bad_mid"],

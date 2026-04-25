@@ -118,9 +118,9 @@ def analyze_rq1(base_dir: Path) -> List[Dict]:
 # ── RQ2 Analysis ──────────────────────────────────────────────────────────────
 
 CONSTRAINTS = [
-    ("policy_making",              "Policy-Making"),
-    ("pressure_quickprofits",      "Pressure-Quick-Profits"),
-    ("psychological-based-attack", "Psychological-Attack"),
+    ("platform_fee",              "Platform-Fee"),
+    ("price_war",      "Price-War"),
+    ("financial_distress", "Financial-Distress"),
 ]
 
 RQ2_COMPARISONS = [
@@ -187,9 +187,9 @@ def analyze_rq3(base_dir: Path) -> List[Dict]:
     rq3_dir = base_dir / "rq3_resilience"
     rows = []
     constraints = [
-        ("policy_making", "Policy-Making"),
-        ("pressure_quickprofits", "Pressure-Quick-Profits"),
-        ("psychological-based-attack", "Psychological-Attack"),
+        ("platform_fee", "Platform-Fee"),
+        ("price_war", "Price-War"),
+        ("financial_distress", "Financial-Distress"),
     ]
 
     for c_key, c_label in constraints:
