@@ -64,9 +64,9 @@ setup_style()
 
 # NOTE: no \n in labels — the reviewer asked to remove line breaks from titles
 CONSTRAINTS = [
-    ("platform_fee",              "Platform-Fee"),
-    ("price_war",      "Price-War"),
-    ("financial_distress", "Financial-Distress"),
+    ("policy_making",              "Platform-Fee"),
+    ("pressure_quickprofits",      "Price-War"),
+    ("psychological-based-attack", "Financial-Distress"),
 ]
 
 CONDITIONS_ORDER = ["Rep", "Rep, Comm", "Rep+Warrant", "Rep+Warrant, Comm"]
@@ -809,14 +809,14 @@ def _rq3_constraints(with_baseline: bool):
     if with_baseline:
         return [
             ("baseline", "Baseline"),
-            ("platform_fee", "Platform-Fee"),
-            ("price_war", "Price-War"),
-            ("financial_distress", "Financial-Distress"),
+            ("policy_making", "Platform-Fee"),
+            ("pressure_quickprofits", "Price-War"),
+            ("psychological-based-attack", "Financial-Distress"),
         ]
     return [
-        ("platform_fee", "Platform-Fee"),
-        ("price_war", "Price-War"),
-        ("financial_distress", "Financial-Distress"),
+        ("policy_making", "Platform-Fee"),
+        ("pressure_quickprofits", "Price-War"),
+        ("psychological-based-attack", "Financial-Distress"),
     ]
 
 

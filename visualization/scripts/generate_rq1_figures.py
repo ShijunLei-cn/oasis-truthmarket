@@ -195,8 +195,8 @@ def _quality_combo_label(advertised_quality: str, product_quality: str) -> str:
         return "LQ Authentic"
     if aq == "HQ" and pq == "LQ":
         return "HQ Counterfeit"
-    if aq == "LQ" and pq == "HQ":
-        return "HQ Hidden Bargain"
+    # LQ advertised but HQ produced should not happen in normal seller behavior
+    # Classify as "Other" instead of creating a separate category
     return "Other"
 
 
@@ -388,12 +388,11 @@ def _draw_markettype_topic_figure(
     primary_color: str,
 ) -> str:
     base_font = 14
-    quality_order = ["HQ Authentic", "LQ Authentic", "HQ Counterfeit", "HQ Hidden Bargain", "Other"]
+    quality_order = ["HQ Authentic", "LQ Authentic", "HQ Counterfeit", "Other"]
     quality_colors = {
         "HQ Authentic": COLORS["hq_auth"],
         "LQ Authentic": COLORS["lq_auth"],
         "HQ Counterfeit": COLORS["counterfeit"],
-        "HQ Hidden Bargain": COLORS["accent"],
         "Other": COLORS["neutral"],
     }
 
@@ -1535,7 +1534,7 @@ def fig_rq2_micro_reasoning_impact(
         ok, compare_detail = _plot_bertopic_group_comparison(
             ax,
             {"Rep": rep_texts, "Rep+Warrant": rw_texts},
-            title="RQ2 BERTopic Comparison: Seller Action Reasoning",
+            title="",  # Remove title as requested
             color_map={"Rep": REP_COLOR, "Rep+Warrant": RW_COLOR},
         )
         # if ok:
@@ -1560,9 +1559,9 @@ def fig_rq3_micro_reasoning_impact(
     """RQ3 BERTopic market-type figures using seller listing action reasoning."""
     base_path = Path(rq3_base_dir)
     constraints = [
-        "platform_fee",
-        "price_war",
-        "financial_distress",
+        "policy_making",
+        "pressure_quickprofits",
+        "psychological-based-attack",
     ]
 
     rep_dirs: list[Path] = []
@@ -1607,7 +1606,7 @@ def fig_rq3_micro_reasoning_impact(
         ok, compare_detail = _plot_bertopic_group_comparison(
             ax,
             {"Rep": rep_texts, "Rep+Warrant": rw_texts},
-            title="RQ3 BERTopic Comparison: Seller Action Reasoning",
+            title="",  # Remove title as requested
             color_map={"Rep": REP_COLOR, "Rep+Warrant": RW_COLOR},
         )
         # if ok:
@@ -1651,9 +1650,9 @@ def fig_rq3_collusion_mechanisms_llm(
 
     base_path = Path(rq3_base_dir)
     constraints = [
-        "platform_fee",
-        "price_war",
-        "financial_distress",
+        "policy_making",
+        "pressure_quickprofits",
+        "psychological-based-attack",
     ]
 
     def _clean_reasoning(text: str) -> str:

@@ -105,12 +105,12 @@ def setup_style() -> None:
             "font.family":          "sans-serif",
             "font.sans-serif":      ["Helvetica Neue", "Helvetica", "Arial",
                                      "Liberation Sans", "DejaVu Sans"],
-            "font.size":            9,
-            "axes.labelsize":       9,
-            "axes.titlesize":       10,
-            "xtick.labelsize":      8,
-            "ytick.labelsize":      8,
-            "legend.fontsize":      8,
+            "font.size":            11,
+            "axes.labelsize":       11,
+            "axes.titlesize":       11,
+            "xtick.labelsize":      11,
+            "ytick.labelsize":      11,
+            "legend.fontsize":      11,
             "figure.titlesize":     11,
             "axes.unicode_minus":   False,
             # ── Spines & frame ──────────────────────────────────────────────
@@ -140,7 +140,7 @@ def setup_style() -> None:
 
 
 def label_panel(ax: "plt.Axes", letter: str,
-                fontsize: int = 10,
+                fontsize: int = 11,
                 x: float = -0.12, y: float = 1.04) -> None:
     """Add a bold (a)/(b)/… panel label at the top-left corner of an axes."""
     ax.text(x, y, f"({letter})",
@@ -206,7 +206,7 @@ def add_significance_bracket(
     y_base: float,
     p_val: float,
     h_frac: float = 0.04,
-    fontsize: int = 9,
+    fontsize: int = 11,
 ) -> None:
     """Draw a bracket + significance marker between two bars.
 
@@ -240,7 +240,7 @@ def add_text_box(
     x: float,
     y: float,
     text: str,
-    fontsize: int = 8,
+    fontsize: int = 11,
     color: str = COLORS["good_dark"],
     boxcolor: str = COLORS["neutral_light"],
 ) -> None:
@@ -289,7 +289,7 @@ def highlight_bar_group(
             y_max * 1.18,
             label,
             ha="center", va="bottom",
-            fontsize=7, color=border,
+            fontsize=11, color=border,
             fontweight="bold",
         )
 
@@ -510,7 +510,7 @@ def add_sig_footnote(fig: plt.Figure, extra: str = "", y: float = -0.02) -> None
         0.5, y,
         note,
         ha="center", va="top",
-        fontsize=7, color="#555555",
+        fontsize=11, color="#555555",
         style="italic",
         transform=fig.transFigure,
     )
