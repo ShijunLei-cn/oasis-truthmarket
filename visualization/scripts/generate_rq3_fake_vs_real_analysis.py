@@ -263,25 +263,38 @@ def create_comprehensive_figure(
         p_values.append(fake_row['p_value'].values[0] if len(fake_row) > 0 else 1.0)
 
     bars1 = ax_a.bar(x - width/2, fake_means, width, yerr=fake_stds, label='FAKE',
-                     color='#3498db', alpha=0.8, capsize=5)
+                     color='#3498db', alpha=0.85, edgecolor='white', linewidth=0.8,
+                     capsize=5, error_kw={'elinewidth': 1.2, 'ecolor': '#555'})
     bars2 = ax_a.bar(x + width/2, real_means, width, yerr=real_stds, label='REAL',
-                     color='#e74c3c', alpha=0.8, capsize=5)
+                     color='#e74c3c', alpha=0.85, edgecolor='white', linewidth=0.8,
+                     hatch='///', capsize=5, error_kw={'elinewidth': 1.2, 'ecolor': '#555'})
 
-    ax_a.set_xlabel('Economic Pressure Condition', fontsize=11, fontweight='bold')
-    ax_a.set_ylabel('Deception Count (mean ± std)', fontsize=11, fontweight='bold')
+    ax_a.set_xlabel('Economic Pressure Condition', fontsize=11)
+    ax_a.set_ylabel('Deception Count (mean ± std)', fontsize=11)
     ax_a.set_title('A. FAKE vs REAL: No Significant Difference in Deception Rates',
-                   fontsize=12, fontweight='bold', pad=10)
+                   fontsize=12, pad=10)
     ax_a.set_xticks(x)
     ax_a.set_xticklabels(pressures, fontsize=10)
-    ax_a.legend(fontsize=10, loc='upper left')
-    ax_a.grid(axis='y', alpha=0.3, linestyle='--')
+    ax_a.legend(fontsize=10, loc='upper left', frameon=False)
+    ax_a.grid(axis='y', color='#E0E0E0', linestyle='--', linewidth=0.6)
+    ax_a.set_axisbelow(True)
+
+    # Value labels on top of bars
+    y_range = ax_a.get_ylim()[1] - ax_a.get_ylim()[0]
+    for i, (fake_m, fake_s, real_m, real_s) in enumerate(zip(fake_means, fake_stds, real_means, real_stds)):
+        ax_a.text(x[i] - width/2, fake_m + fake_s + 2,
+                  f'{fake_m:.1f}', ha='center', va='bottom',
+                  fontsize=10, fontweight='bold', color='#2980b9')
+        ax_a.text(x[i] + width/2, real_m + real_s + 2,
+                  f'{real_m:.1f}', ha='center', va='bottom',
+                  fontsize=10, fontweight='bold', color='#c0392b')
 
     # Add p-values
     for i, (p_val, fake_m, real_m, fake_s, real_s) in enumerate(zip(p_values, fake_means, real_means, fake_stds, real_stds)):
         y_max = max(fake_m + fake_s, real_m + real_s)
         sig_text = '***' if p_val < 0.001 else '**' if p_val < 0.01 else '*' if p_val < 0.05 else 'ns'
-        ax_a.text(i, y_max + 5, f'p={p_val:.3f} ({sig_text})',
-                 ha='center', va='bottom', fontsize=9, style='italic')
+        ax_a.text(i, y_max + 8, f'p={p_val:.3f} ({sig_text})',
+                 ha='center', va='bottom', fontsize=10, style='italic')
 
     # Panel B: Gini Coefficient (Inequality)
     ax_b = fig.add_subplot(gs[1, 0])
@@ -297,20 +310,32 @@ def create_comprehensive_figure(
     width_gini = 0.35
 
     if 'FAKE' in gini_pivot.columns and 'REAL' in gini_pivot.columns:
-        ax_b.bar(x_gini - width_gini/2, gini_pivot['FAKE'], width_gini,
-                label='FAKE', color='#3498db', alpha=0.8)
-        ax_b.bar(x_gini + width_gini/2, gini_pivot['REAL'], width_gini,
-                label='REAL', color='#e74c3c', alpha=0.8)
+        bars_b_fake = ax_b.bar(x_gini - width_gini/2, gini_pivot['FAKE'], width_gini,
+                label='FAKE', color='#3498db', alpha=0.85, edgecolor='white', linewidth=0.8)
+        bars_b_real = ax_b.bar(x_gini + width_gini/2, gini_pivot['REAL'], width_gini,
+                label='REAL', color='#e74c3c', alpha=0.85, edgecolor='white', linewidth=0.8,
+                hatch='///')
 
-    ax_b.set_xlabel('Pressure Condition', fontsize=10, fontweight='bold')
-    ax_b.set_ylabel('Gini Coefficient', fontsize=10, fontweight='bold')
+    ax_b.set_xlabel('Pressure Condition', fontsize=10)
+    ax_b.set_ylabel('Gini Coefficient', fontsize=10)
     ax_b.set_title('B. Inequality in Deception\n(Gini: 0=equal, 1=concentrated)',
-                   fontsize=11, fontweight='bold')
+                   fontsize=11)
     ax_b.set_xticks(x_gini)
-    ax_b.set_xticklabels(gini_pivot.index, fontsize=9, rotation=15, ha='right')
-    ax_b.legend(fontsize=9)
-    ax_b.grid(axis='y', alpha=0.3)
+    ax_b.set_xticklabels(gini_pivot.index, fontsize=10, rotation=15, ha='right')
+    ax_b.legend(fontsize=10, frameon=False)
+    ax_b.grid(axis='y', color='#E0E0E0', linestyle='--', linewidth=0.6)
+    ax_b.set_axisbelow(True)
     ax_b.set_ylim(0, 1)
+
+    # Value labels
+    if 'FAKE' in gini_pivot.columns and 'REAL' in gini_pivot.columns:
+        for i in range(len(gini_pivot)):
+            fake_v = gini_pivot['FAKE'].iloc[i]
+            real_v = gini_pivot['REAL'].iloc[i]
+            ax_b.text(x_gini[i] - width_gini/2, fake_v + 0.02, f'{fake_v:.2f}',
+                     ha='center', va='bottom', fontsize=10, color='#2980b9', fontweight='bold')
+            ax_b.text(x_gini[i] + width_gini/2, real_v + 0.02, f'{real_v:.2f}',
+                     ha='center', va='bottom', fontsize=10, color='#c0392b', fontweight='bold')
 
     # Panel C: Temporal Dynamics (Financial-Distress)
     ax_c = fig.add_subplot(gs[1, 1])
@@ -323,12 +348,12 @@ def create_comprehensive_figure(
                      label=f'{channel}', linestyle=linestyle, color=color,
                      marker='o', markersize=4, linewidth=2)
 
-    ax_c.set_xlabel('Round', fontsize=10, fontweight='bold')
-    ax_c.set_ylabel('Cumulative Deceptions', fontsize=10, fontweight='bold')
+    ax_c.set_xlabel('Round', fontsize=10)
+    ax_c.set_ylabel('Cumulative Deceptions', fontsize=10)
     ax_c.set_title('C. Temporal Dynamics\n(Financial-Distress)',
-                   fontsize=11, fontweight='bold')
+                   fontsize=11)
     ax_c.legend(fontsize=9)
-    ax_c.grid(alpha=0.3)
+    ax_c.grid(alpha=0.25, color='#EBEBEB', linestyle='--', linewidth=0.7)
 
     # Panel D: Temporal Dynamics (Price-War)
     ax_d = fig.add_subplot(gs[1, 2])
@@ -341,12 +366,12 @@ def create_comprehensive_figure(
                      label=f'{channel}', linestyle=linestyle, color=color,
                      marker='o', markersize=4, linewidth=2)
 
-    ax_d.set_xlabel('Round', fontsize=10, fontweight='bold')
-    ax_d.set_ylabel('Cumulative Deceptions', fontsize=10, fontweight='bold')
+    ax_d.set_xlabel('Round', fontsize=10)
+    ax_d.set_ylabel('Cumulative Deceptions', fontsize=10)
     ax_d.set_title('D. Temporal Dynamics\n(Price-War)',
-                   fontsize=11, fontweight='bold')
+                   fontsize=11)
     ax_d.legend(fontsize=9)
-    ax_d.grid(alpha=0.3)
+    ax_d.grid(alpha=0.25, color='#EBEBEB', linestyle='--', linewidth=0.7)
 
     # Panel E: Reasoning Keyword Analysis
     ax_e = fig.add_subplot(gs[2, :2])
@@ -365,24 +390,49 @@ def create_comprehensive_figure(
 
             if len(fake_row) > 0:
                 ax_e.bar(i - width_r*1.5, fake_row['social_all_pct'].values[0], width_r,
-                        color='#3498db', alpha=0.6, label='FAKE (All)' if i == 0 else '')
+                        color='#3498db', alpha=0.6, edgecolor='white', linewidth=0.8,
+                        label='FAKE (All)' if i == 0 else '')
                 ax_e.bar(i - width_r*0.5, fake_row['social_decept_pct'].values[0], width_r,
-                        color='#3498db', alpha=1.0, label='FAKE (Decept)' if i == 0 else '')
+                        color='#3498db', alpha=1.0, edgecolor='white', linewidth=0.8,
+                        label='FAKE (Decept)' if i == 0 else '')
 
             if len(real_row) > 0:
                 ax_e.bar(i + width_r*0.5, real_row['social_all_pct'].values[0], width_r,
-                        color='#e74c3c', alpha=0.6, label='REAL (All)' if i == 0 else '')
+                        color='#e74c3c', alpha=0.6, edgecolor='white', linewidth=0.8,
+                        label='REAL (All)' if i == 0 else '',
+                        hatch='///')
                 ax_e.bar(i + width_r*1.5, real_row['social_decept_pct'].values[0], width_r,
-                        color='#e74c3c', alpha=1.0, label='REAL (Decept)' if i == 0 else '')
+                        color='#e74c3c', alpha=1.0, edgecolor='white', linewidth=0.8,
+                        label='REAL (Decept)' if i == 0 else '',
+                        hatch='///')
 
-        ax_e.set_xlabel('Pressure Condition', fontsize=10, fontweight='bold')
-        ax_e.set_ylabel('% Mentioning Social Keywords', fontsize=10, fontweight='bold')
+        # Value labels on bars
+        y_range_e = ax_e.get_ylim()[1] - ax_e.get_ylim()[0]
+        for i, pressure in enumerate(pressures_r):
+            fake_row = reasoning_plot[(reasoning_plot['Pressure'] == pressure) & (reasoning_plot['Channel'] == 'FAKE')]
+            real_row = reasoning_plot[(reasoning_plot['Pressure'] == pressure) & (reasoning_plot['Channel'] == 'REAL')]
+            if len(fake_row) > 0:
+                for offset_val, key in [(-width_r*1.5, 'social_all_pct'), (-width_r*0.5, 'social_decept_pct')]:
+                    v = fake_row[key].values[0]
+                    if v > 0:
+                        ax_e.text(i + offset_val, v + 0.5, f'{v:.1f}%',
+                                ha='center', va='bottom', fontsize=9, color='#2980b9', fontweight='bold')
+            if len(real_row) > 0:
+                for offset_val, key in [(+width_r*0.5, 'social_all_pct'), (+width_r*1.5, 'social_decept_pct')]:
+                    v = real_row[key].values[0]
+                    if v > 0:
+                        ax_e.text(i + offset_val, v + 0.5, f'{v:.1f}%',
+                                ha='center', va='bottom', fontsize=9, color='#c0392b', fontweight='bold')
+
+        ax_e.set_xlabel('Pressure Condition', fontsize=10)
+        ax_e.set_ylabel('% Mentioning Social Keywords', fontsize=10)
         ax_e.set_title('E. Reasoning Analysis: Social Awareness\n(Keywords: "other seller", "competitor", "peer", etc.)',
-                      fontsize=11, fontweight='bold')
+                      fontsize=11)
         ax_e.set_xticks(x_r)
-        ax_e.set_xticklabels(pressures_r, fontsize=9)
-        ax_e.legend(fontsize=8, ncol=2, loc='upper left')
-        ax_e.grid(axis='y', alpha=0.3)
+        ax_e.set_xticklabels(pressures_r, fontsize=10)
+        ax_e.legend(fontsize=10, ncol=2, loc='upper left', frameon=False)
+        ax_e.grid(axis='y', color='#E0E0E0', linestyle='--', linewidth=0.6)
+        ax_e.set_axisbelow(True)
 
     # Panel F: Key Insights Text Box
     ax_f = fig.add_subplot(gs[2, 2])
@@ -423,7 +473,7 @@ facilitates coordination.
              bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.3))
 
     plt.suptitle('RQ3 Exploratory Analysis: Communication Visibility Has No Significant Effect on LLM Agent Deception',
-                fontsize=14, fontweight='bold', y=0.98)
+                fontsize=14, y=0.98)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(output_path, dpi=300, bbox_inches='tight')

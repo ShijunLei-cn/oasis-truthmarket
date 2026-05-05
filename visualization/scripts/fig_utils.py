@@ -44,6 +44,7 @@ COLORS = {
     "neutral_light":"#F4F3F7",   # paper-like background tint
     # Accent for annotations
     "accent":       "#6BBFD0",   # teal accent — annotation arrows/borders
+    "purple":       "#EEC186",   # orange — price-war / pressure conditions
     # Communication / mechanism colors
     "comm_dark":    "#6BBFD0",   # teal — comm-enhanced condition
     "comm_mid":     "#C6C9DC",   # lavender — lighter comm comparison
@@ -70,9 +71,9 @@ METRIC_COLORS = {
 
 # Consistent condition colors for line charts (RQ3 round evolution)
 CONDITION_COLORS = {
-    "Rep":                 COLORS["neutral"],
+    "Rep":                 COLORS["neutral_dark"],
     "Rep, Comm":           COLORS["good_mid"],
-    "Rep+Warrant":         COLORS["neutral"],
+    "Rep+Warrant":         COLORS["good_dark"],
     "Rep+Warrant, Comm":   COLORS["good_dark"],
 }
 CONDITION_LS = {
@@ -84,59 +85,200 @@ CONDITION_LS = {
 
 # Consistent colors for interference constraints (baseline/platform_fee/price_war/financial_distress)
 INTERFERENCE_CONDITION_COLORS = {
-    "baseline": COLORS["neutral"],
+    "baseline": "#8B99B0",   # blue-gray — neutral baseline, balanced with warm condition colors
     "platform_fee": COLORS["good_mid"],
-    "price_war": COLORS["accent"],
+    "price_war": COLORS["purple"],
     "financial_distress": COLORS["bad_mid"],
     # Legacy names for backward compatibility
     "policy_making": COLORS["good_mid"],
-    "pressure_quickprofits": COLORS["accent"],
+    "pressure_quickprofits": COLORS["purple"],
     "psychological-based-attack": COLORS["bad_mid"],
 }
 
 
 # ─── Matplotlib Style Setup ──────────────────────────────────────────────────
 
+# ─── Hatch Pattern Assignments ────────────────────────────────────────────────
+# Each constraint / condition gets a distinct hatch for visual differentiation
+# even when printed in grayscale.
+def rq3_constraint_color(mt_key: str, c_key: str) -> str:
+    """Return bar color for RQ3 figures — condition determines color.
+
+    Both market types for the same condition share the same color.
+    Market types are distinguished by x-axis position.
+    """
+    return INTERFERENCE_CONDITION_COLORS.get(c_key, COLORS["neutral_dark"])
+
+
+CONSTRAINT_HATCHES = {
+    "baseline":                "",
+    "platform_fee":            "..",
+    "policy_making":           "..",
+    "price_war":               "//",
+    "pressure_quickprofits":   "//",
+    "financial_distress":      "xx",
+    "psychological-based-attack": "xx",
+}
+
+CONDITION_HATCHES = {
+    "Rep":                 "",
+    "Rep, Comm":           "..",
+    "Rep+Warrant":         "",
+    "Rep+Warrant, Comm":   "..",
+}
+
+
 def setup_style() -> None:
-    """Apply global Nature/Science-inspired academic plotting style."""
+    """Apply global publication-quality academic plotting style.
+
+    Inspired by the bar_grouped_hatch / bar_paired_delta skill references:
+    open spines, subtle y-grid, consistent typography, hatch-ready.
+    """
     plt.rcParams.update(
         {
             # ── Typography ──────────────────────────────────────────────────
             "font.family":          "sans-serif",
             "font.sans-serif":      ["Helvetica Neue", "Helvetica", "Arial",
                                      "Liberation Sans", "DejaVu Sans"],
-            "font.size":            11,
-            "axes.labelsize":       11,
-            "axes.titlesize":       11,
+            "font.size":            13,
+            "axes.labelsize":       13,
+            "axes.titlesize":       13,
             "xtick.labelsize":      11,
             "ytick.labelsize":      11,
-            "legend.fontsize":      11,
-            "figure.titlesize":     11,
+            "legend.fontsize":      10,
+            "figure.titlesize":     13,
             "axes.unicode_minus":   False,
-            # ── Spines & frame ──────────────────────────────────────────────
+            # ── Spines & frame: open-style (top/right hidden) ───────────────
             "axes.spines.top":      False,
             "axes.spines.right":    False,
-            "axes.linewidth":       0.7,
-            # ── Grid: off by default (Nature style) ─────────────────────────
+            "axes.linewidth":       0.9,
+            "axes.edgecolor":       "#333333",
+            # ── Grid: off by default; individual figures enable y-grid ──────
             "axes.grid":            False,
             "axes.axisbelow":       True,
-            # ── Ticks: outward, thin ─────────────────────────────────────────
-            "xtick.direction":      "out",
-            "ytick.direction":      "out",
-            "xtick.major.width":    0.7,
-            "ytick.major.width":    0.7,
-            "xtick.major.size":     3.5,
-            "ytick.major.size":     3.5,
-            "xtick.minor.width":    0.4,
-            "ytick.minor.width":    0.4,
+            "grid.color":           "#EBEBEB",
+            "grid.linewidth":       0.7,
+            "grid.linestyle":       "--",
+            # ── Ticks: clean, no tick marks (publication style) ──────────────
+            "xtick.major.size":     0,
+            "ytick.major.size":     0,
+            "xtick.minor.size":     0,
+            "ytick.minor.size":     0,
             # ── Lines & patches ─────────────────────────────────────────────
             "lines.linewidth":      1.2,
-            "patch.linewidth":      0.5,
+            "patch.edgecolor":      "white",
+            "patch.linewidth":      0.8,
+            # ── Hatch styling: white on color (paper standard) ──────────────
+            "hatch.color":          "white",
+            "hatch.linewidth":      1.2,
+            # ── Error bars ──────────────────────────────────────────────────
+            "errorbar.capsize":     4,
             # ── Backgrounds ─────────────────────────────────────────────────
             "figure.facecolor":     "white",
             "axes.facecolor":       "white",
         }
     )
+
+
+# ─── Bar Chart Beautification Helpers ──────────────────────────────────────────
+
+
+def add_bar_labels(ax: "plt.Axes", bars, values, errors=None,
+                   fmt: str = "{:.1f}", fontsize: int = 9.5,
+                   fontweight: str = "bold", color: str = "#333333",
+                   y_offset_frac: float = 0.02) -> None:
+    """Add numeric value labels on top of bars.
+
+    Parameters
+    ----------
+    ax : axes to draw on
+    bars : bar container or list of Rectangle patches
+    values : list of bar heights
+    errors : optional list of error bar heights (labels placed above error cap)
+    fmt : format string for the label text
+    y_offset_frac : fraction of bar height added as vertical gap
+    """
+    for bar, val in zip(bars, values):
+        if val is None or (isinstance(val, float) and np.isnan(val)):
+            continue
+        h = bar.get_height() if hasattr(bar, 'get_height') else val
+        if h <= 0:
+            continue
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            h + 1.5,
+            fmt.format(val),
+            ha="center", va="bottom",
+            fontsize=fontsize, fontweight=fontweight,
+            color=color, zorder=5,
+        )
+
+
+def add_bar_labels_simple(ax: "plt.Axes", xs, vals, errs=None,
+                          fmt: str = "{:.1f}", fontsize: int = 9.5,
+                          color: str = "#333333") -> None:
+    """Add numeric labels above bars given x-positions and values directly.
+
+    Simpler than add_bar_labels when you don't have bar objects.
+    Offset is a fixed 1.5 units for visual consistency across panels.
+    """
+    if errs is None:
+        errs = [0.0] * len(vals)
+    for x, v, e in zip(xs, vals, errs):
+        if v is None or (isinstance(v, float) and np.isnan(v)):
+            continue
+        if v <= 0:
+            continue
+        ax.text(x, v + e + 1.5, fmt.format(v),
+                ha="center", va="bottom", fontsize=fontsize,
+                fontweight="bold", color=color, zorder=5)
+
+
+def enable_ygrid(ax: "plt.Axes") -> None:
+    """Enable a clean y-axis grid (light dashed lines, publication style)."""
+    ax.yaxis.grid(True, color="#EBEBEB", linestyle="--", linewidth=0.7, zorder=0)
+    ax.set_axisbelow(True)
+    style_spines(ax)
+
+
+def style_legend(ax: "plt.Axes", **kwargs) -> None:
+    """Apply consistent legend styling."""
+    defaults = dict(frameon=False, fontsize=9, loc="upper left")
+    defaults.update(kwargs)
+    ax.legend(**defaults)
+
+
+def style_spines(ax: "plt.Axes", hide_top_right: bool = True) -> None:
+    """Style spines for publication quality: open style (no top/right), #333333, above bars."""
+    for side, spine in ax.spines.items():
+        if hide_top_right and side in ("top", "right"):
+            spine.set_visible(False)
+        else:
+            spine.set_linewidth(0.9)
+            spine.set_color("#333333")
+            spine.set_zorder(4)
+
+
+def make_legend_handles(color_map, hatch_map=None, edgecolor="white", linewidth=0.8):
+    """Create legend handles from a color dict, with optional hatch.
+
+    Parameters
+    ----------
+    color_map : dict of {key: color}
+    hatch_map : optional dict of {key: hatch_pattern}
+    """
+    handles = []
+    for key, color in color_map.items():
+        hatch = hatch_map.get(key, "") if hatch_map else ""
+        label = key.replace("_", " ").title()
+        handles.append(
+            mpatches.Patch(
+                facecolor=color, hatch=hatch,
+                edgecolor=edgecolor, linewidth=linewidth,
+                label=label,
+            )
+        )
+    return handles
 
 
 def label_panel(ax: "plt.Axes", letter: str,
@@ -411,6 +553,12 @@ def per_run_values(df: pd.DataFrame, fn) -> List[float]:
 
 def count_deceptions(run_df: pd.DataFrame) -> float:
     return float((run_df["is_honest"] == False).sum())  # noqa: E712
+
+
+def count_hq_counterfeit(run_df: pd.DataFrame) -> float:
+    """Return HQ counterfeit sold count for a run."""
+    _, _, hq_fake = product_quality_counts(run_df)
+    return float(hq_fake)
 
 
 def sum_seller_profit(run_df: pd.DataFrame) -> float:

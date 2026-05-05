@@ -27,6 +27,7 @@ import sys
 import json
 import os
 import re
+import textwrap
 from pathlib import Path
 from collections import defaultdict
 
@@ -44,6 +45,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from fig_utils import (
     COLORS,
     METRIC_COLORS,
+    CONDITION_HATCHES,
     setup_style,
     label_panel,
     load_results_df,
@@ -59,6 +61,8 @@ from fig_utils import (
     sig_marker_display,
     add_significance_bracket,
     add_text_box,
+    add_bar_labels_simple,
+    enable_ygrid,
     highlight_bar_group,
     save_figure,
 )
@@ -285,37 +289,85 @@ def _get_openai_client():
         return None
 
 
-def _llm_topic_label(
+def _llm_topic_labels_batch(
     client,
     topic_model,
-    topic_id: int,
-    fallback_words: list[str],
-) -> str:
+    topic_order: list[int],
+    topic_words: dict[int, list[str]],
+    samples_per_topic: int = 3,
+) -> dict[int, str]:
+    """Label all topics in one LLM call so labels are mutually distinct."""
+    fallback: dict[int, str] = {}
+    for tid in topic_order:
+        words = topic_words.get(tid, [])
+        fallback[tid] = ", ".join(words[:4]) if words else f"Topic {tid}"
+
     if client is None:
-        return ", ".join(fallback_words[:4]) if fallback_words else f"Topic {topic_id}"
+        return fallback
+
     try:
-        docs = topic_model.get_representative_docs(topic_id)[:4]
-        prompt = (
-            "You are labeling a topic from seller reasoning or seller messages in a marketplace simulation.\n"
-            "Return exactly one meaningful phrase of 5-10 words suitable as a chart y-axis label.\n"
-            "The phrase must summarize the shared reasoning pattern or communication intent.\n"
-            "Do not list raw keywords. Do not mention 'topic', 'seller', 'marketplace', or dataset names.\n"
-            "Use natural language, like a concise slide label.\n\n"
-            f"Keywords: {', '.join(fallback_words[:8])}\n"
-            "Representative examples:\n"
-            + "\n".join(f"- {d}" for d in docs)
-            + "\n\nReturn only the label phrase."
-        )
+        # Build a prompt that presents all topics together
+        parts = [
+            (
+                "You are labeling a set of distinct topic clusters from seller reasoning "
+                "in a marketplace simulation. Below are multiple topics, each with keywords "
+                "and representative examples."
+            ),
+            "Your task: assign each topic a concise, MEANINGFULLY DISTINCT label (5-10 words).",
+            (
+                "CRITICAL: The labels must be clearly different from each other. "
+                "No two labels should be paraphrases or share the same core phrase. "
+                "Identify what makes each topic unique and capture that difference in the label."
+            ),
+            "Use natural language suitable for chart axis labels.",
+            "Do not mention 'topic', 'seller', 'marketplace', or dataset names.",
+            "",
+        ]
+        for tid in topic_order:
+            words = topic_words.get(tid, [])
+            docs = topic_model.get_representative_docs(tid)[:samples_per_topic]
+            parts.append(f"--- Topic {tid} ---")
+            parts.append(f"Keywords: {', '.join(words[:8])}" if words else f"Keywords: (none)")
+            parts.append("Representative examples:")
+            for d in docs:
+                parts.append(f"  - {d}")
+            parts.append("")
+
+        parts.append("Return exactly one label per topic in this format:")
+        for tid in topic_order:
+            parts.append(f"Topic {tid}: <label>")
+        parts.append("")
+        parts.append("Do not include any other text. One line per topic.")
+
+        prompt = "\n".join(parts)
+
         resp = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.2,
         )
-        label = resp.choices[0].message.content.strip().replace("\n", " ")
-        label = re.sub(r"\s+", " ", label).strip(" .:-")
-        return label or (", ".join(fallback_words[:4]) if fallback_words else f"Topic {topic_id}")
+        raw = resp.choices[0].message.content.strip()
+
+        # Parse response line by line
+        labels: dict[int, str] = {}
+        for line in raw.split("\n"):
+            line = line.strip()
+            m = re.match(r"^Topic\s*(\d+)\s*[:：\-—]\s*(.+)$", line)
+            if m:
+                tid = int(m.group(1))
+                label = m.group(2).strip()
+                label = re.sub(r"\s+", " ", label).strip(" .:-")
+                if label:
+                    labels[tid] = label
+
+        # Fill any missing topics with fallback
+        for tid in topic_order:
+            if tid not in labels:
+                labels[tid] = fallback[tid]
+
+        return labels
     except Exception:
-        return ", ".join(fallback_words[:4]) if fallback_words else f"Topic {topic_id}"
+        return fallback
 
 
 def _fit_bertopic_topic_records(
@@ -371,10 +423,10 @@ def _fit_bertopic_topic_records(
 
     client = _get_openai_client()
     label_mode = "llm" if client is not None else "keywords-fallback"
-    labels: dict[int, str] = {}
+    topic_words = {}
     for topic_id in topic_order:
-        words = [word for word, _ in (topic_model.get_topic(topic_id) or [])[:6]]
-        labels[int(topic_id)] = _llm_topic_label(client, topic_model, int(topic_id), words)
+        topic_words[topic_id] = [word for word, _ in (topic_model.get_topic(topic_id) or [])[:6]]
+    labels = _llm_topic_labels_batch(client, topic_model, topic_order, topic_words)
 
     detail = f"docs={len(out_df)}, topics={len(topic_order)}, labels={label_mode}"
     return topic_model, out_df, topic_order, labels, detail, label_mode
@@ -411,12 +463,12 @@ def _draw_markettype_topic_figure(
     topic_share = topic_counts / total_docs
 
     y = np.arange(len(topic_order))
-    ax0.barh(y, topic_share.values, color=primary_color, alpha=0.82, edgecolor="white", linewidth=0.6)
+    ax0.barh(y, topic_share.values, color=primary_color, alpha=0.82, edgecolor="white", linewidth=0.8)
     ax0.set_yticks(y)
     ax0.set_yticklabels([topic_labels[t] for t in topic_order], fontsize=base_font)
     ax0.invert_yaxis()
     ax0.set_xlabel("Topic Share", fontsize=base_font)
-    ax0.grid(axis="x", alpha=0.22, linestyle=":", zorder=0)
+    ax0.grid(axis="x", color="#E0E0E0", linestyle="--", linewidth=0.6, zorder=0)
     ax0.set_axisbelow(True)
     for yy, vv in zip(y, topic_share.values):
         ax0.text(vv + 0.006, yy, f"{vv:.0%}", va="center", ha="left", fontsize=base_font, color="#444")
@@ -435,42 +487,50 @@ def _draw_markettype_topic_figure(
     # )
     save_figure(fig_summary, output_path)
 
-    joined = product_df.merge(topic_docs[["doc_id", "topic"]], on="doc_id", how="inner")
-    round_values = sorted(int(r) for r in joined["round"].dropna().unique())
-    bar_w = 0.16
+    # ax1 (Listed Product Count) uses product_df directly — no BERTopic dependency
+    round_values = sorted(int(r) for r in product_df["round"].dropna().unique())
     x = np.arange(len(round_values), dtype=float)
 
     fig_panel, (ax1, ax2) = plt.subplots(
-        2, 1, figsize=(12.8, 9.2),
-        gridspec_kw={"height_ratios": [1.0, 1.55], "hspace": 0.32}
+        2, 1, figsize=(12.8, 7.2),
+        gridspec_kw={"height_ratios": [0.92, 0.75], "hspace": 0.30}
     )
-    for idx, quality in enumerate([q for q in quality_order if q in joined["quality_label"].unique()]):
+    present_qs = [q for q in quality_order if q in product_df["quality_label"].unique()]
+    n_qs = max(1, len(present_qs))
+    bar_w = 0.76 / n_qs  # match ax2 group width
+    for idx, quality in enumerate(present_qs):
         vals = []
         for round_num in round_values:
-            sub = joined[(joined["round"] == round_num) & (joined["quality_label"] == quality)]
+            sub = product_df[(product_df["round"] == round_num) & (product_df["quality_label"] == quality)]
             vals.append(float(sub["quantity"].sum()))
-        offset = (idx - (len([q for q in quality_order if q in joined["quality_label"].unique()]) - 1) / 2) * bar_w
-        ax1.bar(
+        offset = (idx - (n_qs - 1) / 2) * bar_w
+        bars = ax1.bar(
             x + offset,
             vals,
             width=bar_w * 0.92,
             color=quality_colors.get(quality, COLORS["neutral"]),
             edgecolor="white",
-            linewidth=0.5,
+            linewidth=0.8,
             label=quality,
             zorder=3,
         )
+        for bar, v in zip(bars, vals):
+            if v > 0:
+                ax1.text(bar.get_x() + bar.get_width() / 2, v + max(vals) * 0.01,
+                         f"{v:.0f}", ha="center", va="bottom", fontsize=9, color="#333")
     ax1.set_xticks(x)
     ax1.set_xticklabels(round_values, fontsize=base_font)
-    ax1.set_xlabel("Round Number", fontsize=base_font)
+    ax1.set_xlabel("")
     ax1.set_ylabel("Listed Product Count", fontsize=base_font)
-    ax1.grid(axis="y", alpha=0.22, linestyle=":", zorder=0)
-    ax1.set_axisbelow(True)
+    enable_ygrid(ax1)
     # Use blank labels to avoid duplicate legend with the one on ax2
     for patch in ax1.patches:
         patch.set_label('_nolegend_')
-    ax1.legend(frameon=False, ncol=3, fontsize=base_font, loc="upper right")
+    ax1.legend(frameon=False, ncol=4, fontsize=base_font,
+               loc="lower center", bbox_to_anchor=(0.5, 1.02))
 
+    # ax2 (Topic share by round) needs BERTopic topic assignments
+    joined = product_df.merge(topic_docs[["doc_id", "topic"]], on="doc_id", how="inner")
     present_qualities = [q for q in quality_order if q in joined["quality_label"].unique()]
     topic_palette = plt.get_cmap("tab20")
     topic_colors = {topic_id: topic_palette(i % 20) for i, topic_id in enumerate(topic_order)}
@@ -504,8 +564,7 @@ def _draw_markettype_topic_figure(
     ax2.set_xlabel("Round Number", fontsize=base_font)
     ax2.set_ylabel("Topic Share within Product Quality", fontsize=base_font)
     ax2.set_ylim(0, 1.0)
-    ax2.grid(axis="y", alpha=0.20, linestyle=":", zorder=0)
-    ax2.set_axisbelow(True)
+    enable_ygrid(ax2)
 
     quality_handles = [
         mpatches.Patch(color=quality_colors[q], label=q)
@@ -545,7 +604,7 @@ def _plot_bertopic_group_comparison(
     color_map: dict[str, str],
     max_topics: int = 6,
 ) -> tuple[bool, str]:
-    base_font = 14
+    base_font = 11
     os.environ.setdefault("NUMBA_CACHE_DIR", "/tmp/numba_cache")
     try:
         from bertopic import BERTopic
@@ -622,49 +681,231 @@ def _plot_bertopic_group_comparison(
 
     client = _get_openai_client()
     label_mode = "llm" if client is not None else "keywords-fallback"
-    topic_labels: list[str] = []
+    topic_words = {}
     for topic_id in topic_order:
-        words = [word for word, _ in (topic_model.get_topic(int(topic_id)) or [])[:6]]
-        topic_labels.append(_llm_topic_label(client, topic_model, int(topic_id), words))
+        topic_words[int(topic_id)] = [word for word, _ in (topic_model.get_topic(int(topic_id)) or [])[:6]]
+    labels_dict = _llm_topic_labels_batch(client, topic_model, [int(t) for t in topic_order], topic_words)
+    topic_labels = [labels_dict[int(t)] for t in topic_order]
 
-    n_groups = len(prepared)
+    groups = list(prepared.keys())
     y = np.arange(len(topic_order), dtype=float)
-    bar_h = 0.72 / max(n_groups, 2)
-    offsets = np.linspace(-(n_groups - 1) / 2, (n_groups - 1) / 2, n_groups) * bar_h
+    rep_vals = shares[groups[0]].to_numpy(dtype=float)
+    rw_vals = shares[groups[1]].to_numpy(dtype=float)
 
-    for idx, group in enumerate(prepared.keys()):
-        vals = shares[group].to_numpy(dtype=float)
-        ax.barh(
-            y + offsets[idx],
-            vals,
-            height=bar_h * 0.92,
-            color=color_map.get(group, COLORS["neutral_dark"]),
-            alpha=0.88,
-            edgecolor="white",
-            linewidth=0.5,
-            label=f"{group} (n={len(prepared[group])})",
-            zorder=3,
-        )
-        for yy, vv in zip(y + offsets[idx], vals):
-            if vv <= 0:
-                continue
-            ax.text(vv + 0.006, yy, f"{vv:.0%}", va="center", ha="left", fontsize=7.5, color="#444")
+    rep_color = color_map.get(groups[0], COLORS["neutral_dark"])
+    rw_color = color_map.get(groups[1], COLORS["good_dark"])
+    x_max = shares.to_numpy().max()
 
+    bar_h = 0.36
+    pair_gap = 0.03
+
+    # Rep bars (above), Rep+Warrant bars (below) — invert_yaxis flips visual direction
+    ax.barh(y - (bar_h + pair_gap) / 2, rep_vals, height=bar_h,
+            color=rep_color, edgecolor="white", linewidth=0.8,
+            label=f"{groups[0]} (n={len(prepared[groups[0]])})", zorder=3)
+    ax.barh(y + (bar_h + pair_gap) / 2, rw_vals, height=bar_h,
+            color=rw_color, edgecolor="white", linewidth=0.8,
+            label=f"{groups[1]} (n={len(prepared[groups[1]])})", zorder=3)
+
+    # Value labels
+    label_gap = max(x_max * 0.015, 0.006)
+    rep_y = y - (bar_h + pair_gap) / 2
+    rw_y = y + (bar_h + pair_gap) / 2
+    for ry, wy, rv, wv in zip(rep_y, rw_y, rep_vals, rw_vals):
+        ax.text(rv + label_gap, ry, f"{rv:.0%}",
+                va="center", ha="left", fontsize=9, fontweight="bold",
+                color=rep_color)
+        ax.text(wv + label_gap, wy, f"{wv:.0%}",
+                va="center", ha="left", fontsize=9, fontweight="bold",
+                color=rw_color)
+
+    # Legend
+    ax.legend(frameon=False, fontsize=base_font, loc="lower right")
+
+    # Axis
     ax.set_yticks(y)
     ax.set_yticklabels(topic_labels, fontsize=base_font)
     ax.invert_yaxis()
-    ax.set_xlim(0, min(1.0, max(0.22, shares.to_numpy().max() * 1.24)))
+    ax.set_xlim(0, min(1.0, max(0.22, x_max * 1.28)))
     ax.set_xlabel("Topic Share within Group", fontsize=base_font)
-    ax.set_title(title, fontsize=base_font)
-    ax.grid(axis="x", alpha=0.22, linestyle=":", zorder=0)
+    if title:
+        ax.set_title(title, fontsize=base_font)
+
+    # Grid and spine styling
+    ax.xaxis.grid(True, color="#EBEBEB", linestyle="--", linewidth=0.7, zorder=0)
     ax.set_axisbelow(True)
-    ax.legend(frameon=False, fontsize=base_font, loc="lower right")
+    for side in ("top", "right"):
+        ax.spines[side].set_visible(False)
+    for side in ("left", "bottom"):
+        ax.spines[side].set_linewidth(0.9)
+        ax.spines[side].set_color("#333333")
+    ax.tick_params(length=0)
 
     return True, (
         f"docs={len(corpus)}, "
         f"groups=" + ", ".join(f"{label}:{len(texts)}" for label, texts in prepared.items())
         + f", topics={len(topic_order)}, labels={label_mode}"
     )
+
+
+def _plot_bertopic_radar_comparison(
+    ax: plt.Axes,
+    group_texts: dict[str, list[str]],
+    title: str,
+    color_map: dict[str, str],
+    max_topics: int = 6,
+) -> tuple[bool, str, list[str]]:
+    """Radar chart comparing topic shares between Rep and Rep+Warrant.
+
+    Each axis is a topic (numbered 1-N). Numbered topic labels are returned
+    so the caller can display them as a legend below the chart.
+    Returns (success, detail, topic_labels).
+    """
+    base_font = 10
+    os.environ.setdefault("NUMBA_CACHE_DIR", "/tmp/numba_cache")
+    try:
+        from bertopic import BERTopic
+        from bertopic.dimensionality import BaseDimensionalityReduction
+        from bertopic.vectorizers import ClassTfidfTransformer
+        from sklearn.cluster import KMeans
+        from sklearn.decomposition import TruncatedSVD
+        from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
+    except Exception as e:
+        ax.axis("off")
+        ax.text(0.5, 0.5, "BERTopic unavailable", ha="center", va="center", fontsize=base_font, color="#666")
+        return False, str(e), []
+
+    prepared = {label: texts for label, texts in group_texts.items() if texts}
+    if len(prepared) < 2:
+        ax.axis("off")
+        ax.text(0.5, 0.5, "Need two non-empty groups", ha="center", va="center", fontsize=base_font, color="#666")
+        return False, "insufficient groups", []
+
+    corpus: list[str] = []
+    labels_list: list[str] = []
+    for label, texts in prepared.items():
+        corpus.extend(texts)
+        labels_list.extend([label] * len(texts))
+    if len(corpus) < 12:
+        ax.axis("off")
+        ax.text(0.5, 0.5, "Too few reasoning samples", ha="center", va="center", fontsize=base_font, color="#666")
+        return False, "too few reasoning samples", []
+
+    stop = _reasoning_stopwords()
+    tfidf = TfidfVectorizer(max_features=2500, ngram_range=(1, 2), min_df=2, stop_words=list(stop))
+    X = tfidf.fit_transform(corpus)
+    if X.shape[1] < 3:
+        ax.axis("off")
+        ax.text(0.5, 0.5, "Too few textual features", ha="center", va="center", fontsize=base_font, color="#666")
+        return False, "too few textual features", []
+
+    n_components = max(2, min(8, X.shape[1] - 1))
+    embeddings = TruncatedSVD(n_components=n_components, random_state=42).fit_transform(X)
+    n_clusters = max(2, min(max_topics + 2, len(corpus) // 120))
+
+    vectorizer = CountVectorizer(stop_words=list(stop), ngram_range=(1, 2), min_df=2)
+    topic_model = BERTopic(
+        embedding_model=None,
+        umap_model=BaseDimensionalityReduction(),
+        hdbscan_model=KMeans(n_clusters=n_clusters, random_state=42, n_init=10),
+        vectorizer_model=vectorizer,
+        ctfidf_model=ClassTfidfTransformer(reduce_frequent_words=True),
+        min_topic_size=max(10, min(30, len(corpus) // 20)),
+        top_n_words=8,
+        calculate_probabilities=False,
+        verbose=False,
+    )
+
+    try:
+        topics, _ = topic_model.fit_transform(corpus, embeddings=embeddings)
+    except Exception as e:
+        ax.axis("off")
+        ax.text(0.5, 0.5, "BERTopic fitting failed", ha="center", va="center", fontsize=base_font, color="#666")
+        return False, str(e), []
+
+    topic_df = pd.DataFrame({"group": labels_list, "topic": topics})
+    topic_df = topic_df[topic_df["topic"] != -1]
+    if topic_df.empty:
+        ax.axis("off")
+        ax.text(0.5, 0.5, "No stable topics discovered", ha="center", va="center", fontsize=base_font, color="#666")
+        return False, "no stable topics", []
+
+    counts = topic_df.groupby(["topic", "group"]).size().unstack(fill_value=0)
+    counts = counts.reindex(columns=list(prepared.keys()), fill_value=0)
+    topic_order = counts.sum(axis=1).sort_values(ascending=False).head(max_topics).index.tolist()
+    counts = counts.loc[topic_order]
+    shares = counts.div(counts.sum(axis=0), axis=1).fillna(0.0)
+
+    client = _get_openai_client()
+    label_mode = "llm" if client is not None else "keywords-fallback"
+    topic_words = {}
+    for topic_id in topic_order:
+        topic_words[int(topic_id)] = [word for word, _ in (topic_model.get_topic(int(topic_id)) or [])[:6]]
+    labels_dict = _llm_topic_labels_batch(client, topic_model, [int(t) for t in topic_order], topic_words)
+    topic_labels = [labels_dict[int(t)] for t in topic_order]
+
+    groups = list(prepared.keys())
+    rep_vals = shares[groups[0]].to_numpy(dtype=float)
+    rw_vals = shares[groups[1]].to_numpy(dtype=float)
+
+    rep_color = color_map.get(groups[0], COLORS["neutral_dark"])
+    rw_color = color_map.get(groups[1], COLORS["good_dark"])
+    x_max = shares.to_numpy().max()
+
+    # ── Radar chart (manual cartesian axes, compact) ─────────────────────
+    n_topics = len(topic_order)
+    angles = np.linspace(0, 2 * np.pi, n_topics, endpoint=False)
+    max_r = x_max * 1.45
+
+    # Polar → cartesian conversion
+    def _c(r, theta):
+        return r * np.cos(theta), r * np.sin(theta)
+
+    rep_vals_closed = np.concatenate([rep_vals, rep_vals[:1]])
+    rw_vals_closed = np.concatenate([rw_vals, rw_vals[:1]])
+    angles_closed = np.concatenate([angles, angles[:1]])
+    rx, ry = _c(rep_vals_closed, angles_closed)
+    wx, wy = _c(rw_vals_closed, angles_closed)
+
+    # Set up axes
+    pad = max_r * 0.20
+    ax.axis("off")
+    ax.set_aspect("equal")
+    ax.set_xlim(-max_r - pad, max_r + pad)
+    ax.set_ylim(-max_r - pad, max_r + pad)
+
+    # Grid circles
+    for r in np.linspace(max_r * 0.25, max_r, 3):
+        ax.add_patch(plt.Circle((0, 0), r, fill=False, color="#CCCCCC", linewidth=0.5, zorder=1))
+
+    # Grid spokes
+    for a in angles:
+        ex, ey = _c(max_r * 1.02, a)
+        ax.plot([0, ex], [0, ey], color="#CCCCCC", linewidth=0.5, zorder=1)
+
+    # Data polygons
+    ax.fill(rx, ry, alpha=0.10, color=rep_color, zorder=3)
+    ax.plot(rx, ry, "o-", color=rep_color, linewidth=1.5, markersize=3,
+            label=groups[0], zorder=4)
+    ax.fill(wx, wy, alpha=0.10, color=rw_color, zorder=3)
+    ax.plot(wx, wy, "s-", color=rw_color, linewidth=1.5, markersize=3,
+            label=groups[1], zorder=4)
+
+    # Number labels at vertices
+    for i, (a, rv, wv) in enumerate(zip(angles, rep_vals, rw_vals)):
+        lr = max(rv, wv) + x_max * 0.10
+        lx, ly = _c(lr, a)
+        ax.text(lx, ly, str(i + 1), ha="center", va="center",
+                fontsize=base_font - 1, fontweight="bold", zorder=5)
+
+    # Legend
+    ax.legend(frameon=False, fontsize=base_font - 2, loc="lower left")
+
+    return True, (
+        f"docs={len(corpus)}, "
+        f"groups=" + ", ".join(f"{label}:{len(texts)}" for label, texts in prepared.items())
+        + f", topics={len(topic_order)}, labels={label_mode}"
+    ), topic_labels
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -722,7 +963,7 @@ def _kde_panel(
         m = float(np.mean(arr))
         ax.axvline(m, color=color, lw=1.2, ls="--", alpha=0.85, zorder=4)
         ax.text(m, y_max * 1.07, f"μ={m:.1f}",
-                ha="center", va="bottom", fontsize=8,
+                ha="center", va="bottom", fontsize=9,
                 color=color, fontweight="bold")
 
     # Rug: individual per-run values along x-axis
@@ -744,7 +985,7 @@ def _kde_panel(
     if annotation:
         ax.text(0.97, 0.80, annotation,
                 transform=ax.transAxes, ha="right", va="top",
-                fontsize=7, color=COLORS["good_dark"],
+                fontsize=9, color=COLORS["good_dark"],
                 bbox=dict(boxstyle="round,pad=0.3", facecolor=COLORS["neutral_light"],
                           edgecolor=COLORS["good_dark"], alpha=0.9, linewidth=0.8))
 
@@ -753,7 +994,7 @@ def _kde_panel(
     ax.set_ylim(rug_y * 2.2, y_max * 1.32)
     ax.set_xlim(x_lo, x_hi)
     if show_legend:
-        ax.legend(frameon=False, fontsize=8, loc="upper left")
+        ax.legend(frameon=False, fontsize=10, loc="upper left")
 
 
 def fig1_profit_and_deceptions(
@@ -929,24 +1170,24 @@ def fig_rq2_product_quality_over_rounds(
     stats_r = _round_stats(df_r)
     stats_rw = _round_stats(df_rw)
 
-    fig, axes = plt.subplots(1, 2, figsize=(9.6, 4.0), gridspec_kw={"wspace": 0.28}, sharex=True)
+    fig, axes = plt.subplots(1, 2, figsize=(7.5, 3.8), gridspec_kw={"wspace": 0.30}, sharex=True)
     for ax, cat_name in zip(
         axes,
         ["HQ True Quality", "LQ True Quality"],
     ):
         xr, mr, sr = stats_r[cat_name]
         xw, mw, sw = stats_rw[cat_name]
-        ax.plot(xr, mr, color=REP_COLOR, lw=1.8, label="Rep")
+        ax.plot(xr, mr, color=REP_COLOR, lw=2.2, label="Rep")
         ax.fill_between(xr, mr - sr, mr + sr, color=COLORS["neutral"], alpha=0.22)
-        ax.plot(xw, mw, color=RW_COLOR, lw=1.8, label="Rep+Warrant")
+        ax.plot(xw, mw, color=RW_COLOR, lw=2.2, label="Rep+Warrant")
         ax.fill_between(xw, mw - sw, mw + sw, color=RW_COLOR, alpha=0.18)
-        ax.set_title(cat_name, fontsize=10)
-        ax.set_xlabel("Round", fontsize=9)
-        ax.grid(axis="y", alpha=0.25)
-    axes[0].set_ylabel("Mean Sold Count per Round", fontsize=10)
+        ax.set_title(cat_name, fontsize=13)
+        ax.set_xlabel("Round", fontsize=11)
+        ax.grid(axis="y", color="#EBEBEB", linestyle="--", linewidth=0.7)
+    axes[0].set_ylabel("Mean Sold Count per Round", fontsize=12)
     shared_handles = [
-        Line2D([0], [0], color=REP_COLOR, lw=1.8, label="Rep"),
-        Line2D([0], [0], color=RW_COLOR, lw=1.8, label="Rep+Warrant"),
+        Line2D([0], [0], color=REP_COLOR, lw=2.2, label="Rep"),
+        Line2D([0], [0], color=RW_COLOR, lw=2.2, label="Rep+Warrant"),
     ]
     fig.legend(
         handles=shared_handles,
@@ -954,9 +1195,9 @@ def fig_rq2_product_quality_over_rounds(
         bbox_to_anchor=(0.5, 0.0),
         ncol=2,
         frameon=False,
-        fontsize=9,
+        fontsize=11,
     )
-    fig.subplots_adjust(bottom=0.18)
+    fig.subplots_adjust(bottom=0.20)
     save_figure(fig, output_dir / "rq2_product_quality_over_rounds.png")
     print("  [RQ2-RoundQuality] Product-quality round trend figure saved.")
 
@@ -1030,21 +1271,23 @@ def _draw_probe_panel(
 ) -> None:
     n_groups = len(VULN_KEYS)
     x = np.arange(n_groups)
-    w = 0.32
+    w = 0.36
 
+    enable_ygrid(ax)
     ax.bar(x - w / 2, means_r, width=w, color=COLORS["bad_dark"],
-           label=LABEL_R, edgecolor="white", linewidth=0.5,
-           yerr=stds_r, capsize=3,
-           error_kw={"elinewidth": 1.0, "ecolor": "#555555"}, zorder=3)
+           label=LABEL_R, edgecolor="white", linewidth=0.8,
+           yerr=stds_r, capsize=4,
+           error_kw={"elinewidth": 1.2, "ecolor": "#555"}, zorder=3)
     ax.bar(x + w / 2, means_rw, width=w, color=COLORS["bad_mid"],
-           label=LABEL_RW, edgecolor="white", linewidth=0.5,
-           yerr=stds_rw, capsize=3,
-           error_kw={"elinewidth": 1.0, "ecolor": "#555555"}, zorder=3)
+           hatch="//",
+           label=LABEL_RW, edgecolor="white", linewidth=0.8,
+           yerr=stds_rw, capsize=4,
+           error_kw={"elinewidth": 1.2, "ecolor": "#555"}, zorder=3)
 
     ax.set_xticks(x)
-    ax.set_xticklabels(VULN_LABELS, fontsize=9)
+    ax.set_xticklabels(VULN_LABELS, fontsize=10)
     if show_ylabel:
-        ax.set_ylabel("Manipulation Detection Rate (%)", fontsize=10)
+        ax.set_ylabel("Manipulation Detection Rate (%)", fontsize=11)
 
     bracket_tops = []
     for i, p in enumerate(p_vals):
@@ -1055,20 +1298,23 @@ def _draw_probe_panel(
                                      y_top, p, h_frac=0.07, fontsize=9)
 
     global_top = max(bracket_tops) if bracket_tops else max(means_r + means_rw)
-    _set_dynamic_ylim_positive(ax, [global_top], pad_ratio=0.30, min_top=1.0)
+    _set_dynamic_ylim_positive(ax, [global_top], pad_ratio=0.10, min_top=1.0)
+
+    # Value labels on all bars
+    for i in range(n_groups):
+        ax.text(x[i] - w / 2, means_r[i] + stds_r[i] + global_top * 0.02,
+                f"{means_r[i]:.0f}", ha="center", va="bottom",
+                fontsize=10, fontweight="bold", color="#333333")
+        ax.text(x[i] + w / 2, means_rw[i] + stds_rw[i] + global_top * 0.02,
+                f"{means_rw[i]:.0f}", ha="center", va="bottom",
+                fontsize=10, fontweight="bold", color="#333333")
 
     es_idx = VULN_KEYS.index("exit_strategy")
     es_y = bracket_tops[es_idx] * 1.24
     add_text_box(ax, x[es_idx], es_y, "Primary\nvulnerability",
-                 fontsize=8, color=COLORS["bad_dark"], boxcolor=COLORS["neutral_light"])
-    ax.text(x[es_idx] - w / 2, means_r[es_idx] + stds_r[es_idx] + 1.0,
-            f"{means_r[es_idx]:.1f}%", ha="center", va="bottom",
-            fontsize=7, color=COLORS["bad_dark"])
-    ax.text(x[es_idx] + w / 2, means_rw[es_idx] + stds_rw[es_idx] + 1.0,
-            f"{means_rw[es_idx]:.1f}%", ha="center", va="bottom",
-            fontsize=7, color=COLORS["bad_mid"])
+                 fontsize=9, color=COLORS["bad_dark"], boxcolor=COLORS["neutral_light"])
     if show_legend:
-        ax.legend(frameon=False, fontsize=8, loc="upper left")
+        ax.legend(frameon=False, fontsize=10, loc="upper left")
 
 
 def fig1_2_manipulation_detection_rep_only(r_dir: str, output_dir: Path) -> None:
@@ -1080,25 +1326,31 @@ def fig1_2_manipulation_detection_rep_only(r_dir: str, output_dir: Path) -> None
 
     means_r, stds_r = _compute_probe_single_stats(probe_r)
     x = np.arange(len(VULN_KEYS))
-    w = 0.52
+    w = 0.56
 
-    fig, ax = plt.subplots(1, 1, figsize=(7.0, 4.1))
+    fig, ax = plt.subplots(1, 1, figsize=(3.2, 2.6))
+    enable_ygrid(ax)
     ax.bar(
         x, means_r, width=w, color=COLORS["bad_dark"],
-        edgecolor="white", linewidth=0.5,
-        yerr=stds_r, capsize=3,
-        error_kw={"elinewidth": 1.0, "ecolor": "#555555"},
+        edgecolor="white", linewidth=0.8,
+        yerr=stds_r, capsize=4,
+        error_kw={"elinewidth": 1.2, "ecolor": "#555"},
         zorder=3
     )
 
     ax.set_xticks(x)
-    ax.set_xticklabels(VULN_LABELS, fontsize=9)
-    ax.set_ylabel("Manipulation Detection Rate (%)", fontsize=10)
-    ax.grid(axis="y", alpha=0.25, zorder=0)
-    ax.set_axisbelow(True)
+    ax.set_xticklabels(VULN_SHORT, fontsize=10)
+    ax.set_ylabel("Detection Rate (%)", fontsize=11)
+
+    # Value labels on top of bars
+    global_top = max(m + s for m, s in zip(means_r, stds_r)) if means_r else 1.0
+    for i, (m, s) in enumerate(zip(means_r, stds_r)):
+        ax.text(x[i], m + s + global_top * 0.02,
+                f"{m:.0f}%", ha="center", va="bottom",
+                fontsize=10, fontweight="bold", color="#333333")
 
     y_tops = [m + s for m, s in zip(means_r, stds_r)]
-    _set_dynamic_ylim_positive(ax, y_tops, pad_ratio=0.22, min_top=1.0)
+    _set_dynamic_ylim_positive(ax, y_tops, pad_ratio=0.08, min_top=1.0)
 
     save_figure(fig, output_dir / "rq1_2_rep_only_manipulation_detection.png")
     print("  [Fig1-2] Rep-only manipulation-detection figure saved.")
@@ -1213,7 +1465,7 @@ def fig2_probe_and_product_mix(
         for xi, (h, bot) in enumerate(zip(heights, bottoms)):
             if h > 8.0:   # only label if segment is wide enough
                 ax_mix.text(xm[xi], bot + h / 2, f"{h:.1f}%",
-                            ha="center", va="center", fontsize=8,
+                            ha="center", va="center", fontsize=9,
                             color="white", fontweight="bold")
         bottoms = [bottoms[j] + heights[j] for j in range(2)]
 
@@ -1222,17 +1474,18 @@ def fig2_probe_and_product_mix(
     ax_mix.set_ylabel("Share of Listed Products (%)", fontsize=10)
     mix_top = max(bottoms) if bottoms else 1.0
     _set_dynamic_ylim_positive(ax_mix, [mix_top], pad_ratio=0.10, min_top=1.0)
+    enable_ygrid(ax_mix)
 
     # ── (c) Sold-out product quality combos (absolute counts) ────────────
     bottoms = [0.0, 0.0]
     for si, col in enumerate(seg_colors):
         heights = [sold_counts[LABEL_R][si], sold_counts[LABEL_RW][si]]
         ax_sold.bar(xm, heights, width=wm, bottom=bottoms,
-                    color=col, edgecolor="white", linewidth=0.5, zorder=3)
+                    color=col, edgecolor="white", linewidth=0.8, zorder=3)
         for xi, (h, bot) in enumerate(zip(heights, bottoms)):
             if h > 0.35:
                 ax_sold.text(xm[xi], bot + h / 2, f"{h:.1f}",
-                             ha="center", va="center", fontsize=8,
+                             ha="center", va="center", fontsize=9,
                              color="white", fontweight="bold")
         bottoms = [bottoms[j] + heights[j] for j in range(2)]
     sold_ymax = max(bottoms) if bottoms else 0.0
@@ -1240,13 +1493,14 @@ def fig2_probe_and_product_mix(
     ax_sold.set_xticklabels([LABEL_R, LABEL_RW], fontsize=10)
     ax_sold.set_ylabel("Mean Sold Products per Run", fontsize=10)
     ax_sold.set_ylim(0, max(1.0, sold_ymax * 1.18))
+    enable_ygrid(ax_sold)
 
     # Shared legend for both product-mix subplots
     handles = [mpatches.Patch(facecolor=c, edgecolor="white", label=l)
                for c, l in zip(seg_colors, seg_labels)]
     fig.legend(handles=handles, loc="lower center",
                bbox_to_anchor=(0.5, 0.03), ncol=3,
-               frameon=False, fontsize=8)
+               frameon=False, fontsize=9)
 
     fig.subplots_adjust(bottom=0.20)
     save_figure(fig, output_dir / "rq1_exit_loophole_vulnerability.png")
@@ -1318,40 +1572,43 @@ def fig_rq2_listed_vs_sold_quality(
         vals_rw = [listed_mean_rw, sold_mean_rw]
         errs_rw = [listed_sem_rw, sold_sem_rw]
 
-        ax.bar(
+        bars_r = ax.bar(
             x - w / 2,
             vals_r,
             width=w,
             color=REP_COLOR,
+            hatch=CONDITION_HATCHES.get("Rep", ""),
             edgecolor="white",
-            linewidth=0.5,
+            linewidth=0.8,
             yerr=errs_r,
-            capsize=3,
-            error_kw={"elinewidth": 1.0, "ecolor": "#555"},
+            capsize=4,
+            error_kw={"elinewidth": 1.2, "ecolor": "#555"},
             zorder=3,
         )
-        ax.bar(
+        bars_rw = ax.bar(
             x + w / 2,
             vals_rw,
             width=w,
             color=RW_COLOR,
+            hatch=CONDITION_HATCHES.get("Rep+Warrant", ""),
             edgecolor="white",
-            linewidth=0.5,
+            linewidth=0.8,
             yerr=errs_rw,
-            capsize=3,
-            error_kw={"elinewidth": 1.0, "ecolor": "#555"},
+            capsize=4,
+            error_kw={"elinewidth": 1.2, "ecolor": "#555"},
             zorder=3,
         )
 
         ax.set_xticks(x)
-        ax.set_xticklabels(["Listed", "Sold"], fontsize=9)
+        ax.set_xticklabels(["Listed", "Sold"], fontsize=10)
         ax.set_title(cat_name, fontsize=10)
         if idx == 0:
             ax.set_ylabel("Share (%)", fontsize=10)
         panel_tops = [vals_r[i] + errs_r[i] for i in range(2)] + [vals_rw[i] + errs_rw[i] for i in range(2)]
         _set_dynamic_ylim_positive(ax, panel_tops, pad_ratio=0.18, min_top=1.0)
-        ax.grid(axis="y", alpha=0.25, zorder=0)
-        ax.set_axisbelow(True)
+        enable_ygrid(ax)
+        add_bar_labels_simple(ax, x - w / 2, vals_r, errs_r, fmt="{:.1f}", fontsize=10)
+        add_bar_labels_simple(ax, x + w / 2, vals_rw, errs_rw, fmt="{:.1f}", fontsize=10)
 
     handles = [
         mpatches.Patch(facecolor=REP_COLOR, edgecolor="white", label="Rep"),
@@ -1408,18 +1665,19 @@ def fig_rq2_listed_vs_sold_counts(
     def _panel(ax: plt.Axes, counts_listed, counts_sold, title: str) -> None:
         ax.bar(
             x - w / 2, counts_listed, width=w, color=listed_color, alpha=0.75,
-            edgecolor="white", linewidth=0.5, label="Listed", zorder=3
+            edgecolor="white", linewidth=0.8, label="Listed", zorder=3
         )
         ax.bar(
             x + w / 2, counts_sold, width=w, color=sold_color, alpha=0.85,
-            edgecolor="white", linewidth=0.5, label="Sold", zorder=3
+            edgecolor="white", linewidth=0.8, label="Sold", zorder=3
         )
         ax.set_xticks(x)
         ax.set_xticklabels(categories, fontsize=14)
         ax.set_title(title, fontsize=14, fontweight="bold")
-        ax.grid(axis="y", alpha=0.25, zorder=0)
-        ax.set_axisbelow(True)
+        enable_ygrid(ax)
         ax.set_ylabel("Total Count", fontsize=14)
+        add_bar_labels_simple(ax, x - w / 2, counts_listed, fmt="{:.0f}", fontsize=10)
+        add_bar_labels_simple(ax, x + w / 2, counts_sold, fmt="{:.0f}", fontsize=10)
         ax.legend(frameon=False, fontsize=14, loc="upper right")
 
     _panel(axes[0], sum_listed_r, sum_sold_r, "Rep")
@@ -1477,20 +1735,23 @@ def fig_rq2_welfare_overview(
     fig, ax = plt.subplots(1, 1, figsize=(8.0, 4.2))
     ax.bar(
         x - w / 2, means_r, width=w, color=COLORS["neutral_dark"], alpha=0.60,
-        edgecolor="white", linewidth=0.5, yerr=sems_r, capsize=3,
-        error_kw={"elinewidth": 1.0, "ecolor": "#666"}, label="Rep", zorder=3
+        hatch=CONDITION_HATCHES.get("Rep", ""),
+        edgecolor="white", linewidth=0.8, yerr=sems_r, capsize=4,
+        error_kw={"elinewidth": 1.2, "ecolor": "#555"}, label="Rep", zorder=3
     )
     ax.bar(
         x + w / 2, means_rw, width=w, color=COLORS["good_dark"], alpha=0.80,
-        edgecolor="white", linewidth=0.5, yerr=sems_rw, capsize=3,
-        error_kw={"elinewidth": 1.0, "ecolor": "#666"}, label="Rep+Warrant", zorder=3
+        hatch=CONDITION_HATCHES.get("Rep+Warrant", ""),
+        edgecolor="white", linewidth=0.8, yerr=sems_rw, capsize=4,
+        error_kw={"elinewidth": 1.2, "ecolor": "#555"}, label="Rep+Warrant", zorder=3
     )
     ax.set_xticks(x)
-    ax.set_xticklabels([m[0] for m in metrics], fontsize=9)
+    ax.set_xticklabels([m[0] for m in metrics], fontsize=10)
     ax.set_ylabel("Run-Level Mean (mixed units)", fontsize=10)
-    ax.grid(axis="y", alpha=0.25, zorder=0)
-    ax.set_axisbelow(True)
-    ax.legend(frameon=False, fontsize=9, loc="upper left")
+    enable_ygrid(ax)
+    add_bar_labels_simple(ax, x - w / 2, means_r, sems_r, fmt="{:.1f}")
+    add_bar_labels_simple(ax, x + w / 2, means_rw, sems_rw, fmt="{:.1f}")
+    ax.legend(frameon=False, fontsize=10, loc="upper left")
     save_figure(fig, output_dir / "rq2_warrant_vs_rep_welfare_overview.png")
     print("  [RQ2-Welfare] Welfare overview figure saved.")
 
@@ -1530,26 +1791,16 @@ def fig_rq2_micro_reasoning_impact(
     )
 
     if rep_texts and rw_texts:
-        fig, ax = plt.subplots(1, 1, figsize=(11.6, 5.2))
+        fig, ax = plt.subplots(1, 1, figsize=(6.2, 3.5))
         ok, compare_detail = _plot_bertopic_group_comparison(
             ax,
             {"Rep": rep_texts, "Rep+Warrant": rw_texts},
-            title="",  # Remove title as requested
+            title="",
             color_map={"Rep": REP_COLOR, "Rep+Warrant": RW_COLOR},
         )
-        # if ok:
-        #     fig.text(
-        #         0.5,
-        #         0.01,
-        #         "Joint BERTopic comparison across the two market types.",
-        #         ha="center",
-        #         va="bottom",
-        #         fontsize=8,
-        #         color=COLORS["neutral_dark"],
-        #     )
-        # else:
-        #     print(f"[RQ2-Micro] BERTopic comparison skipped ({compare_detail}).")
-        save_figure(fig, output_dir / "rq2_warrant_micro_reasoning_impact.png")
+        if not ok:
+            print(f"[RQ2-Micro] BERTopic comparison skipped ({compare_detail}).")
+        save_figure(fig, output_dir / "rq2_warrant_micro_reasoning_impact.png", dpi=400)
         print(f"  [RQ2-Micro] Saved BERTopic comparison figure. {compare_detail}")
 
 
@@ -1559,18 +1810,16 @@ def fig_rq3_micro_reasoning_impact(
     """RQ3 BERTopic market-type figures using seller listing action reasoning."""
     base_path = Path(rq3_base_dir)
     constraints = [
-        "policy_making",
-        "pressure_quickprofits",
-        "psychological-based-attack",
+        "platform_fee",
+        "price_war",
+        "financial_distress",
     ]
 
     rep_dirs: list[Path] = []
     rw_dirs: list[Path] = []
     for ck in constraints:
         for prefix, bucket in [
-            ("r_wsc_F", rep_dirs),
             ("r_wsc_R", rep_dirs),
-            ("rw_wsc_F", rw_dirs),
             ("rw_wsc_R", rw_dirs),
         ]:
             exp_dir = base_path / f"{prefix}_{ck}"
@@ -1602,7 +1851,7 @@ def fig_rq3_micro_reasoning_impact(
     rep_texts = rep_docs["reasoning"].astype(str).tolist() if not rep_docs.empty else []
     rw_texts = rw_docs["reasoning"].astype(str).tolist() if not rw_docs.empty else []
     if rep_texts and rw_texts:
-        fig, ax = plt.subplots(1, 1, figsize=(11.6, 5.2))
+        fig, ax = plt.subplots(1, 1, figsize=(12.0, 6.0))
         ok, compare_detail = _plot_bertopic_group_comparison(
             ax,
             {"Rep": rep_texts, "Rep+Warrant": rw_texts},
@@ -1616,7 +1865,7 @@ def fig_rq3_micro_reasoning_impact(
         #         "Joint BERTopic comparison across the two market types in RQ3.",
         #         ha="center",
         #         va="bottom",
-        #         fontsize=8,
+        #         fontsize=9,
         #         color=COLORS["neutral_dark"],
         #     )
         # else:
@@ -1650,9 +1899,9 @@ def fig_rq3_collusion_mechanisms_llm(
 
     base_path = Path(rq3_base_dir)
     constraints = [
-        "policy_making",
-        "pressure_quickprofits",
-        "psychological-based-attack",
+        "platform_fee",
+        "price_war",
+        "financial_distress",
     ]
 
     def _clean_reasoning(text: str) -> str:
@@ -1857,11 +2106,11 @@ def fig_rq3_collusion_mechanisms_llm(
         y = np.arange(len(topic_ids))
         ax.barh(y, counts, color="#4F5D73", alpha=0.85)
         ax.set_yticks(y)
-        ax.set_yticklabels([f"T{tid}: {lab}" for tid, lab in zip(topic_ids, labels)], fontsize=8)
+        ax.set_yticklabels([f"T{tid}: {lab}" for tid, lab in zip(topic_ids, labels)], fontsize=9)
         ax.invert_yaxis()
         ax.set_xlabel("Document Count", fontsize=9)
         ax.set_title("RQ3 BERTopic Themes (Mechanism Labels)", fontsize=11, fontweight="bold")
-        ax.grid(axis="x", alpha=0.25, linestyle=":")
+        ax.grid(axis="x", color="#EBEBEB", linestyle="--", linewidth=0.7)
         fig.tight_layout()
         fig_path = output_dir / f"{file_prefix}_bertopic_mechanisms.png"
         save_figure(fig, fig_path)

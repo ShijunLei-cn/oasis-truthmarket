@@ -26,6 +26,7 @@ from generate_rq2_figures import (
     fig_rq3_profit_decomposition_grouped,
     fig6_product_mix,
     fig_all_constraints_summary,
+    fig_all_constraints_summary_1x4,
     fig_rq2_all_markettype_dual_metrics,
     _rq3_grouped_metric,
 )
@@ -105,6 +106,13 @@ def generate_rq3(base_dir: Path, output_dir: Path) -> None:
         rq3_include_baseline=True,
     )
     fig_all_constraints_summary(
+        str(rq3_base),
+        output_dir,
+        file_prefix=prefix,
+        rq3_comm_only=True,
+        rq3_include_baseline=True,
+    )
+    fig_all_constraints_summary_1x4(
         str(rq3_base),
         output_dir,
         file_prefix=prefix,
