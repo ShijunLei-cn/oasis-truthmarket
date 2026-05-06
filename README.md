@@ -2,7 +2,9 @@
 
 A multi-agent online market simulation system built on the [OASIS](https://github.com/camel-ai/oasis) framework, designed to study agent behavior patterns in realistic market environments, with a particular focus on information asymmetry, reputation mechanisms, and warranty systems' impact on market efficiency.
 
-## 🎯 Overview
+![Framework Overview](assets/oasis_overview.png)
+
+## Overview
 
 This project implements a multi-agent online market simulation environment featuring:
 
@@ -10,154 +12,117 @@ This project implements a multi-agent online market simulation environment featu
 - **Buyer Agents**: Make purchasing decisions based on seller reputation and product information
 - **Market Mechanisms**: Include reputation systems, warranty institutions, and transaction tracking
 
-## 🚀 Quick Start
+## Quick Start
 
 ### 1. Prerequisites
 
 - Python 3.10+ (< 3.12)
-- OpenAI API Key
+- An LLM API Key (OpenAI or vLLM-compatible)
 
-### 2. Install Dependencies
-
-#### Install OASIS Framework
-
-According to the [OASIS official documentation](https://github.com/camel-ai/oasis), first install the OASIS package:
+### 2. Install OASIS Framework
 
 ```bash
 pip install camel-oasis
 ```
 
-#### Install Project Dependencies
+### 3. Install Project Dependencies
 
 ```bash
-pip install -r requirement.txt
+pip install -r requirements.txt
 ```
 
-### 3. Environment Configuration
+### 4. Environment Configuration
 
-#### Create Environment Variables File
+Copy the template and configure your API key:
 
-The project provides an `env.template` file as a configuration template. Please follow these steps:
-
-1. Copy the template file:
 ```bash
-cp env.template .env
+cp .env.template .env
 ```
 
-2. Edit the `.env` file with your actual configuration:
-```bash
-# Edit .env file
-nano .env  # or use your preferred editor
-```
+Edit `.env`:
 
-3. At minimum, configure the following required items:
-```bash
-# Model API Configuration (Required)
+```text
 MODEL_API_KEY=your_api_key_here
-MODEL_BASE_URL=https://api.openai.com/v1  # Optional, for OpenAI or compatible APIs
-
-# Optional: Database path
-MARKET_DB_PATH=market_sim.db
+MODEL_BASE_URL=https://api.openai.com/v1
 ```
 
-#### Environment Variables Reference
+| Variable        | Description                      | Required |
+|-----------------|----------------------------------|----------|
+| `MODEL_API_KEY` | API key for the model provider   | Yes      |
+| `MODEL_BASE_URL` | Base URL for API endpoint       | Optional |
 
-| Variable | Description | Default Value | Required |
-|----------|-------------|---------------|----------|
-| `MODEL_API_KEY` | API key for the model provider (OpenAI or vLLM) | - | ✓ Yes |
-| `MODEL_BASE_URL` | Base URL for API endpoint (for custom endpoints) | - | Optional |
-| `MARKET_DB_PATH` | Database file path for market simulation | `market_sim.db` | Optional |
+## Run Simulation
 
-#### Configuration via config.py
-
-The simulation parameters are configured in `config.py`:
-
-```python
-class SimulationConfig:
-    RUNS = 50                          # Total number of independent simulation runs
-    NUM_SELLERS = 10                   # Number of seller agents per run
-    NUM_BUYERS = 10                    # Number of buyer agents per run
-    SIMULATION_ROUNDS = 7              # Number of trading rounds per run
-    
-    # Market mechanism parameters
-    REPUTATION_LAG = 1                 # Rounds of delay in reputation display
-    REENTRY_ALLOWED_ROUND = 5          # Round when low-reputation sellers can re-enter
-    EXIT_ROUND = 7                     # Round when sellers can choose to exit
-    MARKET_TYPE = 'reputation_and_warrant'  # Market mechanism type
-    
-    # Model configuration
-    MODEL_PLATFORM = "openai"          # "openai" or "vllm"
-    MODEL_TYPE = "gpt-4o"              # Model identifier
-```
-
-To modify simulation parameters, edit these values in `config.py` before running.
-
-### 4. Run Simulation
-
-For detailed instructions on running simulations, please refer to the [Example Documentation](./example/README.md).
-
-The `example/` folder contains streamlined runners:
-- **Intent Probe Runner**: `run_intent_probe_experiment.py` - Run intent-focused probing experiments
-- **Condition Batch Runner**: `run_market_condition_experiment.py` - Run market-condition batch experiments
-
-Quick start examples:
+### Using Experiment Scripts
 
 ```bash
-# Run intent probing experiment
-python ./example/run_intent_probe_experiment.py --market-type reputation_only
+# Run the full experiment pipeline
+./scripts/run_exp4paper_main.sh
 
-# Run condition batch experiment
-python ./example/run_market_condition_experiment.py --experiment-id demo --market-type reputation_only --communication none
+# Override config and model via environment variables
+CONFIG_FILE=configs/sim_gpt4o_10s_10b_10r_runs5_base.yaml \
+MODEL_TYPE=gpt-4o \
+./scripts/run_exp4paper_main.sh
 ```
 
-See [example/README.md](./example/README.md) for comprehensive documentation on:
-- Available command-line options
-- Configuration parameters
-- Communication types and market types
+Individual per-RQ scripts are also available:
 
-## 🛠️ Customization
+- `./scripts/run_rq1_intent.sh`
+- `./scripts/run_rq2_welfare.sh`
+- `./scripts/run_rq3_resilience.sh`
 
-### Modify Simulation Parameters
+### Using Python Entry Points
 
-Edit values in `config.py`:
+Direct Python runners are in `example/`:
 
-```python
-class SimulationConfig:
-    RUNS = 50                          # Total number of independent simulation runs
-    NUM_SELLERS = 10                   # Number of seller agents per run
-    NUM_BUYERS = 10                    # Number of buyer agents per run
-    SIMULATION_ROUNDS = 7              # Number of trading rounds per run
-    
-    # Market mechanism parameters
-    REPUTATION_LAG = 1                 # Rounds of delay in reputation display
-    REENTRY_ALLOWED_ROUND = 5          # Round when low-reputation sellers can re-enter
-    EXIT_ROUND = 7                     # Round when sellers can choose to exit
-    MARKET_TYPE = 'reputation_and_warrant'  # Market mechanism type
-    
-    # Model configuration
-    MODEL_PLATFORM = "openai"          # "openai" or "vllm"
-    MODEL_TYPE = "gpt-4o"              # Model identifier
+```bash
+# Intent probe experiment
+python ./example/run_intent_probe_experiment.py \
+    --market-type reputation_only \
+    --output-dir experiments/my_run/rq1_intent \
+    --config configs/sim_gpt4omini_5s_5b_10r_runs5_base.yaml
+
+# Market condition batch experiment
+python ./example/run_market_condition_experiment.py \
+    --experiment-id my_run/rq2_welfare \
+    --market-type reputation_and_warrant \
+    --communication none \
+    --communication-channel-type Fake \
+    --config configs/sim_gpt4omini_5s_5b_10r_runs5_base.yaml \
+    --disable-reentry
 ```
+
+### Simulation Parameters
+
+Parameters are configured via YAML files in `configs/`. Key adjustable parameters:
+
+- **Market type**: `reputation_only` or `reputation_and_warrant`
+- **Communication**: `none` / `seller` / `buyer` / `both`; channel `Real` or `Fake`
+- **Economic parameters**: production costs, prices, consumer utilities, budgets
+- **Market rules**: reputation lag, re-entry rounds, exit rounds
+- **Model settings**: platform (`openai` / `vllm`), model type
+
+Command-line flags override YAML values, which override `config.py` defaults.
 
 ### Customize Agent Characteristics
 
 Modify prompt templates in `prompt.py`:
 
-- `SELLER_GENERATION_SYS_PROMPT`: System prompt for seller agent generation
-- `SELLER_GENERATION_USER_PROMPT`: User prompt for seller agent generation
-- `BUYER_GENERATION_SYS_PROMPT`: System prompt for buyer agent generation
-- `BUYER_GENERATION_USER_PROMPT`: User prompt for buyer agent generation
+- `SELLER_GENERATION_SYS_PROMPT` / `SELLER_GENERATION_USER_PROMPT`: System and user prompts for seller agent generation
+- `BUYER_GENERATION_SYS_PROMPT` / `BUYER_GENERATION_USER_PROMPT`: System and user prompts for buyer agent generation
 - `SELLER_ROUND_PROMPT`: Dynamic prompt for sellers during each round
 - `BUYER_ROUND_PROMPT`: Dynamic prompt for buyers during each round
 
-### Adjust Market Parameters
-
-## 📚 Related Resources
+## Related Resources
 
 - [OASIS Official Documentation](https://docs.oasis.camel-ai.org/)
 - [OASIS GitHub Repository](https://github.com/camel-ai/oasis)
 - [CAMEL-AI Project](https://github.com/camel-ai/camel)
 
-## 🙏 Acknowledgments
+## License
+
+This project is licensed under the Apache License 2.0.
+
+## Acknowledgments
 
 Thanks to the [OASIS](https://github.com/camel-ai/oasis) project for providing an excellent multi-agent simulation framework, and to the [CAMEL-AI](https://github.com/camel-ai/camel) team for their important contributions in the AI agent field.
