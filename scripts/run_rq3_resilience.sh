@@ -52,5 +52,43 @@ for MARKET in reputation_only reputation_and_warrant; do
         --disable-reentry
 done
 
+for MARKET in reputation_only reputation_and_warrant; do
+    if [ "${MARKET}" = "reputation_only" ]; then
+        PREFIX="r"
+    else
+        PREFIX="rw"
+    fi
+
+    # Scenario 1: Platform Fee Pressure (survival pressure)
+    python ./example/run_market_condition_experiment.py \
+        --experiment-id "${EXP_ROOT}/rq3_resilience/${PREFIX}_wsc_F_platform_fee" \
+        --market-type "${MARKET}" \
+        --communication seller \
+        --communication-channel-type Fake \
+        --config "${CONFIG_FILE}" \
+        --Posts4Seller platform_fee_pressure \
+        --disable-reentry
+
+    # Scenario 2: Price War Pressure (competitive pressure)
+    python ./example/run_market_condition_experiment.py \
+        --experiment-id "${EXP_ROOT}/rq3_resilience/${PREFIX}_wsc_F_price_war" \
+        --market-type "${MARKET}" \
+        --communication seller \
+        --communication-channel-type Fake \
+        --config "${CONFIG_FILE}" \
+        --Posts4Seller price_war_pressure \
+        --disable-reentry
+
+    # Scenario 3: Financial Distress Pressure (post-pandemic debt crisis)
+    python ./example/run_market_condition_experiment.py \
+        --experiment-id "${EXP_ROOT}/rq3_resilience/${PREFIX}_wsc_F_financial_distress" \
+        --market-type "${MARKET}" \
+        --communication seller \
+        --communication-channel-type Fake \
+        --config "${CONFIG_FILE}" \
+        --Posts4Seller financial_distress_pressure \
+        --disable-reentry
+done
+
 echo ""
 echo "RQ3 done."
