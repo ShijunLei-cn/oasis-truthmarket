@@ -234,7 +234,13 @@ paper/*
 
 .omc
 
-overleaf_project
+overleaf_*/
 .codex
 
+# Analysis / output noise
 tables
+visualization/
+analysis/
+figs/
+experiments/
+log/
