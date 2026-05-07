@@ -1,4 +1,4 @@
-# OASIS Truth Market Simulation
+# TruthMarketTwin Simulation
 
 A multi-agent online market simulation system built on the [OASIS](https://github.com/camel-ai/oasis) framework, designed to study agent behavior patterns in realistic market environments, with a particular focus on information asymmetry, reputation mechanisms, and warranty systems' impact on market efficiency.
 
