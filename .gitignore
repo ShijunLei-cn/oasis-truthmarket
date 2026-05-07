@@ -210,7 +210,6 @@ __marimo__/
 # Personal
 *.db
 .temp
-*.png
 .vscode/
 experiments/
 analysis/experiment_*
