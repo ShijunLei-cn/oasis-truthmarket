@@ -243,6 +243,7 @@ analysis/
 figs/
 experiments/
 log/
-data/
 docs/
 .continue/
+
+overleaf_*
