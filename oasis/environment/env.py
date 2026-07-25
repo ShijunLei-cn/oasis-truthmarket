@@ -21,7 +21,10 @@ from typing import Any, Dict, List, Union
 from oasis.environment.env_action import LLMAction, ManualAction
 from oasis.social_agent.agent import SocialAgent
 from oasis.social_agent.agent_graph import AgentGraph
-from oasis.social_agent.agents_generator import generate_custom_agents
+from oasis.social_agent.agents_generator import (
+    connect_platform_channel,
+    generate_custom_agents,
+)
 from oasis.social_platform.channel import Channel
 from oasis.social_platform.platform import Platform
 from oasis.social_platform.typing import (ActionType, DefaultPlatformType,
@@ -44,6 +47,10 @@ file_handler.setLevel("INFO")
 file_handler.setFormatter(
     logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
 env_log.addHandler(file_handler)
+
+
+class FatalAgentActionError(RuntimeError):
+    """A model/provider failure that invalidates the current round."""
 
 
 class OasisEnv:
@@ -119,11 +126,21 @@ class OasisEnv:
                 f"Invalid platform: {platform}. You should pass a "
                 "DefaultPlatformType or a Platform instance.")
 
-    async def reset(self) -> None:
-        r"""Start the platform and sign up the agents."""
+    async def reset(self, register_agents: bool = True) -> None:
+        r"""Start the platform and optionally sign up newly created agents.
+
+        Resume mode reconnects the reconstructed agents to a fresh channel but
+        keeps the user rows already present in the restored database.
+        """
         self.platform_task = asyncio.create_task(self.platform.running())
-        self.agent_graph = await generate_custom_agents(
-            channel=self.channel, agent_graph=self.agent_graph)
+        if register_agents:
+            self.agent_graph = await generate_custom_agents(
+                channel=self.channel, agent_graph=self.agent_graph)
+        else:
+            self.agent_graph = connect_platform_channel(
+                channel=self.channel,
+                agent_graph=self.agent_graph,
+            )
 
     async def _perform_llm_action(self, agent, llm_action):
         r"""Send the request to the llm model and execute the action."""
@@ -262,6 +279,26 @@ class OasisEnv:
         
         # Store detailed results for later retrieval
         self._last_step_detailed_results = detailed_results
+
+        fatal_results = [
+            result
+            for result in detailed_results
+            if isinstance(result.get("action_result"), dict)
+            and result["action_result"].get("_failure_kind")
+            == "model_or_provider"
+        ]
+        if fatal_results:
+            agent_ids = sorted(
+                {
+                    result.get("agent_id")
+                    for result in fatal_results
+                    if result.get("agent_id") is not None
+                }
+            )
+            raise FatalAgentActionError(
+                "model/provider failure invalidated the current round"
+                + (f" for agent(s) {agent_ids}" if agent_ids else "")
+            )
             
         return results
 

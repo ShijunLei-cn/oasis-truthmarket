@@ -216,9 +216,11 @@ class SocialAgent(ChatAgent):
         
         action_reasoning = ""
         action_result = None
+        model_completed = False
         
         try:
             response = await self.astep(user_msg)
+            model_completed = True
             action_reasoning = response.msg.content
             
             # Method 1: Check for tool_calls (preferred method)
@@ -266,7 +268,15 @@ class SocialAgent(ChatAgent):
             
         except Exception as e:
             agent_log.error(f"Agent {self.social_agent_id} error: {e}")
-            action_result = {"success": False, "error": str(e)}
+            action_result = {
+                "success": False,
+                "error": str(e),
+                "_failure_kind": (
+                    "model_or_provider"
+                    if not model_completed
+                    else "action_or_parse"
+                ),
+            }
         finally:
             if extra_action:
                 self.remove_tools(extra_action)
@@ -340,9 +350,11 @@ class SocialAgent(ChatAgent):
         
         action_reasoning = ""
         action_result = None
+        model_completed = False
         
         try:
             response = await self.astep(user_msg)
+            model_completed = True
             action_reasoning = response.msg.content
             
             # Method 1: Check for tool_calls (preferred method)
@@ -390,7 +402,15 @@ class SocialAgent(ChatAgent):
             
         except Exception as e:
             agent_log.error(f"Agent {self.social_agent_id} error: {e}")
-            action_result = {"success": False, "error": str(e)}
+            action_result = {
+                "success": False,
+                "error": str(e),
+                "_failure_kind": (
+                    "model_or_provider"
+                    if not model_completed
+                    else "action_or_parse"
+                ),
+            }
         finally:
             if extra_action:
                 self.remove_tools(extra_action)

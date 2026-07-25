@@ -15,6 +15,7 @@ class SimulationConfig:
 
     # Experiment configuration
     RUNS = 5
+    SEEDS = []
     NUM_SELLERS = 5
     NUM_BUYERS = 5
     SIMULATION_ROUNDS = 10
@@ -110,6 +111,7 @@ class SimulationConfig:
         """Convert configuration to dictionary format"""
         return {
             'RUNS': cls.RUNS,
+            'SEEDS': cls.SEEDS,
             'NUM_SELLERS': cls.NUM_SELLERS,
             'NUM_BUYERS': cls.NUM_BUYERS,
             'SIMULATION_ROUNDS': cls.SIMULATION_ROUNDS,
@@ -168,6 +170,7 @@ class SimulationConfig:
         if 'experiment' in config_dict:
             exp_config = config_dict['experiment']
             cls.RUNS = exp_config.get('runs', cls.RUNS)
+            cls.SEEDS = exp_config.get('seeds', cls.SEEDS)
             cls.NUM_SELLERS = exp_config.get('num_sellers', cls.NUM_SELLERS)
             cls.NUM_BUYERS = exp_config.get('num_buyers', cls.NUM_BUYERS)
             cls.SIMULATION_ROUNDS = exp_config.get('simulation_rounds', cls.SIMULATION_ROUNDS)

@@ -5,6 +5,7 @@ Handles saving and managing simulation action logs
 
 import os
 import json
+import tempfile
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 
@@ -36,6 +37,33 @@ class ActionLogger:
         if os.path.exists(self.log_path):
             os.remove(self.log_path)
             print(f"Action log cleaned up: {self.log_path}")
+
+    def _write_records_atomic(self, records: List[Dict]) -> None:
+        """Replace the cumulative action log without exposing partial JSON."""
+        output_path = os.path.abspath(self.log_path)
+        output_dir = os.path.dirname(output_path)
+        os.makedirs(output_dir, exist_ok=True)
+        file_descriptor, temporary_path = tempfile.mkstemp(
+            prefix=f".{os.path.basename(output_path)}.",
+            suffix=".tmp",
+            dir=output_dir,
+        )
+        try:
+            with os.fdopen(file_descriptor, "w", encoding="utf-8") as handle:
+                json.dump(
+                    records,
+                    handle,
+                    indent=2,
+                    ensure_ascii=False,
+                    default=str,
+                )
+                handle.write("\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temporary_path, output_path)
+        finally:
+            if os.path.exists(temporary_path):
+                os.remove(temporary_path)
     
     def save_system_prompts(self, agent_graph):
         """
@@ -89,9 +117,7 @@ class ActionLogger:
             'system_prompts': system_prompts
         })
         
-        # Save all records
-        with open(self.log_path, 'w', encoding='utf-8') as f:
-            json.dump(all_records, f, indent=2, ensure_ascii=False, default=str)
+        self._write_records_atomic(all_records)
     
     def _format_as_one_line(self, obj: Any) -> str:
         """
@@ -236,9 +262,7 @@ class ActionLogger:
             
             all_records.append(record)
         
-        # Save all records
-        with open(self.log_path, 'w', encoding='utf-8') as f:
-            json.dump(all_records, f, indent=2, ensure_ascii=False, default=str)
+        self._write_records_atomic(all_records)
     
     def load_action_records(self) -> List[Dict]:
         """

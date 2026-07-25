@@ -42,7 +42,7 @@ TRANSACTIONS_SCHEMA_SQL = "transactions.sql"
 REPUTATION_HISTORY_SCHEMA_SQL = "reputation_history.sql"
 ANALYSIS_LABELS_SCHEMA_SQL = "analysis_labels.sql"
 
-TABLE_NAMES = {
+REQUIRED_SCHEMA_TABLES = {
     "user",
     "post",
     "follow",
@@ -52,17 +52,18 @@ TABLE_NAMES = {
     "report",
     "trace",
     "rec",
-    "comment.sql",
-    "comment_like.sql",
-    "comment_dislike.sql",
-    "product.sql",
-    "group",
-    "group_member",
-    "group_message",
+    "comment",
+    "comment_like",
+    "comment_dislike",
+    "product",
+    "chat_group",
+    "group_members",
+    "group_messages",
     "transactions",
     "reputation_history",
     "analysis_labels",
 }
+TABLE_NAMES = REQUIRED_SCHEMA_TABLES
 
 
 def get_db_path() -> str:
@@ -99,6 +100,23 @@ def create_db(db_path: str | None = None):
     print("db_path", db_path)
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
+
+    existing_tables = {
+        row[0]
+        for row in cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table'"
+        ).fetchall()
+        if row[0] != "sqlite_sequence"
+    }
+    if existing_tables:
+        missing_tables = REQUIRED_SCHEMA_TABLES - existing_tables
+        if missing_tables:
+            conn.close()
+            raise sqlite3.DatabaseError(
+                "existing database has an incomplete schema; missing tables: "
+                + ", ".join(sorted(missing_tables))
+            )
+        return conn, cursor
 
     try:
         # Read and execute the user table SQL script:
@@ -220,8 +238,10 @@ def create_db(db_path: str | None = None):
         # Commit the changes:
         conn.commit()
 
-    except sqlite3.Error as e:
-        print(f"An error occurred while creating tables: {e}")
+    except sqlite3.Error:
+        conn.rollback()
+        conn.close()
+        raise
 
     return conn, cursor
 
