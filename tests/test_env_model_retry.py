@@ -45,6 +45,33 @@ class _ParseFailureAgent:
         )
 
 
+class _FakeMemory:
+    def __init__(self):
+        self.records = ["initial"]
+
+    def retrieve(self):
+        return [
+            SimpleNamespace(memory_record=record)
+            for record in self.records
+        ]
+
+    def clear(self):
+        self.records.clear()
+
+    def write_records(self, records):
+        self.records.extend(records)
+
+
+class _MemoryWritingProviderAgent(_TransientProviderAgent):
+    def __init__(self):
+        super().__init__()
+        self.memory = _FakeMemory()
+
+    async def perform_market_action(self, *args):
+        self.memory.records.append(f"attempt-{self.calls + 1}")
+        return await super().perform_market_action(*args)
+
+
 class OasisEnvModelRetryTests(unittest.IsolatedAsyncioTestCase):
     @staticmethod
     def _make_env():
@@ -83,6 +110,20 @@ class OasisEnvModelRetryTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result[0]["_failure_kind"], "action_or_parse")
         self.assertEqual(agent.calls, 1)
+
+    async def test_provider_retry_restores_agent_memory_before_next_attempt(self):
+        env = self._make_env()
+        agent = _MemoryWritingProviderAgent()
+        action = SimpleNamespace(
+            level="market",
+            extra_action=None,
+            extra_prompt=None,
+        )
+
+        result = await env._perform_llm_action(agent, action)
+
+        self.assertTrue(result[0]["success"])
+        self.assertEqual(agent.memory.records, ["initial", "attempt-2"])
 
 
 if __name__ == "__main__":

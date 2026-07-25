@@ -165,6 +165,14 @@ class OasisEnv:
             else:
                 return None
 
+            memory = getattr(agent, "memory", None)
+            memory_records = []
+            if memory is not None:
+                memory_records = [
+                    getattr(item, "memory_record", item)
+                    for item in memory.retrieve()
+                ]
+
             for attempt in range(1, self.model_action_max_attempts + 1):
                 result = await perform_action(
                     extra_action,
@@ -182,7 +190,12 @@ class OasisEnv:
                     and action_result.get("_failure_kind")
                     == "model_or_provider"
                 )
-                if not provider_failed or attempt == self.model_action_max_attempts:
+                if not provider_failed:
+                    break
+                if memory is not None:
+                    memory.clear()
+                    memory.write_records(memory_records)
+                if attempt == self.model_action_max_attempts:
                     break
 
                 delay = self.model_action_retry_base_seconds * (
