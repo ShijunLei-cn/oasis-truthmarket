@@ -787,6 +787,10 @@ async def generate_agent_from_LLM(agents_num:int,
         # Set config in environment if available
         if hasattr(agent, 'env') and hasattr(agent.env, 'config'):
             agent.env.config = config
+        budget_key = "seller_budget" if role == "seller" else "buyer_budget"
+        configured_budget = config.MARKET_PARAMS.get(budget_key, 60.0)
+        agent.initial_budget = configured_budget
+        agent.current_budget = configured_budget
 
         agent_graph.add_agent(agent)
 

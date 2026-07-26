@@ -82,6 +82,7 @@ class AgentManager:
         # Update agent attributes
         agent.thumbs_up_count = state['thumbs_up_count']
         agent.thumbs_down_count = state['thumbs_down_count']
+        agent.total_profit = state['total_profit']
         agent.history_summary = visible_history_string
         # Store budget in agent for potential use
         if 'budget' in state:
@@ -109,6 +110,7 @@ class AgentManager:
         
         # Update agent attributes
         agent.cumulative_utility = state['cumulative_utility']
+        agent.current_budget = state['budget']
         
         return state
     

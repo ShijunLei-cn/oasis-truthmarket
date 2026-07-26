@@ -212,14 +212,20 @@ class ActionLogger:
         
         for result in env._last_step_detailed_results:
             agent_id = result.get('agent_id')
-            if agent_id is None:
-                continue
             
             # Get agent name
-            agent_name = self._get_agent_name(agent_id, agent_graph)
+            agent_name = (
+                self._get_agent_name(agent_id, agent_graph)
+                if agent_id is not None
+                else ""
+            )
             
             # Get prompt information for this agent
-            prompt_info = last_step_prompts.get(agent_id, {})
+            prompt_info = (
+                last_step_prompts.get(agent_id, {})
+                if agent_id is not None
+                else {}
+            )
             
             # Clean action_result
             action_result = result.get('action_result')

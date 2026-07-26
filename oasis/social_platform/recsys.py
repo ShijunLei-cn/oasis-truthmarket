@@ -24,7 +24,6 @@ from typing import Any, Dict, List
 
 import numpy as np
 import torch
-from sentence_transformers import SentenceTransformer
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
@@ -84,6 +83,7 @@ def load_model(model_name):
     try:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         if model_name == 'paraphrase-MiniLM-L6-v2':
+            from sentence_transformers import SentenceTransformer
             return SentenceTransformer(model_name,
                                        device=device,
                                        cache_folder="./models")

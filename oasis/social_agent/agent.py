@@ -217,6 +217,8 @@ class SocialAgent(ChatAgent):
         action_reasoning = ""
         action_result = None
         model_completed = False
+        attempted_action_name = None
+        attempted_action_args = None
         
         try:
             response = await self.astep(user_msg)
@@ -228,6 +230,8 @@ class SocialAgent(ChatAgent):
                 for tool_call in response.info['tool_calls']:
                     action_name = tool_call.tool_name
                     args = tool_call.args
+                    attempted_action_name = action_name
+                    attempted_action_args = args
                     if isinstance(tool_call.result, dict):
                         tool_call.result['agent_id'] = self.social_agent_id
                         tool_call.result['_action_name'] = action_name
@@ -242,6 +246,9 @@ class SocialAgent(ChatAgent):
                 action_json = self._extract_action_json(action_reasoning)
                 if action_json:
                     function_name = self._clean_function_name(action_json.get("function_name", ""))
+                    action_args = action_json.get("arguments", {})
+                    attempted_action_name = function_name
+                    attempted_action_args = action_args
                     # Try cleaned name first, then original name as fallback
                     func = self.all_possible_actions_dict.get(function_name)
                     if not func:
@@ -254,7 +261,6 @@ class SocialAgent(ChatAgent):
                         available = list(self.all_possible_actions_dict.keys())[:5]
                         raise ValueError(f"Unknown action: {function_name}. Available: {available}...")
                     
-                    action_args = action_json.get("arguments", {})
                     action_result = await func.func(**action_args)
                     if isinstance(action_result, dict):
                         action_result['agent_id'] = self.social_agent_id
@@ -268,14 +274,21 @@ class SocialAgent(ChatAgent):
             
         except Exception as e:
             agent_log.error(f"Agent {self.social_agent_id} error: {e}")
+            failure_kind = (
+                "model_or_provider"
+                if not model_completed
+                else "action_or_parse"
+            )
             action_result = {
                 "success": False,
+                "agent_id": self.social_agent_id,
                 "error": str(e),
-                "_failure_kind": (
-                    "model_or_provider"
-                    if not model_completed
-                    else "action_or_parse"
+                "_failure_kind": failure_kind,
+                "_action_name": (
+                    attempted_action_name
+                    or f"{failure_kind}_failure"
                 ),
+                "_action_args": attempted_action_args,
             }
         finally:
             if extra_action:
@@ -351,6 +364,8 @@ class SocialAgent(ChatAgent):
         action_reasoning = ""
         action_result = None
         model_completed = False
+        attempted_action_name = None
+        attempted_action_args = None
         
         try:
             response = await self.astep(user_msg)
@@ -362,6 +377,8 @@ class SocialAgent(ChatAgent):
                 for tool_call in response.info['tool_calls']:
                     action_name = tool_call.tool_name
                     args = tool_call.args
+                    attempted_action_name = action_name
+                    attempted_action_args = args
                     if isinstance(tool_call.result, dict):
                         tool_call.result['agent_id'] = self.social_agent_id
                         tool_call.result['_action_name'] = action_name
@@ -376,6 +393,9 @@ class SocialAgent(ChatAgent):
                 action_json = self._extract_action_json(action_reasoning)
                 if action_json:
                     function_name = self._clean_function_name(action_json.get("function_name", ""))
+                    action_args = action_json.get("arguments", {})
+                    attempted_action_name = function_name
+                    attempted_action_args = action_args
                     # Try cleaned name first, then original name as fallback
                     func = self.all_possible_actions_dict.get(function_name)
                     if not func:
@@ -388,7 +408,6 @@ class SocialAgent(ChatAgent):
                         available = list(self.all_possible_actions_dict.keys())[:5]
                         raise ValueError(f"Unknown action: {function_name}. Available: {available}...")
                     
-                    action_args = action_json.get("arguments", {})
                     action_result = await func.func(**action_args)
                     if isinstance(action_result, dict):
                         action_result['agent_id'] = self.social_agent_id
@@ -402,14 +421,21 @@ class SocialAgent(ChatAgent):
             
         except Exception as e:
             agent_log.error(f"Agent {self.social_agent_id} error: {e}")
+            failure_kind = (
+                "model_or_provider"
+                if not model_completed
+                else "action_or_parse"
+            )
             action_result = {
                 "success": False,
+                "agent_id": self.social_agent_id,
                 "error": str(e),
-                "_failure_kind": (
-                    "model_or_provider"
-                    if not model_completed
-                    else "action_or_parse"
+                "_failure_kind": failure_kind,
+                "_action_name": (
+                    attempted_action_name
+                    or f"{failure_kind}_failure"
                 ),
+                "_action_args": attempted_action_args,
             }
         finally:
             if extra_action:

@@ -915,14 +915,16 @@ class SocialAction:
         """
         return await self.perform_action(product_id, ActionType.PURCHASE_PRODUCT_ID.value)
 
-    async def purchase_products(self, product_ids: list):
+    async def purchase_products(self, product_ids: list[int]):
         r"""Purchase multiple products based on their unique product IDs.
 
         This method allows you to purchase multiple products at once, which is more efficient
         than calling purchase_product_id multiple times.
 
         Args:
-            product_ids (list): A list of product IDs to purchase. Each element should be an integer.
+            product_ids (list[int]): A list of unique, positive product IDs to
+                purchase. An empty list is a valid decision to purchase
+                nothing.
 
         Returns:
             dict: A dictionary with:
