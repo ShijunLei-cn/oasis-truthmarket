@@ -7,6 +7,8 @@ import sqlite3
 import os
 from typing import Dict, Optional, List, Tuple, Any
 
+from config import SimulationConfig
+
 
 class MarketDatabase:
     """Handles all database operations for the market simulation"""
@@ -68,7 +70,13 @@ class MarketDatabase:
             if role == 'seller':
                 return {'thumbs_up_count': 0, 'thumbs_down_count': 0, 'total_profit': 0, 'budget': 5.0}
             else:
-                return {'cumulative_utility': 0, 'total_utility': 0}
+                return {
+                    'cumulative_utility': 0,
+                    'total_utility': 0,
+                    'budget': SimulationConfig.MARKET_PARAMS.get(
+                        'buyer_budget', 60.0
+                    ),
+                }
         
         conn = sqlite3.connect(self.database_path)
         cursor = conn.cursor()
@@ -98,14 +106,20 @@ class MarketDatabase:
                 state['round_profit'] = sales_result[1] if sales_result and sales_result[1] is not None else 0
         
         elif role == 'buyer':
-            # Get buyer basic information
+            # Get buyer basic information, including the cash available for
+            # this round's purchase decision.
             cursor.execute(
-                "SELECT profit_utility_score FROM user WHERE agent_id = ?",
+                "SELECT profit_utility_score, budget FROM user WHERE agent_id = ?",
                 (agent_id,)
             )
             result = cursor.fetchone()
             state['cumulative_utility'] = result[0] if result and result[0] is not None else 0
             state['total_utility'] = result[0] if result and result[0] is not None else 0
+            state['budget'] = (
+                result[1]
+                if result and result[1] is not None
+                else SimulationConfig.MARKET_PARAMS.get('buyer_budget', 60.0)
+            )
             
             # Get purchase information for this round
             if round_num > 0:

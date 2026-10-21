@@ -298,6 +298,9 @@ class SocialEnvironment(Environment):
             # Get market_type from agent profile
             market_type = agent.user_info.profile.get("market_type", "reputation_and_warrant")
             available_products = self.get_product_listings_for_env(market_type=market_type)
+            budget = getattr(agent, "current_budget", None)
+            if budget is None:
+                budget = self.config.MARKET_PARAMS.get("buyer_budget", 60.0)
             
             # Use dynamic prompt based on market_type
             purchase_env = MarketEnv_prompt.get_buyer_purchase_env(market_type)
@@ -305,6 +308,7 @@ class SocialEnvironment(Environment):
                 current_round=current_round,
                 simulation_rounds=self.config.SIMULATION_ROUNDS,
                 cumulative_utility=agent.cumulative_utility,
+                budget=budget,
                 available_products=available_products,
             )
             

@@ -1669,8 +1669,12 @@ class Platform:
         """Handle buyer purchase product backend logic and return detailed results."""
         buyer_id = agent_id
         current_time = self.sandbox_clock.get_time_step()
+        current_budget = None
 
         try:
+            if type(product_id) is not int or product_id <= 0:
+                raise ValueError("product_id must be a positive integer.")
+
             # Get product details including price and cost
             product_check_query = """
                 SELECT user_id, status, advertised_quality, true_quality, has_warrant, 
@@ -1681,21 +1685,23 @@ class Platform:
             product_result = self.db_cursor.fetchone()
 
             if not product_result:
-                return {"success": False, "error": f"Product with ID {product_id} not found."}
+                raise ValueError(f"Product with ID {product_id} not found.")
             
             seller_id, status, advertised_quality, true_quality, has_warrant, price, cost = product_result
+            if status != "on_sale":
+                raise ValueError(f"Product with ID {product_id} is not available for purchase.")
             
             # Get buyer user_id
             buyer_info_query = "SELECT user_id FROM user WHERE agent_id = ?"
             self.pl_utils._execute_db_command(buyer_info_query, (buyer_id,))
             buyer_info_result = self.db_cursor.fetchone()
             if not buyer_info_result:
-                return {"success": False, "error": "Buyer information not found."}
+                raise ValueError("Buyer information not found.")
             
             self.pl_utils._execute_db_command("SELECT budget FROM user WHERE agent_id = ?", (buyer_id,))
             current_budget = self.db_cursor.fetchone()[0]
             if current_budget is None:
-                current_budget = 10.0  # Buyer default budget
+                current_budget = self.market_params.get("buyer_budget", 60.0)
             if current_budget < price:
                 raise ValueError(f"Not enough budget to purchase this product. Current budget: {current_budget}, Price: {price}")
             
@@ -1706,45 +1712,73 @@ class Platform:
             # High quality product utility is 8, low quality product utility is 5
             utility = SimulationConfig.MARKET_PARAMS['hq_utility'] if true_quality == 'HQ' else SimulationConfig.MARKET_PARAMS['lq_utility']
             buyer_utility = utility - price
-            
-            # Update buyer budget: deduct price first, then add utility (net: budget + buyer_utility)
-            # This is equivalent to: budget = budget - price + utility = budget + (utility - price)
-            self.pl_utils._execute_db_command("UPDATE user SET budget = budget + ? WHERE agent_id = ?", (utility - price, buyer_id), commit=True)
-            
-            # Update seller budget: add profit from sale
-            self.pl_utils._execute_db_command("UPDATE user SET budget = budget + ? WHERE agent_id = ?", (seller_profit, seller_id), commit=True)
 
+            try:
+                self.db.execute("BEGIN IMMEDIATE")
+                self.pl_utils._execute_db_command(
+                    """
+                    UPDATE product
+                    SET is_sold = 1, status = 'sold'
+                    WHERE product_id = ? AND status = 'on_sale'
+                    """,
+                    (product_id,),
+                )
+                if self.db_cursor.rowcount != 1:
+                    raise ValueError(
+                        f"Product with ID {product_id} is no longer available."
+                    )
 
-            # Update product status to sold
-            product_update_query = "UPDATE product SET is_sold = 1, status = 'sold' WHERE product_id = ?"
-            self.pl_utils._execute_db_command(product_update_query, (product_id,), commit=True)
+                # Purchase budgets are cash constraints. Product utility is
+                # accumulated separately and never replenishes cash.
+                self.pl_utils._execute_db_command(
+                    "UPDATE user SET budget = budget - ? WHERE agent_id = ?",
+                    (price, buyer_id),
+                )
+                self.pl_utils._execute_db_command(
+                    "UPDATE user SET budget = budget + ? WHERE agent_id = ?",
+                    (seller_profit, seller_id),
+                )
 
-            # Insert transaction record with complete profit information
-            transaction_insert_query = """
-                INSERT INTO transactions (
-                    product_id, seller_id, buyer_id, round_number, 
-                    seller_profit, buyer_utility, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
-            """
-            self.pl_utils._execute_db_command(
-                transaction_insert_query,
-                (product_id, seller_id, buyer_id, self.sandbox_clock.get_round_step(), 
-                 seller_profit, buyer_utility, current_time),
-                commit=True
-            )
-            transaction_id = self.db_cursor.lastrowid
+                transaction_insert_query = """
+                    INSERT INTO transactions (
+                        product_id, seller_id, buyer_id, round_number,
+                        seller_profit, buyer_utility, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """
+                self.pl_utils._execute_db_command(
+                    transaction_insert_query,
+                    (
+                        product_id,
+                        seller_id,
+                        buyer_id,
+                        self.sandbox_clock.get_round_step(),
+                        seller_profit,
+                        buyer_utility,
+                        current_time,
+                    ),
+                )
+                transaction_id = self.db_cursor.lastrowid
 
-            # Update seller and buyer profit/utility scores
-            self.pl_utils._execute_db_command(
-                "UPDATE user SET profit_utility_score = profit_utility_score + ? WHERE agent_id = ?",
-                (seller_profit, seller_id), commit=True
-            )
-            self.pl_utils._execute_db_command(
-                "UPDATE user SET profit_utility_score = profit_utility_score + ? WHERE agent_id = ?",
-                (buyer_utility, buyer_id), commit=True
-            )
+                self.pl_utils._execute_db_command(
+                    "UPDATE user SET profit_utility_score = profit_utility_score + ? WHERE agent_id = ?",
+                    (seller_profit, seller_id),
+                )
+                self.pl_utils._execute_db_command(
+                    "UPDATE user SET profit_utility_score = profit_utility_score + ? WHERE agent_id = ?",
+                    (buyer_utility, buyer_id),
+                )
+                self.db.commit()
+            except Exception:
+                self.db.rollback()
+                raise
 
-            action_info = {"product_id": product_id, "transaction_id": transaction_id}
+            remaining_budget = current_budget - price
+            action_info = {
+                "product_id": product_id,
+                "transaction_id": transaction_id,
+                "selected_total_price": price,
+                "remaining_budget": remaining_budget,
+            }
             self.pl_utils._record_trace(buyer_id, ActionType.PURCHASE_PRODUCT_ID.value, action_info, current_time)
 
             return {
@@ -1759,109 +1793,204 @@ class Platform:
                 "seller_profit": seller_profit,
                 "buyer_utility": buyer_utility,
                 "purchase_price": price,
+                "selected_total_price": price,
+                "remaining_budget": remaining_budget,
             }
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            action_info = {
+                "product_id": product_id,
+                "success": False,
+                "error": str(e),
+                "remaining_budget": current_budget,
+            }
+            self.pl_utils._record_trace(
+                buyer_id,
+                ActionType.PURCHASE_PRODUCT_ID.value,
+                action_info,
+                current_time,
+            )
+            return {
+                "success": False,
+                "agent_id": buyer_id,
+                "error": str(e),
+                "remaining_budget": current_budget,
+            }
     
-    async def purchase_products(self, agent_id: int, product_ids: list):
+    async def purchase_products(self, agent_id: int, product_ids: list[int]):
         """Handle buyer purchasing multiple products backend logic."""
         buyer_id = agent_id
         current_time = self.sandbox_clock.get_time_step()
+        current_budget = None
         
         try:
-            if not product_ids or len(product_ids) == 0:
-                return {"success": False, "error": "No product IDs specified."}
-            
-            transactions = []
-            failed_purchases = []
+            if not isinstance(product_ids, list):
+                raise ValueError("product_ids must be a list of positive integers.")
+            if any(type(product_id) is not int or product_id <= 0 for product_id in product_ids):
+                raise ValueError(
+                    "Each product ID must be a positive integer; booleans, "
+                    "strings, floats, and non-positive IDs are invalid."
+                )
+            if len(set(product_ids)) != len(product_ids):
+                raise ValueError("product_ids must not contain duplicates.")
             
             # Get buyer's current budget
             self.pl_utils._execute_db_command("SELECT budget FROM user WHERE agent_id = ?", (buyer_id,))
             budget_result = self.db_cursor.fetchone()
             if not budget_result:
-                return {"success": False, "error": f"Buyer {buyer_id} not found in database."}
+                raise ValueError(f"Buyer {buyer_id} not found in database.")
             
             current_budget = budget_result[0]
             if current_budget is None:
-                current_budget = SimulationConfig.MARKET_PARAMS.get('buyer_budget', 18.0)  # Buyer default budget
-            
-            # Process each product purchase
+                current_budget = self.market_params.get("buyer_budget", 60.0)
+
+            if not product_ids:
+                action_info = {
+                    "product_ids": [],
+                    "transactions": [],
+                    "total_transactions": 0,
+                    "selected_total_price": 0.0,
+                    "remaining_budget": current_budget,
+                    "no_purchase": True,
+                }
+                self.pl_utils._record_trace(
+                    buyer_id,
+                    ActionType.PURCHASE_PRODUCTS.value,
+                    action_info,
+                    current_time,
+                )
+                return {
+                    "success": True,
+                    "agent_id": buyer_id,
+                    "transactions": [],
+                    "total_transactions": 0,
+                    "failed_purchases": None,
+                    "selected_total_price": 0.0,
+                    "remaining_budget": current_budget,
+                    "no_purchase": True,
+                }
+
+            placeholders = ", ".join("?" for _ in product_ids)
+            self.pl_utils._execute_db_command(
+                f"""
+                SELECT product_id, user_id, status, advertised_quality,
+                       true_quality, has_warrant, price, cost
+                FROM product
+                WHERE product_id IN ({placeholders})
+                """,
+                tuple(product_ids),
+            )
+            product_rows = {
+                row[0]: row[1:]
+                for row in self.db_cursor.fetchall()
+            }
+
+            failed_purchases = []
             for product_id in product_ids:
-                try:
-                    # Get product details
-                    product_check_query = """
-                        SELECT user_id, status, advertised_quality, true_quality, has_warrant, 
-                               price, cost
-                        FROM product WHERE product_id = ?
-                    """
-                    self.pl_utils._execute_db_command(product_check_query, (product_id,))
-                    product_result = self.db_cursor.fetchone()
-                    
-                    if not product_result:
-                        failed_purchases.append({"product_id": product_id, "error": "Product not found"})
-                        continue
-                    
-                    seller_id, status, advertised_quality, true_quality, has_warrant, price, cost = product_result
-                    
-                    # Check if product is available
-                    if status != 'on_sale':
-                        failed_purchases.append({"product_id": product_id, "error": "Product not available for purchase"})
-                        continue
-                    
-                    # Check budget
-                    if current_budget < price:
-                        failed_purchases.append({"product_id": product_id, "error": f"Insufficient budget. Required: ${price:.2f}, Available: ${current_budget:.2f}"})
-                        continue
-                    
-                    # Atomically update product status to 'sold' only if it's still 'on_sale'
-                    # This prevents multiple buyers from purchasing the same product
-                    update_status_query = """
-                        UPDATE product 
-                        SET is_sold = 1, status = 'sold' 
+                product_result = product_rows.get(product_id)
+                if product_result is None:
+                    failed_purchases.append(
+                        {"product_id": product_id, "error": "Product not found"}
+                    )
+                elif product_result[1] != "on_sale":
+                    failed_purchases.append(
+                        {
+                            "product_id": product_id,
+                            "error": "Product not available for purchase",
+                        }
+                    )
+            if failed_purchases:
+                raise ValueError(
+                    "The selected product set contains unavailable or unknown products."
+                )
+
+            selected_total_price = sum(
+                product_rows[product_id][5]
+                for product_id in product_ids
+            )
+            if selected_total_price > current_budget:
+                failed_purchases = [
+                    {
+                        "product_id": product_id,
+                        "error": (
+                            "Selected set exceeds the purchase budget. "
+                            f"Selected total: ${selected_total_price:.2f}, "
+                            f"available: ${current_budget:.2f}"
+                        ),
+                    }
+                    for product_id in product_ids
+                ]
+                raise ValueError(
+                    f"Selected product total ${selected_total_price:.2f} "
+                    f"exceeds current budget ${current_budget:.2f}."
+                )
+
+            transactions = []
+            try:
+                self.db.execute("BEGIN IMMEDIATE")
+                for product_id in product_ids:
+                    (
+                        seller_id,
+                        _status,
+                        advertised_quality,
+                        true_quality,
+                        has_warrant,
+                        price,
+                        cost,
+                    ) = product_rows[product_id]
+
+                    self.pl_utils._execute_db_command(
+                        """
+                        UPDATE product
+                        SET is_sold = 1, status = 'sold'
                         WHERE product_id = ? AND status = 'on_sale'
-                    """
-                    self.pl_utils._execute_db_command(update_status_query, (product_id,), commit=True)
-                    
-                    # Check if the update was successful (product was still available)
-                    if self.db_cursor.rowcount == 0:
-                        failed_purchases.append({"product_id": product_id, "error": "Product was already purchased by another buyer"})
-                        continue
-                    
-                    # Calculate seller profit and buyer utility
+                        """,
+                        (product_id,),
+                    )
+                    if self.db_cursor.rowcount != 1:
+                        raise ValueError(
+                            f"Product {product_id} was purchased concurrently."
+                        )
+
                     seller_profit = price - cost
-                    utility = SimulationConfig.MARKET_PARAMS['hq_utility'] if true_quality == 'HQ' else SimulationConfig.MARKET_PARAMS['lq_utility']
+                    utility = (
+                        self.market_params["hq_utility"]
+                        if true_quality == "HQ"
+                        else self.market_params["lq_utility"]
+                    )
                     buyer_utility = utility - price
-                    
-                    # Update budgets
-                    current_budget += (utility - price)  # Buyer budget update
-                    self.pl_utils._execute_db_command("UPDATE user SET budget = budget + ? WHERE agent_id = ?", (utility - price, buyer_id), commit=True)
-                    self.pl_utils._execute_db_command("UPDATE user SET budget = budget + ? WHERE agent_id = ?", (seller_profit, seller_id), commit=True)
-                    
-                    # Insert transaction
-                    transaction_insert_query = """
+
+                    self.pl_utils._execute_db_command(
+                        "UPDATE user SET budget = budget + ? WHERE agent_id = ?",
+                        (seller_profit, seller_id),
+                    )
+                    self.pl_utils._execute_db_command(
+                        """
                         INSERT INTO transactions (
-                            product_id, seller_id, buyer_id, round_number, 
+                            product_id, seller_id, buyer_id, round_number,
                             seller_profit, buyer_utility, created_at
                         ) VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """
-                    self.pl_utils._execute_db_command(
-                        transaction_insert_query,
-                        (product_id, seller_id, buyer_id, self.sandbox_clock.get_round_step(), 
-                         seller_profit, buyer_utility, current_time),
-                        commit=True
+                        """,
+                        (
+                            product_id,
+                            seller_id,
+                            buyer_id,
+                            self.sandbox_clock.get_round_step(),
+                            seller_profit,
+                            buyer_utility,
+                            current_time,
+                        ),
                     )
                     transaction_id = self.db_cursor.lastrowid
-                    
-                    # Update profit/utility scores
+
                     self.pl_utils._execute_db_command(
                         "UPDATE user SET profit_utility_score = profit_utility_score + ? WHERE agent_id = ?",
-                        (seller_profit, seller_id), commit=True
+                        (seller_profit, seller_id),
                     )
                     self.pl_utils._execute_db_command(
                         "UPDATE user SET profit_utility_score = profit_utility_score + ? WHERE agent_id = ?",
-                        (buyer_utility, buyer_id), commit=True
+                        (buyer_utility, buyer_id),
                     )
-                    
+
                     transactions.append({
                         "transaction_id": transaction_id,
                         "product_id": product_id,
@@ -1873,15 +2002,26 @@ class Platform:
                         "buyer_utility": buyer_utility,
                         "purchase_price": price,
                     })
-                except Exception as e:
-                    failed_purchases.append({"product_id": product_id, "error": str(e)})
+
+                self.pl_utils._execute_db_command(
+                    "UPDATE user SET budget = budget - ? WHERE agent_id = ?",
+                    (selected_total_price, buyer_id),
+                )
+                self.db.commit()
+            except Exception:
+                self.db.rollback()
+                raise
+
+            remaining_budget = current_budget - selected_total_price
             
             # Record trace
             action_info = {
                 "product_ids": product_ids,
                 "transactions": transactions,
                 "total_transactions": len(transactions),
-                "failed_purchases": failed_purchases
+                "failed_purchases": [],
+                "selected_total_price": selected_total_price,
+                "remaining_budget": remaining_budget,
             }
             self.pl_utils._record_trace(buyer_id, ActionType.PURCHASE_PRODUCTS.value, action_info, current_time)
             
@@ -1890,10 +2030,37 @@ class Platform:
                 "agent_id": buyer_id,
                 "transactions": transactions,
                 "total_transactions": len(transactions),
-                "failed_purchases": failed_purchases if failed_purchases else None
+                "failed_purchases": None,
+                "selected_total_price": selected_total_price,
+                "remaining_budget": remaining_budget,
             }
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            failed_purchases = locals().get("failed_purchases", [])
+            selected_total_price = locals().get("selected_total_price")
+            action_info = {
+                "product_ids": product_ids,
+                "success": False,
+                "error": str(e),
+                "failed_purchases": failed_purchases,
+                "selected_total_price": selected_total_price,
+                "remaining_budget": current_budget,
+            }
+            self.pl_utils._record_trace(
+                buyer_id,
+                ActionType.PURCHASE_PRODUCTS.value,
+                action_info,
+                current_time,
+            )
+            return {
+                "success": False,
+                "agent_id": buyer_id,
+                "error": str(e),
+                "transactions": [],
+                "total_transactions": 0,
+                "failed_purchases": failed_purchases or None,
+                "selected_total_price": selected_total_price,
+                "remaining_budget": current_budget,
+            }
     
     async def list_product(self, agent_id: int, product_details: dict):
         """Handle seller listing product backend logic."""

@@ -247,3 +247,13 @@ docs/
 .continue/
 
 overleaf_*
+tables
+# Generated / local-only artifacts (not synced)
+/figs/
+/log/
+/logs/
+/tables/
+/tests/
+/visualization/
+/example/log/
+/overleaf_arxiv_truthmarket/

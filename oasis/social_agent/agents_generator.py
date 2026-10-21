@@ -675,11 +675,17 @@ async def generate_agent_from_LLM(agents_num:int,
                                 market_type: str,
                                 agent_graph: AgentGraph = None,
                                 agent_checkpoint_save: bool = True,
+                                agent_checkpoint_path: Optional[Union[str, os.PathLike[str]]] = None,
                                 db_path: str = "",
                                 config = None):
 
-    if agent_checkpoint_save == True and os.path.exists(f"./data/agent_checkpoint_{role}.json"):
-        with open(f"./data/agent_checkpoint_{role}.json", "r") as file:
+    checkpoint_path = (
+        agent_checkpoint_path
+        if agent_checkpoint_path is not None
+        else f"./data/agent_checkpoint_{role}.json"
+    )
+    if agent_checkpoint_save == True and os.path.exists(checkpoint_path):
+        with open(checkpoint_path, "r") as file:
             user_trait_list = json.load(file)
     else:
         user_trait_list = []
@@ -704,7 +710,7 @@ async def generate_agent_from_LLM(agents_num:int,
         user_trait = json.loads(content)
         user_trait_list.append(user_trait)
 
-    with open(f"./data/agent_checkpoint_{role}.json", "w") as file:
+    with open(checkpoint_path, "w") as file:
         json.dump(user_trait_list, file)
 
     if agent_graph is None:
@@ -781,6 +787,10 @@ async def generate_agent_from_LLM(agents_num:int,
         # Set config in environment if available
         if hasattr(agent, 'env') and hasattr(agent.env, 'config'):
             agent.env.config = config
+        budget_key = "seller_budget" if role == "seller" else "buyer_budget"
+        configured_budget = config.MARKET_PARAMS.get(budget_key, 60.0)
+        agent.initial_budget = configured_budget
+        agent.current_budget = configured_budget
 
         agent_graph.add_agent(agent)
 

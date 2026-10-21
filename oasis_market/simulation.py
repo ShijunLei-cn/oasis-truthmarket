@@ -11,6 +11,7 @@ from datetime import datetime
 
 from .database import MarketDatabase
 from .agents import AgentManager
+from .checkpointing import SimulationCheckpointManager
 from .logging import ActionLogger, SimulationLogger
 from .phases import (
     SellerListingPhase, BuyerPurchasePhase, BuyerRatingPhase, BuyerChallengePhase, CommunicationPhase
@@ -32,7 +33,14 @@ from oasis_market.probing import VulnerabilityProbe, run_cognitive_probes, Vulne
 class MarketSimulation:
     """Main market simulation orchestrator"""
     
-    def __init__(self, database_path: str, config):
+    def __init__(
+        self,
+        database_path: str,
+        config,
+        agent_checkpoint_paths: Optional[Dict[str, str]] = None,
+        resume: bool = False,
+        run_identity: Optional[Dict[str, Any]] = None,
+    ):
         """
         Initialize market simulation
         
@@ -42,8 +50,17 @@ class MarketSimulation:
         """
         self.database_path = database_path
         self.config = config
+        self.agent_checkpoint_paths = agent_checkpoint_paths or {}
+        self.resume = resume
+        self.run_identity = run_identity or {}
         self.db_manager = MarketDatabase(database_path)
         self.action_logger = ActionLogger(database_path)
+        self.checkpoint_manager = SimulationCheckpointManager(
+            database_path,
+            config,
+            self.agent_checkpoint_paths,
+            self.run_identity,
+        )
         self.sellers_history = {}
         self.env = None
         self.agent_graph = None
@@ -53,19 +70,24 @@ class MarketSimulation:
         self.cognitive_probe_output_path: Optional[str] = None
         self.cognitive_probe_summary: Dict[str, Any] = {}
     
-    def setup_environment(self):
-        """Set up environment variables and clean up existing data"""
+    def setup_environment(self, clean: bool = True):
+        """Set up environment variables and optionally clean existing data."""
         # Set environment variables
         os.environ['MARKET_DB_PATH'] = self.database_path
         
-        # Clean up existing database and action log
-        self.db_manager.cleanup()
-        self.action_logger.cleanup_action_log()
+        if clean:
+            self.db_manager.cleanup()
+            self.action_logger.cleanup_action_log()
         
         # Reset agent ID counter
         AgentManager.reset_agent_id_counter()
     
-    async def initialize_agents(self, model, market_type: str):
+    async def initialize_agents(
+        self,
+        model,
+        market_type: str,
+        register_agents: bool = True,
+    ):
         """
         Initialize seller and buyer agents
         
@@ -88,6 +110,7 @@ class MarketSimulation:
             market_type=market_type,
             role="seller",
             model=model,
+            agent_checkpoint_path=self.agent_checkpoint_paths.get("seller"),
             db_path=self.database_path,
             config=self.config,
         )
@@ -101,6 +124,7 @@ class MarketSimulation:
             market_type=market_type,
             role="buyer",
             model=model,
+            agent_checkpoint_path=self.agent_checkpoint_paths.get("buyer"),
             db_path=self.database_path,
             config=self.config,
         )
@@ -122,14 +146,15 @@ class MarketSimulation:
             platform=oasis.DefaultPlatformType.REDDIT,
             database_path=self.database_path
         )
-        await env.reset()
+        await env.reset(register_agents=register_agents)
         
         print(f"Environment initialized. Database at '{self.database_path}'.")
-        # Get initial seller reputation from config
-        initial_reputation = self.config.MARKET_PARAMS.get('initial_seller_reputation', 0.0)
-        self.db_manager.initialize_market_roles(
-            agent_graph, self.config.NUM_SELLERS, self.config.NUM_BUYERS, initial_seller_reputation=initial_reputation
-        )
+        if register_agents:
+            # Get initial seller reputation from config
+            initial_reputation = self.config.MARKET_PARAMS.get('initial_seller_reputation', 0.0)
+            self.db_manager.initialize_market_roles(
+                agent_graph, self.config.NUM_SELLERS, self.config.NUM_BUYERS, initial_seller_reputation=initial_reputation
+            )
         
         return agent_graph, env
     
@@ -326,8 +351,16 @@ class MarketSimulation:
         if probe_interval is None:
             probe_interval = getattr(self.config, 'COGNITIVE_PROBING_INTERVAL', 1)
         
-        # Setup environment
-        self.setup_environment()
+        checkpoint_payload = None
+        if self.resume:
+            checkpoint_payload = self.checkpoint_manager.restore_files()
+            print(
+                "Restored complete-round artifacts from "
+                f"round {checkpoint_payload['completed_round']}."
+            )
+
+        # Setup environment. Resume mode keeps the restored database and log.
+        self.setup_environment(clean=not self.resume)
         
         # Create model
         self.model = ModelFactory.create(
@@ -341,38 +374,80 @@ class MarketSimulation:
         )
         
         # Initialize agents and environment
-        self.agent_graph, self.env = await self.initialize_agents(self.model, market_type)
-        
-        # Create initial posts for sellers if specified
-        if posts4seller:
-            await self.create_initial_posts_for_sellers(posts4seller)
-        
-        # Save system prompts for all agents (Round 0)
-        self.action_logger.save_system_prompts(self.agent_graph)
-        
-        # Initialize seller history
-        self.sellers_history = {i+1: [] for i in range(self.config.NUM_SELLERS)}
+        self.agent_graph, self.env = await self.initialize_agents(
+            self.model,
+            market_type,
+            register_agents=not self.resume,
+        )
         
         # Initialize cognitive probing system (optional)
         self.prober = VulnerabilityProbe(self.database_path, self.config) if enable_cognitive_probing else None
         self.cognitive_probe_results = []
         self.cognitive_probe_output_path = None
         self.cognitive_probe_summary = {}
-        
-        # Run simulation rounds
-        for round_num in range(1, self.config.SIMULATION_ROUNDS + 1):
-            if self.prober is not None and (round_num % probe_interval == 0 or round_num <= 2):
-                print(f"  [Probing] Running cognitive probes for round {round_num}...")
-                probe_results = await run_cognitive_probes(
-                    self.env,
-                    self.agent_graph,
-                    round_num,
-                    self.prober,
-                    probe_types=probe_types,
+
+        if self.resume:
+            completed_round = self.checkpoint_manager.restore_runtime(
+                self,
+                checkpoint_payload,
+            )
+            start_round = completed_round + 1
+            print(
+                f"Runtime state restored; continuing from round {start_round}."
+            )
+        else:
+            # Create initial posts for sellers if specified
+            if posts4seller:
+                await self.create_initial_posts_for_sellers(posts4seller)
+
+            # Save system prompts for all agents (Round 0)
+            self.action_logger.save_system_prompts(self.agent_graph)
+
+            # Initialize seller history
+            self.sellers_history = {
+                agent_id: []
+                for agent_id, agent in self.agent_graph.get_agents()
+                if agent.user_info.profile.get("role") == "seller"
+            }
+            start_round = 1
+            self.checkpoint_manager.save(self, completed_round=0)
+
+        simulation_completed = False
+        try:
+            # Run simulation rounds
+            for round_num in range(start_round, self.config.SIMULATION_ROUNDS + 1):
+                if self.prober is not None and (round_num % probe_interval == 0 or round_num <= 2):
+                    print(f"  [Probing] Running cognitive probes for round {round_num}...")
+                    probe_results = await run_cognitive_probes(
+                        self.env,
+                        self.agent_graph,
+                        round_num,
+                        self.prober,
+                        probe_types=probe_types,
+                    )
+                    self.cognitive_probe_results.extend(probe_results)
+                    print(f"  [Probing] Round {round_num}: {len(probe_results)} probe results collected")
+                await self.run_round(round_num, market_type, communication_type)
+                checkpoint_path = self.checkpoint_manager.save(
+                    self,
+                    completed_round=round_num,
                 )
-                self.cognitive_probe_results.extend(probe_results)
-                print(f"  [Probing] Round {round_num}: {len(probe_results)} probe results collected")
-            await self.run_round(round_num, market_type, communication_type)
+                print(
+                    f"Checkpoint saved after round {round_num}: "
+                    f"{checkpoint_path}"
+                )
+            simulation_completed = True
+        except Exception:
+            print(
+                "Simulation stopped. The live artifacts may contain a partial "
+                "round; resume will restore the latest complete checkpoint."
+            )
+            raise
+        finally:
+            # Close the platform connection even when a model/provider call
+            # invalidates the current round.
+            if self.env is not None:
+                await self.env.close()
         
         # # Run vulnerability detection
         # from oasis.environment.processing.valunerability import run_detection
@@ -406,12 +481,10 @@ class MarketSimulation:
                     "error": str(e),
                 }
 
-        # Close environment
-        await self.env.close()
-        
-        # Print summary
-        print_simulation_summary(self.database_path)
-        print("\nSimulation finished")
+        if simulation_completed:
+            # Print summary
+            print_simulation_summary(self.database_path)
+            print("\nSimulation finished")
     
     def _reset_agent_budgets(self):
         """
@@ -480,7 +553,10 @@ class MarketSimulation:
 async def run_single_simulation(database_path: str, market_type: Optional[str] = None,
     communication_type: str = 'none', communication_channel_type: str = "Fake",
     posts4seller: Optional[str] = None, enable_cognitive_probing: bool = False,
-    probe_interval: int = 1, probe_types: Optional[List[VulnerabilityType]] = None):
+    probe_interval: int = 1, probe_types: Optional[List[VulnerabilityType]] = None,
+    agent_checkpoint_paths: Optional[Dict[str, str]] = None,
+    resume: bool = False,
+    run_identity: Optional[Dict[str, Any]] = None):
     """
     Run a single market simulation (backward compatibility wrapper)
     
@@ -502,19 +578,26 @@ async def run_single_simulation(database_path: str, market_type: Optional[str] =
     SimulationConfig.COMMUNICATION_TYPE = communication_type
     SimulationConfig.COMMUNICATION_CHANNEL_TYPE = communication_channel_type
     
-    simulation = MarketSimulation(database_path, SimulationConfig)
-    await simulation.run(
-        market_type,
-        communication_type,
-        posts4seller,
-        enable_cognitive_probing=enable_cognitive_probing,
-        probe_interval=probe_interval,
-        probe_types=probe_types,
+    simulation = MarketSimulation(
+        database_path,
+        SimulationConfig,
+        agent_checkpoint_paths=agent_checkpoint_paths,
+        resume=resume,
+        run_identity=run_identity,
     )
-    
-    # Restore original communication type
-    SimulationConfig.COMMUNICATION_TYPE = original_comm_type
-    SimulationConfig.COMMUNICATION_CHANNEL_TYPE = original_comm_channel_type
+    try:
+        await simulation.run(
+            market_type,
+            communication_type,
+            posts4seller,
+            enable_cognitive_probing=enable_cognitive_probing,
+            probe_interval=probe_interval,
+            probe_types=probe_types,
+        )
+    finally:
+        # Restore original communication type even when execution stops.
+        SimulationConfig.COMMUNICATION_TYPE = original_comm_type
+        SimulationConfig.COMMUNICATION_CHANNEL_TYPE = original_comm_channel_type
 
 
 # Test cases

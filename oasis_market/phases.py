@@ -162,7 +162,8 @@ class BuyerPurchasePhase(MarketPhase):
             buyer_round_prompt = (
                 "\n\nIn this phase, you are only allowed to perform the purchase_products action to purchase products. "
                 "Based on the available product and seller information, and your own preferences, choose whether and which products to purchase."
-                "You can purchase multiple products at once. You cannot perform any other actions during this phase.\n"
+                "You can purchase multiple products at once, but the sum of their displayed prices must not exceed your current purchase budget. "
+                "Use an empty product_ids list when you choose not to purchase. You cannot perform any other actions during this phase.\n"
             )
 
             # Tools available for buyers in purchase phase
@@ -211,7 +212,9 @@ class BuyerRatingPhase(MarketPhase):
         self.env.market_phase = "rating"
 
         successful_purchases = [
-            res for res in purchase_results if res and res.get("success")
+            res
+            for res in purchase_results
+            if isinstance(res, dict) and res.get("success")
         ]
         rating_results = None
 
@@ -317,7 +320,9 @@ class BuyerChallengePhase(MarketPhase):
         self.env.market_phase = "challenge"
 
         successful_purchases = [
-            res for res in purchase_results if res and res.get("success")
+            res
+            for res in purchase_results
+            if isinstance(res, dict) and res.get("success")
         ]
         challenge_results = []
 
@@ -390,7 +395,7 @@ class BuyerChallengePhase(MarketPhase):
             )
 
         for result in challenge_results:
-            if result.get("success"):
+            if isinstance(result, dict) and result.get("success"):
                 print("good")
         print("All challenge actions are complete.")
         return challenge_results
